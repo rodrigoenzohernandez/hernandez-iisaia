@@ -30,8 +30,9 @@ No asumas nada, hace las preguntas que necesites.
 
 **Qué intentaba lograr:** Plasmar una versión inicial de la idea que sea funcional
 
-**Qué devolvió:** A pesar de que no me hizo preguntas, devolvió la versión esperada, en un solo archivo como fue solicitado.
+**Qué devolvió:** A pesar de que no me hizo preguntas, devolvió la versión esperada, en un solo archivo como fue solicitado. Solamente tomó algunas decisiones de diseño que me hubiese gustado que no las asuma, indiqué más detalles en el README.
 
 ![Primer approach](docs/first-approach.png)
 
 **Qué hice con eso:** lo acepté, pero decidí seguir iterando para incorporar mejoras.
+
