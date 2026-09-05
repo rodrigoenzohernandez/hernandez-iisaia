@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teléfono de un Botón</title>
+    <style>
+        /* Reseteo y fondo general de la página */
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #121212; /* Fondo oscuro exterior */
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        /* Contenedor principal: Imitación del teléfono */
+        .phone {
+            width: 320px;
+            height: 620px;
+            background-color: #0e131f;
+            color: #f9fafb;
+            border-radius: 40px;
+            box-shadow: 0 0 0 8px #2a2a2a, 0 20px 40px rgba(0,0,0,0.6);
+            padding: 30px 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Cabecera */
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+        #status {
+            display: block;
+            min-height: 1.2rem;
+            font-size: 0.85rem;
+            color: #757d8c;
+            margin-top: 5px;
+        }
+
+        /* Contenido principal */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Display de dígitos */
+        #display {
+            font-family: monospace;
+            font-size: 2.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 60px;
+            margin-bottom: auto; /* Empuja el botón hacia abajo */
+        }
+        
+        .slot {
+            width: 1.1ch;
+            text-align: center;
+        }
+        .confirmed {
+            color: #757d8c;
+        }
+        .editing {
+            color: #f9fafb;
+            text-decoration: underline; /* Para resaltar más qué se está editando */
+        }
+        .empty {
+            color: rgba(117, 125, 140, 0.2); /* Guiones muy tenues para vacíos */
+        }
+        .calling-text {
+            font-family: system-ui, sans-serif;
+            font-size: 1.8rem;
+            color: #f9fafb;
+        }
+
+        /* Botón rojo marcador */
+        #dial {
+            background-color: #d42222;
+            color: #f9fafb;
+            border: none;
+            width: 95%;
+            height: 90px;
+            border-radius: 20px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 20px;
+            
+            /* Previene el scroll o menú contextual en móviles al mantener apretado */
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; 
+            
+            transition: transform 0.1s, background-color 0.1s;
+        }
+        #dial:active {
+            transform: scale(0.96);
+            background-color: #b51c1c;
+        }
+
+        /* Pie del teléfono */
+        footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px;
+        }
+
+        /* Botones inferiores */
+        #call {
+            background-color: #2e8b57;
+            color: #f9fafb;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        #call:disabled {
+            background-color: #2a3b47;
+            color: #757d8c;
+            cursor: not-allowed;
+        }
+
+        #del {
+            background-color: #2a3b47;
+            color: #f9fafb;
+            border: none;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        #del:active {
+            background-color: #3b5061;
+        }
+        #del:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="phone">
+        <header>
+            <h1>Teléfono</h1>
+            <span id="status"></span>
+        </header>
+
+        <main>
+            <output id="display"></output>
+            <button id="dial">Pulsar</button>
+        </main>
+
+        <footer>
+            <button id="call" disabled>Llamar</button>
+            <button id="del">←</button>
+        </footer>
+    </div>
+
+    <script>
+        // Referencias del DOM
+        const display = document.getElementById('display');
+        const dialBtn = document.getElementById('dial');
+        const callBtn = document.getElementById('call');
+        const delBtn = document.getElementById('del');
+        
+        // Estados principales
+        let digitos = [];
+        let actual = 0;
+        let llamando = false;
+        
+        // Variables de control de interacción
+        let pressTimer = null;
+        let isLongPress = false;
+
+        // Función para renderizar y actualizar la UI basada en el estado
+        function render() {
+            // Caso 1: Está en curso una llamada
+            if (llamando) {
+                display.innerHTML = '<span class="calling-text">Llamando...</span>';
+                dialBtn.textContent = 'Colgar';
+                callBtn.disabled = true;
+                delBtn.disabled = true;
+                return;
+            }
+
+            // Caso 2: Editando número
+            dialBtn.textContent = 'Pulsar';
+            display.innerHTML = ''; // Limpiamos el output
+
+            // Renderizar los 10 casilleros
+            for (let i = 0; i < 10; i++) {
+                const span = document.createElement('span');
+                span.classList.add('slot');
+
+                if (i < digitos.length) {
+                    // Dígito confirmado
+                    span.textContent = digitos[i];
+                    span.classList.add('confirmed');
+                } else if (i === digitos.length) {
+                    // Dígito actual que se está editando
+                    span.textContent = actual;
+                    span.classList.add('editing');
+                } else {
+                    // Casillero vacío futuro
+                    span.textContent = '-'; 
+                    span.classList.add('empty');
+                }
+                display.appendChild(span);
+            }
+
+            // Actualizar botones inferiores
+            callBtn.disabled = digitos.length !== 10;
+            delBtn.disabled = digitos.length === 0 && actual === 0;
+        }
+
+        /* ---- LOGICA DEL BOTÓN ROJO (#dial) ---- */
+        
+        // pointerdown cubre clicks del ratón y toques táctiles de manera uniforme
+        dialBtn.addEventListener('pointerdown', (e) => {
+            // Si está llamando, el botón sirve para colgar, que se procesa en el pointerup
+            if (llamando) return; 
+            
+            // Captura el puntero para que no se pierdan eventos si se arrastra el dedo/ratón
+            dialBtn.setPointerCapture(e.pointerId);
+            isLongPress = false;
+
+            // Iniciar temporizador de 1 segundo para el long press
+            pressTimer = setTimeout(() => {
+                isLongPress = true;
+                if (digitos.length < 10) {
+                    digitos.push(actual);
+                    actual = 0;
+                    
+                    // Feedback háptico sutil si el dispositivo lo soporta
+                    if (navigator.vibrate) navigator.vibrate(50);
+                    render();
+                }
+            }, 1000);
+        });
+
+        dialBtn.addEventListener('pointerup', (e) => {
+            if (llamando) {
+                // Acción de colgar
+                llamando = false;
+                render();
+                return;
+            }
+
+            // Cancelar el temporizador para que no se confirme el dígito
+            clearTimeout(pressTimer);
+
+            // Si se soltó antes del segundo (y tenemos menos de 10 dígitos)
+            if (!isLongPress && digitos.length < 10) {
+                actual++;
+                if (actual > 9) {
+                    actual = 0;
+                }
+                render();
+            }
+        });
+
+        // Por si el usuario arrastra el dedo fuera de la pantalla
+        dialBtn.addEventListener('pointercancel', () => {
+            clearTimeout(pressTimer);
+        });
+
+        /* ---- LOGICA DE LOS BOTONES SECUNDARIOS ---- */
+        
+        delBtn.addEventListener('click', () => {
+            if (llamando) return;
+            
+            // "borrar el último dígito de digitos. actual vuelve a 0."
+            digitos.pop(); // Si el array está vacío, pop no hace nada (lo cual está bien)
+            actual = 0;
+            render();
+        });
+
+        callBtn.addEventListener('click', () => {
+            if (digitos.length === 10) {
+                llamando = true;
+                render();
+            }
+        });
+
+        // Renderizado inicial al cargar
+        render();
+    </script>
+</body>
+</html>
