@@ -173,7 +173,7 @@
 
         <main>
             <output id="display"></output>
-            <button id="dial">Pulsar</button>
+            <button id="dial">Presionar</button>
         </main>
 
         <footer>
@@ -203,14 +203,14 @@
             // Caso 1: Está en curso una llamada
             if (llamando) {
                 display.innerHTML = '<span class="calling-text">Llamando...</span>';
-                dialBtn.textContent = 'Colgar';
+                dialBtn.textContent = 'Cortar';
                 callBtn.disabled = true;
                 delBtn.disabled = true;
                 return;
             }
 
             // Caso 2: Editando número
-            dialBtn.textContent = 'Pulsar';
+            dialBtn.textContent = 'Presionar';
             display.innerHTML = ''; // Limpiamos el output
 
             // Renderizar los 10 casilleros

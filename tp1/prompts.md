@@ -47,3 +47,15 @@ Aplicar el siguiente cambio de comportamiento:
 **Qué devolvió:** Devolvió el funcionamiento esperado, técnicamente en vez quitar el último elemento del array con un `digitos.pop()`, lo iguala a un array vacío.
 
 **Qué hice con eso:** lo acepté.
+
+## 3 - Prompt final de ajustes
+
+- Cambiar los textos texto:
+-- Pulsar --> Presionar
+-- Colgar --> Cortar
+
+**Qué intentaba lograr:** Ajustes menores de textos.
+
+**Qué devolvió:** Devolvió los cambios esperados.
+
+**Qué hice con eso:** lo acepté.

@@ -16,6 +16,8 @@ Una bad UI en la cual el usuario debe ingresar cada dígito que desea marcar, ap
 
 **Ilusionar al usuario** El botón que normalmente borraría un dígito, borra todos los dígitos ingresados.
 
+**Ajustes menores de texto** Decidí cambiar los textos del botón rojo que ingresa los dígitos y el botón que corta la llamada.
+
 ## Qué salió mal y cómo lo corregí
 
 Algo que me hubiera gustado que salga mejor, le pedí a la IA que no asuma nada y me haga las preguntas que necesite, sin embargo en el primer prompt tomó desiciones de diseño que me hubiese gustado que me pregunte, dejo esa sección del output del prompt:
@@ -30,7 +32,7 @@ Texto del botón principal: Cuando no estás llamando, le puse el texto "Pulsar"
 Colgar: Cuando estás en estado "Llamando..." y apretás "Colgar", la llamada termina pero mantuve el número en pantalla por si el usuario quiere editarlo y volver a llamar.
 ```
 
-Solamente modifiqué algunas leyendas de texto en prompts siguientes.
+Solamente modifiqué algunas leyendas de texto en prompts siguientes y cambié el comportamiento del botón de borrar.
 
 ## Prompts
 
