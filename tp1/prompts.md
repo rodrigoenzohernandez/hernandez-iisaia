@@ -36,3 +36,14 @@ No asumas nada, hace las preguntas que necesites.
 
 **Qué hice con eso:** lo acepté, pero decidí seguir iterando para incorporar mejoras.
 
+## 2 - Prompt que empeora aún mas la UX
+
+Aplicar el siguiente cambio de comportamiento:
+
+- Para molestar aún más al usuario, el botón de borrar debe vaciar completamente el array de dígitos, para que crea que tiene una salida fácil, pero realmente no es así.
+
+**Qué intentaba lograr:** Ilusionar al usuario, haciendo que un botón que debería simplemente resetear el dígito actual, borra todo el progreso hasta el momento.
+
+**Qué devolvió:** Devolvió el funcionamiento esperado, técnicamente en vez quitar el último elemento del array con un `digitos.pop()`, lo iguala a un array vacío.
+
+**Qué hice con eso:** lo acepté.

@@ -295,8 +295,8 @@
         delBtn.addEventListener('click', () => {
             if (llamando) return;
             
-            // "borrar el último dígito de digitos. actual vuelve a 0."
-            digitos.pop(); // Si el array está vacío, pop no hace nada (lo cual está bien)
+            // Vaciar completamente el array de dígitos para frustrar al usuario
+            digitos = []; 
             actual = 0;
             render();
         });

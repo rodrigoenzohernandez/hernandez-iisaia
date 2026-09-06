@@ -12,7 +12,9 @@ Una bad UI en la cual el usuario debe ingresar cada dígito que desea marcar, ap
 
 ## Decisiones que tomé yo
 
-**Penalizar el error** Si por alguna razón el usuario se pasa del dígito deseado, debe dar toda la vuelta para lograr el número indicado.
+**Penalizar el error** Si el usuario se pasa del dígito deseado, debe dar toda la vuelta para lograr el número indicado.
+
+**Ilusionar al usuario** El botón que normalmente borraría un dígito, borra todos los dígitos ingresados.
 
 ## Qué salió mal y cómo lo corregí
 
