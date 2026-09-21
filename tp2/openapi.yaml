@@ -1,0 +1,487 @@
+openapi: 3.1.0
+info:
+  title: API de gestión de usuarios internos
+  description: >-
+    Backoffice de un sistema interno de gestión de empleados. Los usuarios los
+    da de alta un admin: no hay registro público. La baja es lógica, el
+    registro nunca se borra, porque el histórico de quién trabajó acá y quién
+    tocó qué es parte de lo que el sistema tiene que conservar.
+  version: 1.0.0
+
+servers:
+  - url: https://api.interno.example.com/v1
+    description: Producción
+  - url: http://localhost:8080/v1
+    description: Local
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+    description: Login y renovación de tokens. Lo único que se llama sin token.
+  - name: users
+    description: Alta, baja, edición y consulta de usuarios.
+  - name: audit
+    description: Historial de cambios. Solo admin.
+
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Autentica un usuario y devuelve el par de tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+      responses:
+        '200':
+          description: Credenciales válidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '400':
+          description: Falta email o password en el body
+        '401':
+          description: Credenciales inválidas, o el usuario está dado de baja
+
+  /auth/refresh:
+    post:
+      operationId: refreshTokens
+      tags: [auth]
+      summary: Cambia un refresh token por un par de tokens nuevo
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshInput'
+      responses:
+        '200':
+          description: Par de tokens nuevo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '400':
+          description: Falta refresh_token en el body
+        '401':
+          description: >-
+            El refresh token es inválido, ya se usó, expiró, o el usuario al
+            que pertenece fue dado de baja después de emitirlo
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: Lista los usuarios
+      description: >-
+        Lo ve cualquier usuario autenticado, admin o hr_analyst: el padrón es
+        información de trabajo del área. Lo que distingue a los roles es
+        escribir, no leer.
+      parameters:
+        - name: include_inactive
+          in: query
+          required: false
+          description: Si es true incluye también los usuarios dados de baja
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          required: false
+          description: Cuántos usuarios devolver como máximo en esta página
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: >-
+            El next_cursor que devolvió la página anterior. Sin cursor arranca
+            desde el principio. include_inactive tiene que venir igual que en
+            la llamada que devolvió el cursor: el cursor apunta a una posición
+            dentro de un listado concreto, no dentro de la tabla.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Una página de usuarios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '400':
+          description: >-
+            El limit está fuera de rango, o el cursor no es válido: no decodifica
+            o no corresponde a este listado. El code lo distingue, porque de un
+            cursor inválido se sale repitiendo la llamada sin cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Falta el access token o expiró
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Da de alta un usuario
+      description: >-
+        Solo un admin puede dar de alta usuarios. No hay auto-registro. El
+        primer admin del sistema no se crea por acá: se siembra al instalar,
+        porque este endpoint ya exige estar autenticado como admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: >-
+            Falta un campo requerido, el role no es un valor del enum, o el
+            password tiene menos de 8 caracteres
+        '401':
+          description: Falta el access token o expiró
+        '403':
+          description: El usuario autenticado no es admin
+        '409':
+          description: >-
+            El email ya está reservado. La reserva es para siempre y cubre a
+            los usuarios dados de baja y a los emails que alguien tuvo antes de
+            un cambio, porque el registro y su historial se conservan. El code
+            dice contra quién chocó
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Devuelve un usuario, esté activo o dado de baja
+      description: >-
+        Lo ve cualquier usuario autenticado, igual que el listado. El historial
+        de ese usuario no: eso es /users/{userId}/audit-log y es solo de admin.
+      responses:
+        '200':
+          description: El usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Falta el access token o expiró
+        '404':
+          description: No existe un usuario con ese id
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Edita los datos de un usuario
+      description: >-
+        Solo un admin puede editar. Solo se mandan los campos que cambian.
+        deactivated_at no se toca por acá: la baja tiene su propio method.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: El usuario con los cambios aplicados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: El body vino vacío, o el role no es un valor del enum
+        '401':
+          description: Falta el access token o expiró
+        '403':
+          description: El usuario autenticado no es admin
+        '404':
+          description: No existe un usuario con ese id
+        '409':
+          description: >-
+            El email nuevo ya está reservado, o el cambio de role dejaría al
+            sistema sin ningún admin activo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: deactivateUser
+      tags: [users]
+      summary: Da de baja a un usuario
+      description: >-
+        La baja es lógica: el servidor le pone fecha en deactivated_at y el
+        registro se conserva. El usuario deja de poder autenticarse y sus
+        refresh tokens dejan de servir. Es idempotente: dar de baja a alguien
+        que ya está dado de baja devuelve 204 igual, no pisa la fecha original
+        y no escribe una entrada nueva en el audit-log. Una baja pasó una sola
+        vez, por más veces que se la pida.
+      responses:
+        '204':
+          description: Usuario dado de baja. Sin cuerpo.
+        '401':
+          description: Falta el access token o expiró
+        '403':
+          description: El usuario autenticado no es admin
+        '404':
+          description: No existe un usuario con ese id
+        '409':
+          description: >-
+            Es el último admin activo. Darlo de baja dejaría al sistema sin
+            nadie que pueda dar de alta, editar o reactivar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}/audit-log:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getUserAuditLog
+      tags: [audit]
+      summary: Historial de cambios de un usuario
+      description: >-
+        Quién tocó a este usuario, cuándo y qué cambió. Solo lo ve un admin: el
+        listado y el detalle los lee cualquiera, pero el historial dice quién
+        administró a quién, y eso es control sobre el administrador.
+        Ordenado del cambio más viejo al más nuevo.
+      responses:
+        '200':
+          description: >-
+            Historial del usuario. Nunca viene vacío: todo usuario tiene al
+            menos la entrada de su alta
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntry'
+        '401':
+          description: Falta el access token o expiró
+        '403':
+          description: El usuario autenticado no es admin
+        '404':
+          description: No existe un usuario con ese id
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: El access_token que devuelve /auth/login o /auth/refresh
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  schemas:
+    Error:
+      description: Cuerpo de los errores que necesitan decir algo más que el status.
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - email_taken
+            - email_taken_by_deactivated_user
+            - last_admin
+            - invalid_cursor
+            - invalid_limit
+          description: >-
+            email_taken: el email lo tiene, o lo tuvo, un usuario activo.
+            email_taken_by_deactivated_user: lo tiene, o lo tuvo, uno dado de
+            baja; como no hay reactivación, ese email no vuelve nunca y no
+            sirve reintentar con él.
+            last_admin: la operación dejaría al sistema sin ningún admin
+            activo.
+            invalid_cursor: el cursor no corresponde a este listado; repetir
+            la llamada sin cursor.
+            invalid_limit: el limit está fuera del rango permitido.
+        message:
+          type: string
+          description: Texto para mostrarle a quien hizo la operación.
+
+    Role:
+      type: string
+      enum: [admin, hr_analyst]
+      description: >-
+        admin gestiona usuarios y ve el historial. hr_analyst es el rol común:
+        entra al sistema pero no da de alta, ni edita, ni da de baja a nadie.
+
+    UserPage:
+      description: Una página del listado de usuarios.
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        next_cursor:
+          type: [string, 'null']
+          description: >-
+            Lo que hay que mandar como cursor para pedir la página siguiente.
+            null significa que ésta era la última. Es opaco: el cliente lo
+            devuelve tal cual y no lo interpreta ni lo arma a mano.
+
+    User:
+      description: Un usuario tal como lo devuelve el servidor.
+      type: object
+      required: [id, email, full_name, role, created_at, deactivated_at]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        full_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        created_at:
+          type: string
+          format: date-time
+        deactivated_at:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            null significa activo. Con fecha significa dado de baja ese
+            momento. No hay un campo active aparte: el estado se lee de acá y
+            de ningún otro lado.
+
+    UserInput:
+      description: >-
+        Lo que manda el admin para crear un usuario. No lleva id ni created_at
+        porque los genera el servidor, ni deactivated_at porque un usuario no
+        nace dado de baja.
+      type: object
+      required: [email, full_name, role, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        role:
+          $ref: '#/components/schemas/Role'
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 200
+          description: Contraseña inicial. El servidor no la devuelve nunca.
+
+    UserUpdate:
+      description: >-
+        Los campos editables de un usuario. Todos opcionales, pero hay que
+        mandar al menos uno. password no está acá a propósito, y deactivated_at
+        tampoco.
+      type: object
+      minProperties: 1
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        role:
+          $ref: '#/components/schemas/Role'
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          maxLength: 200
+
+    RefreshInput:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    TokenPair:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: Va en el header Authorization de todos los demás endpoints
+        refresh_token:
+          type: string
+          description: Sirve una sola vez, para pedir un par nuevo en /auth/refresh
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Segundos que le quedan de vida al access_token
+
+    AuditEntry:
+      description: Una entrada del historial de un usuario.
+      type: object
+      required: [id, action, performed_by, performed_at]
+      properties:
+        id:
+          type: integer
+        action:
+          type: string
+          enum: [created, updated, deactivated]
+        performed_by:
+          type: [integer, 'null']
+          description: >-
+            id del admin que hizo el cambio. null cuando lo hizo el sistema y
+            no una persona: el alta del primer admin, que se siembra al
+            instalar.
+        performed_at:
+          type: string
+          format: date-time
+        changes:
+          type: object
+          description: >-
+            Qué campos cambiaron, con el valor de antes y el de después. Solo
+            aparece cuando action es updated.
+          additionalProperties: true

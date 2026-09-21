@@ -6,6 +6,6 @@ Repositorio del curso Introducción a la ingeniería de software asistida por In
 
 | Entrega | Carpeta | Estado |
 | --------- | --------- | -------- |
-| TP 1 | [tp1/](tp1/) | en blanco |
-| TP 2 | [tp2/](tp2/) | en blanco |
+| TP 1 | [tp1/](tp1/) | entregado |
+| TP 2 | [tp2/](tp2/) | entregado |
 | Trabajo Práctico Final | [tp-final/](tp-final/) | en blanco |
