@@ -44,4 +44,4 @@ Lo tercero lo encontró la revisión automática, y es lo que peor me cae: mi re
 
 ## Prompts
 
-El registro completo está en [prompts.md](prompts.md). Son cuatro, en dos sesiones: los dos primeros generan el contrato —el inicial fija el dominio y las reglas, el segundo resuelve las decisiones que el primero había dejado abiertas sin que yo lo notara—, y los dos últimos lo revisan.
+El registro completo está en [prompts.md](prompts.md). Son tres, en dos sesiones: los dos primeros generan el contrato —el inicial fija el dominio y las reglas, el segundo resuelve las decisiones que el primero había dejado abiertas sin que yo lo notara— y el tercero lo revisa con la skill `code-review`.

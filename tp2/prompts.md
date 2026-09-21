@@ -1,6 +1,6 @@
 # Prompts — TP 2
 
-Dos sesiones: una para generar el contrato y otra, días después, para revisarlo. El registro va tal como pasó, incluida la idea mía que el modelo me rechazó con razón.
+Dos sesiones: una para generar el contrato y otra, días después, para revisarlo. El registro va tal como pasó.
 
 ## 1 - Prompt inicial
 
@@ -33,22 +33,23 @@ De las tres formas de escribir la baja elegí el **DELETE que marca inactivo**: 
 
 **Qué hice con eso:** Lo revisé utilizando el Swagger editor.
 
-## 3 - La revisión, y un `404` que estaba mal
+## 3 - La revisión con la skill `code-review`
 
-Revisa mi tp2, cambiarias algo? quizas agregaría como decisión y modificaría el swagger para que cuando se esta intentando crear un usuario que esta dado de baja, tire 404 y diga que tiene que hablar con un administrador o algo asi.
+Sobre el contrato ya generado corrí la skill `code-review` de Claude Code, sin pedirle nada puntual.
 
-**Qué intentaba lograr:** Dos cosas a la vez, y esa fue la parte que salió bien: pedí una revisión abierta, pero además puse sobre la mesa un cambio concreto que ya tenía decidido. Quería ver si me lo discutía o si me lo implementaba sin chistar, que es lo que me había pasado en el TP1.
+**Qué intentaba lograr:** Aplicar una revisión en base a las buenas prácticas definidas por Anthropic en la skill de code-review.
 
-**Qué devolvió:** Me lo discutió. El `404` estaba mal por dos motivos que no había visto: `POST /users` no busca nada, así que un `404` ahí diría que la colección no existe, no que el email está tomado; y el mensaje "hablá con un administrador" no tiene sentido porque el único que puede llegar a ese error ya es el administrador. Lo que sí rescató fue el problema de fondo: el `409` no distinguía chocar contra un usuario activo de chocar contra uno dado de baja, y como no hay reactivación, el segundo caso deja al admin sin salida y sin enterarse. Lo resolvió donde iba, en el cuerpo del error, con un `code`. Además me marcó cuatro cosas más: que `hr_analyst` podía leer todo sin que el contrato lo dijera, que la idempotencia del `DELETE` no aclaraba si escribía en el audit-log, que `GET /users` no paginaba, y que el `400` del alta no mencionaba el largo mínimo del password.
+**Qué devolvió:** Varios hallazgos:
 
-**Qué hice con eso:** Acepté el rechazo del `404` y pedí que arreglara los cuatro puntos. La paginación la pedí explícitamente por cursor.
+- Último admin: DELETE y PATCH ahora dan 409 + code last_admin. Sin eso, el día que se va el último admin la API queda de solo lectura para siempre — no hay auto-registro ni reactivación.
+- PATCH de email: La regla "el email queda ocupado para siempre" la rompía tu propio PATCH: cambiar el email de alguien liberaba el viejo, y después un POST lo reusaba. La reserva ahora cubre los emails históricos.
+- Primer admin: No se puede crear por API (POST /users exige admin). Documentado como semilla, y performed_by pasó a nullable para poder auditar esa entrada.
+- audit-log: vacío La descripción prometía array vacío "si nunca se lo editó", pero created siempre existe. Era inalcanzable.
+- Error.message: Decía "quien está cargando el alta" y lo usa también el PATCH. Ese lo metí yo el turno pasado.
+/auth/refresh Le faltaba el 400 que /auth/login sí tenía: mismo error, dos criterios.
+- GET /users 400: Ahora lleva cuerpo con invalid_cursor / invalid_limit — el cliente necesita distinguir "reintentá sin cursor" de "tu código está mal".
+- Validación maxLength en email, full_name y password. En 3.1 format es anotación, no valida: sin esto un password de 1 MB entra derecho al KDF.
+- Tooling servers, operationId y tags en las 8 ops, userId a components/parameters. Sin servers, "Try it out" en Swagger Editor pega contra el host del editor.
+- Entre otros hallazgos que decidí descartar.
 
-## 4 - Los arreglos, y una segunda revisión automática
-
-Le pedí que resolviera los cuatro puntos —dejando claro que RH puede leer a todos pero solo los admin escriben, y que el audit-log es solo de admin— y después le pedí que pasara `/code-review` sobre el resultado.
-
-**Qué intentaba lograr:** No quedarme con la primera revisión. La primera la había pedido yo en lenguaje suelto; quería ver qué encontraba una pasada sistemática sobre el contrato ya corregido.
-
-**Qué devolvió:** Quince hallazgos. El que más me importó: mi regla de "el email queda ocupado para siempre" la rompía mi propio `PATCH`, porque cambiar el email de alguien liberaba el viejo y después un `POST` lo podía reusar. La regla estaba escrita en el README y el contrato no la cumplía. También encontró que el contrato se podía suicidar —dar de baja o degradar al último admin dejaba la API de solo lectura para siempre, sin auto-registro ni reactivación—, que el primer admin era imposible de crear por API, y que la descripción del audit-log prometía un array vacío que nunca podía pasar porque el alta siempre deja una entrada.
-
-**Qué hice con eso:** No apliqué los quince. Separé los que eran contradicciones internas del contrato (esos van sí o sí: el email, el último admin, el array vacío) de los que eran alcance ya declarado. El `429` en login lo descarté: es política de deployment, y meterla a medias en el contrato es decorado. Lo que dejé afuera lo escribí como deuda en el README, con su costo: sin cambio de contraseña, el admin conoce la contraseña de cada uno; sin logout, un refresh token robado solo se invalida dando de baja al usuario entero. Queda abierto si el audit-log también se pagina.
+**Qué hice con eso:** No apliqué los quince. Descarté algunos que no consideré importantes en base al aclance del TP y le pedí que solucione los más importantes.
