@@ -1,0 +1,12 @@
+{
+  "//": "El tsconfig del build. Solo src: el seed y prisma.config.ts corren con el type stripping de Node y no van a dist.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "prisma", "prisma.config.ts"]
+}

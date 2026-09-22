@@ -1,0 +1,27 @@
+# Solo la base. La API corre fuera del compose (npm run start:dev): recompilar un
+# contenedor en cada cambio no aporta nada en un TP.
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: turnos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: turnos
+      POSTGRES_PASSWORD: turnos
+      POSTGRES_DB: turnos
+    ports:
+      # 5442 en el host: 5432 y 5433 suelen estar tomados por otros Postgres locales.
+      - '5442:5432'
+    volumes:
+      - turnos-pgdata:/var/lib/postgresql/data
+    # Sin esto, `up -d` vuelve antes de que Postgres acepte conexiones y `migrate deploy`
+    # falla. Con `--wait` la cadena con && es segura. Reemplaza un wait-for-it.sh.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U turnos -d turnos']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+volumes:
+  turnos-pgdata:

@@ -1,0 +1,1486 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/tenants/{tenantSlug}/sesiones": {
+      "post": {
+        "operationId": "SesionesController_create",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearSesionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales incorrectas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inicia sesion como administradora del centro.",
+        "tags": [
+          "Sesiones"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/servicios": {
+      "get": {
+        "operationId": "ServiciosController_findAll",
+        "parameters": [
+          {
+            "name": "activo",
+            "required": false,
+            "in": "query",
+            "description": "Filtra por estado. El front del cliente pide `activo=true`; el ABM no manda nada y ve\ntodo. Es un filtro comun y no un flag de autorizacion: un parametro que cambia el nivel\nde acceso de una ruta publica es lo que se rompe en el segundo refactor.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "description": "Cuantos elementos devolver como maximo en esta pagina.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "El nextCursor que devolvio la pagina anterior. Es opaco: mandalo tal cual.",
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Una pagina de resultados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CursorPageDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ServicioDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.\n\nEl centro o el tratamiento no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Catalogo de tratamientos del centro, paginado por cursor.",
+        "tags": [
+          "Servicios"
+        ]
+      },
+      "post": {
+        "operationId": "ServiciosController_create",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServicioDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicioDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos invalidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.\n\nEl centro o el tratamiento no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ya hay un tratamiento con ese nombre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Da de alta un tratamiento. Solo la administradora del centro.",
+        "tags": [
+          "Servicios"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/servicios/{servicioId}": {
+      "get": {
+        "operationId": "ServiciosController_findOne",
+        "parameters": [
+          {
+            "name": "servicioId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicioDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.\n\nEl centro o el tratamiento no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Un tratamiento puntual.",
+        "tags": [
+          "Servicios"
+        ]
+      },
+      "patch": {
+        "operationId": "ServiciosController_update",
+        "parameters": [
+          {
+            "name": "servicioId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServicioDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicioDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos invalidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.\n\nEl centro o el tratamiento no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ya hay un tratamiento con ese nombre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edita un tratamiento. Es tambien la baja, con `{\"activo\": false}`.",
+        "tags": [
+          "Servicios"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/ventanas-atencion": {
+      "get": {
+        "operationId": "VentanasAtencionController_findAll",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VentanasAtencionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Las franjas en que el centro toma turnos, con su capacidad.",
+        "tags": [
+          "VentanasAtencion"
+        ]
+      },
+      "put": {
+        "operationId": "VentanasAtencionController_replaceAll",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceVentanasDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VentanasAtencionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Alguna franja es invalida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Hay franjas superpuestas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reemplaza la semana completa de franjas de atencion.",
+        "tags": [
+          "VentanasAtencion"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/servicios/{servicioId}/disponibilidad": {
+      "get": {
+        "operationId": "DisponibilidadController_find",
+        "parameters": [
+          {
+            "name": "servicioId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fecha",
+            "required": true,
+            "in": "query",
+            "description": "Formato YYYY-MM-DD.",
+            "schema": {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "example": "2026-10-05",
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisponibilidadDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fecha invalida o muy lejana.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro o el tratamiento no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Horarios de un dia para un tratamiento, con los cupos que quedan en cada uno.",
+        "tags": [
+          "Disponibilidad"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/reservas": {
+      "post": {
+        "operationId": "ReservasController_create",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReservaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos invalidos o fecha muy lejana.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro o el tratamiento no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sin cupo, fuera de agenda, horario pasado o turno duplicado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reserva un turno. Publico: la clienta no tiene cuenta, deja sus datos de contacto.",
+        "tags": [
+          "Reservas"
+        ]
+      },
+      "get": {
+        "operationId": "ReservasController_findAll",
+        "parameters": [
+          {
+            "name": "estado",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pendiente",
+                "confirmada",
+                "cancelada"
+              ]
+            }
+          },
+          {
+            "name": "servicioId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 40,
+              "type": "string"
+            }
+          },
+          {
+            "name": "desde",
+            "required": false,
+            "in": "query",
+            "description": "Desde esta fecha, inclusive.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hasta",
+            "required": false,
+            "in": "query",
+            "description": "Hasta esta fecha, inclusive.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "description": "Cuantos elementos devolver como maximo en esta pagina.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "El nextCursor que devolvio la pagina anterior. Es opaco: mandalo tal cual.",
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Una pagina de resultados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CursorPageDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ReservaDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "La agenda del centro, paginada por cursor. Solo la administradora.",
+        "tags": [
+          "Reservas"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/reservas/{reservaId}": {
+      "patch": {
+        "operationId": "ReservasController_update",
+        "parameters": [
+          {
+            "name": "reservaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReservaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "El estado pedido no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "La reserva no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Esa transicion de estado no es valida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Confirma o cancela un turno.",
+        "tags": [
+          "Reservas"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "API de turnos",
+    "description": "SaaS multi-tenant de turnos para centros de estetica. Cada centro es un tenant y viaja en el path. Los montos son enteros en centavos. Las horas son hora de pared del centro, en formato HH:mm, y las fechas YYYY-MM-DD.",
+    "version": "1.0.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [
+    {
+      "url": "http://localhost:3100",
+      "description": "Desarrollo local"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "ErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Identificador de maquina del error. Es el que conviene usar para ramificar.",
+            "enum": [
+              "validation_error",
+              "invalid_cursor",
+              "invalid_credentials",
+              "unauthenticated",
+              "invalid_token",
+              "wrong_tenant",
+              "tenant_not_found",
+              "servicio_not_found",
+              "reserva_not_found",
+              "servicio_name_taken",
+              "ventanas_superpuestas",
+              "slot_full",
+              "outside_business_hours",
+              "past_date",
+              "too_far_ahead",
+              "invalid_transition",
+              "high_contention"
+            ],
+            "type": "string",
+            "example": "slot_full"
+          },
+          "message": {
+            "type": "string",
+            "description": "Texto en espanol, listo para mostrarle a una persona.",
+            "example": "Ese horario ya no tiene cupo. Elegi otro."
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "CrearSesionDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email de la persona administradora del centro.",
+            "format": "email",
+            "example": "admin@ejemplo.test"
+          },
+          "password": {
+            "type": "string",
+            "description": "Su contrasena.",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "UsuarioSesionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "rol": {
+            "type": "string",
+            "description": "Siempre `admin` en el MVP."
+          }
+        },
+        "required": [
+          "id",
+          "nombre",
+          "rol"
+        ]
+      },
+      "SesionDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT para el header `Authorization: Bearer <token>`.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/UsuarioSesionDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "usuario"
+        ]
+      },
+      "CursorPageDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Pasalo como `cursor` para pedir la pagina siguiente. null = era la ultima.",
+            "example": null
+          }
+        },
+        "required": [
+          "data",
+          "nextCursor"
+        ]
+      },
+      "ServicioDto": {
+        "type": "object",
+        "properties": {
+          "precioCentavos": {
+            "type": "number",
+            "description": "Precio total, en centavos. 1800000 son $18.000,00.",
+            "example": 1800000
+          },
+          "senaCentavos": {
+            "type": "number",
+            "description": "Sena que se cobra al reservar, en centavos. Nunca mayor al precio.",
+            "example": 540000
+          },
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string",
+            "description": "Nombre del tratamiento. Unico dentro del centro."
+          },
+          "descripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "duracionMinutos": {
+            "type": "number",
+            "description": "Cuanto dura el turno. Define cuantos inicios de grilla entran en cada franja."
+          },
+          "requiereValoracion": {
+            "type": "boolean",
+            "description": "Si el tratamiento necesita una valoracion previa con el equipo."
+          },
+          "activo": {
+            "type": "boolean",
+            "description": "Un servicio inactivo no se puede reservar. La baja es logica."
+          }
+        },
+        "required": [
+          "precioCentavos",
+          "senaCentavos",
+          "id",
+          "nombre",
+          "descripcion",
+          "duracionMinutos",
+          "requiereValoracion",
+          "activo"
+        ]
+      },
+      "CreateServicioDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "description": "Nombre del tratamiento. Unico dentro del centro.",
+            "minLength": 2,
+            "maxLength": 80
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "duracionMinutos": {
+            "type": "number",
+            "description": "Duracion del turno en minutos.\n\nEl minimo no es cosmetico: con 0, horaFin queda igual a horaInicio, el predicado de\nsolape no matchea nada y el control de capacidad queda desactivado.",
+            "minimum": 5,
+            "maximum": 600
+          },
+          "precioCentavos": {
+            "type": "number",
+            "description": "Precio total en centavos.",
+            "minimum": 0
+          },
+          "senaCentavos": {
+            "type": "number",
+            "description": "Sena en centavos. El service valida ademas que no supere al precio.",
+            "minimum": 0
+          },
+          "requiereValoracion": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "nombre",
+          "duracionMinutos",
+          "precioCentavos",
+          "senaCentavos"
+        ]
+      },
+      "UpdateServicioDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "description": "Nombre del tratamiento. Unico dentro del centro.",
+            "minLength": 2,
+            "maxLength": 80
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "duracionMinutos": {
+            "type": "number",
+            "description": "Duracion del turno en minutos.\n\nEl minimo no es cosmetico: con 0, horaFin queda igual a horaInicio, el predicado de\nsolape no matchea nada y el control de capacidad queda desactivado.",
+            "minimum": 5,
+            "maximum": 600
+          },
+          "precioCentavos": {
+            "type": "number",
+            "description": "Precio total en centavos.",
+            "minimum": 0
+          },
+          "senaCentavos": {
+            "type": "number",
+            "description": "Sena en centavos. El service valida ademas que no supere al precio.",
+            "minimum": 0
+          },
+          "requiereValoracion": {
+            "type": "boolean"
+          },
+          "activo": {
+            "type": "boolean"
+          }
+        }
+      },
+      "VentanaAtencionDto": {
+        "type": "object",
+        "properties": {
+          "diaSemana": {
+            "type": "number",
+            "description": "1 lunes .. 7 domingo. Un dia sin franjas es un dia cerrado.",
+            "minimum": 1,
+            "maximum": 7,
+            "example": 1
+          },
+          "horaInicio": {
+            "type": "string",
+            "description": "Hora de pared en que abre la franja, \"HH:mm\".",
+            "example": "09:00"
+          },
+          "horaFin": {
+            "type": "string",
+            "description": "Minuto mas tardio en que un turno puede TERMINAR, no cuando se cierra la puerta.\nCon 13:30 un tratamiento de 45 minutos llega a empezar 12:45.",
+            "example": "13:30"
+          },
+          "intervaloMinutos": {
+            "type": "number",
+            "description": "Separacion entre inicios de la grilla, en minutos.",
+            "minimum": 5,
+            "maximum": 240,
+            "example": 45
+          },
+          "capacidad": {
+            "type": "number",
+            "description": "Turnos simultaneos aceptados en esta franja. Mayor a 1 habilita el doble turno.",
+            "minimum": 1,
+            "maximum": 20,
+            "example": 1
+          }
+        },
+        "required": [
+          "diaSemana",
+          "horaInicio",
+          "horaFin",
+          "intervaloMinutos",
+          "capacidad"
+        ]
+      },
+      "VentanasAtencionDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VentanaAtencionDto"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ReplaceVentanasDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "maxItems": 84,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VentanaAtencionDto"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "SlotDto": {
+        "type": "object",
+        "properties": {
+          "hora": {
+            "type": "string",
+            "description": "Hora de inicio, en hora de pared del centro.",
+            "example": "09:45"
+          },
+          "cuposDisponibles": {
+            "type": "number",
+            "description": "Cupos que quedan en ese horario. 0 significa lleno: el horario se devuelve igual para\nque el front lo pinte en gris, como hace el prototipo.",
+            "example": 1
+          }
+        },
+        "required": [
+          "hora",
+          "cuposDisponibles"
+        ]
+      },
+      "DisponibilidadDto": {
+        "type": "object",
+        "properties": {
+          "fecha": {
+            "type": "string",
+            "example": "2026-10-05"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlotDto"
+            }
+          }
+        },
+        "required": [
+          "fecha",
+          "data"
+        ]
+      },
+      "CreateReservaDto": {
+        "type": "object",
+        "properties": {
+          "fecha": {
+            "type": "string",
+            "description": "Formato YYYY-MM-DD.",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "example": "2026-10-05"
+          },
+          "hora": {
+            "type": "string",
+            "description": "Formato HH:mm, de la grilla del centro.",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "example": "09:45"
+          },
+          "metodoPago": {
+            "enum": [
+              "efectivo",
+              "mercadopago"
+            ],
+            "type": "string",
+            "example": "efectivo"
+          },
+          "servicioId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "clienteNombre": {
+            "type": "string",
+            "description": "Un solo campo, como el formulario del prototipo.",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "clienteEmail": {
+            "type": "string",
+            "format": "email"
+          },
+          "clienteTelefono": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 30
+          },
+          "notas": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "fecha",
+          "hora",
+          "metodoPago",
+          "servicioId",
+          "clienteNombre",
+          "clienteEmail",
+          "clienteTelefono"
+        ]
+      },
+      "ReservaDto": {
+        "type": "object",
+        "properties": {
+          "fecha": {
+            "type": "string",
+            "example": "2026-10-05"
+          },
+          "horaInicio": {
+            "type": "string",
+            "example": "09:45"
+          },
+          "horaFin": {
+            "type": "string",
+            "example": "10:30"
+          },
+          "estado": {
+            "type": "string",
+            "description": "`pendiente`, `confirmada` o `cancelada`.",
+            "example": "confirmada"
+          },
+          "metodoPago": {
+            "type": "string",
+            "description": "`efectivo` o `mercadopago`.",
+            "example": "efectivo"
+          },
+          "senaCentavos": {
+            "type": "number",
+            "description": "Sena congelada al momento de reservar, en centavos.",
+            "example": 540000
+          },
+          "id": {
+            "type": "string"
+          },
+          "clienteNombre": {
+            "type": "string"
+          },
+          "clienteEmail": {
+            "type": "string"
+          },
+          "clienteTelefono": {
+            "type": "string"
+          },
+          "notas": {
+            "type": "string",
+            "nullable": true
+          },
+          "servicioId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fecha",
+          "horaInicio",
+          "horaFin",
+          "estado",
+          "metodoPago",
+          "senaCentavos",
+          "id",
+          "clienteNombre",
+          "clienteEmail",
+          "clienteTelefono",
+          "notas",
+          "servicioId",
+          "createdAt"
+        ]
+      },
+      "UpdateReservaDto": {
+        "type": "object",
+        "properties": {
+          "estado": {
+            "description": "Nuevo estado. Transiciones validas: pendiente -> confirmada | cancelada,\nconfirmada -> cancelada. `cancelada` es terminal.",
+            "enum": [
+              "confirmada",
+              "cancelada"
+            ],
+            "type": "string",
+            "example": "cancelada"
+          }
+        },
+        "required": [
+          "estado"
+        ]
+      }
+    }
+  }
+}

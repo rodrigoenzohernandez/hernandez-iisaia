@@ -1,0 +1,162 @@
+// Este archivo es la unica fuente del esquema. La migracion inicial es el baseline que
+// genera Prisma: cero SQL a mano, cero EXCLUDE, cero CHECK, cero ALTER TABLE.
+// Lo que un CHECK habria cubierto vive en los DTO y en los services.
+//
+// Convencion de idioma: sustantivos del dominio en espanol, infraestructura en ingles.
+// Identificadores en ASCII, sin tildes ni enie.
+
+generator client {
+  // prisma-client-js y no el generador nuevo: tenancy/tenant-scope.ts lee Prisma.dmmf de aca.
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Prisma 7 saco `url` de este bloque: la URL vive en prisma.config.ts para Migrate, y el
+  // cliente se conecta con el driver adapter de src/prisma/prisma.module.ts.
+  provider = "postgresql"
+}
+
+/// Un solo rol en el MVP. El claim viaja en el JWT para que el guard haga un chequeo de
+/// verdad en vez de la ficcion "si hay token valido, es la duenia".
+enum RolUsuario {
+  admin
+  cliente
+}
+
+enum EstadoReserva {
+  pendiente
+  confirmada
+  cancelada
+}
+
+enum MetodoPago {
+  efectivo
+  mercadopago
+}
+
+/// Raiz del arbol: el unico modelo sin tenantId y el unico que la extension no filtra.
+/// No hay endpoint que lo lea ni que lo liste. Los tenants se crean por seed.
+model Tenant {
+  id     String @id @default(cuid())
+  slug   String @unique
+  nombre String
+
+  /// La unica razon por la que el backend conoce zonas horarias: saber que dia y que hora
+  /// es "ahora" en el centro, para rechazar turnos pasados. Todo lo demas es hora de pared.
+  zonaHoraria String   @default("America/Argentina/Buenos_Aires")
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  usuarios  Usuario[]
+  servicios Servicio[]
+  ventanas  VentanaAtencion[]
+}
+
+model Usuario {
+  id           String     @id @default(cuid())
+  tenantId     String
+  email        String
+  passwordHash String
+  nombre       String
+  rol          RolUsuario @default(admin)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  /// El mismo email puede administrar dos centros. Por eso el login vive bajo el path del
+  /// tenant: sin tenant, el email no identifica a nadie.
+  @@unique([tenantId, email])
+}
+
+model Servicio {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  nombre             String
+  descripcion        String?
+  duracionMinutos    Int
+  precioCentavos     Int
+  senaCentavos       Int
+  requiereValoracion Boolean  @default(false)
+  activo             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  reservas Reserva[]
+
+  /// Dos centros pueden tener "Depilacion". Ninguna unique de dominio vuelve a ser de una
+  /// sola columna: todas arrancan con tenantId.
+  @@unique([tenantId, nombre])
+  /// No es decorativo: habilita la FK compuesta de Reserva.
+  @@unique([tenantId, id])
+}
+
+/// Franja recurrente en la que el centro toma turnos, con cuantos acepta en simultaneo.
+/// Varias por dia: maniana y tarde. capacidad > 1 ES el doble turno: configurable, no
+/// imposible.
+model VentanaAtencion {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// 1 lunes .. 7 domingo (ISO-8601).
+  diaSemana Int
+
+  /// Hora de pared del centro, "HH:mm" con cero a la izquierda: el orden lexicografico
+  /// coincide con el cronologico y Postgres lo resuelve con el indice.
+  horaInicio String @db.VarChar(5)
+
+  /// Minuto mas tardio en el que un turno puede TERMINAR, no cuando se cierra la puerta.
+  /// Por eso la grilla depende de la duracion del servicio.
+  horaFin String @db.VarChar(5)
+
+  /// Separacion entre inicios de la grilla. 45 en el prototipo de Lo de Lili.
+  intervaloMinutos Int @default(45)
+
+  /// Turnos simultaneos aceptados en esta franja. Puede ser mayor a 1.
+  capacidad Int @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  /// Una franja por dia y hora de inicio: es lo que hace idempotente al PUT de la
+  /// coleccion. Sirve ademas de indice para la busqueda por dia, que es su prefijo.
+  @@unique([tenantId, diaSemana, horaInicio])
+}
+
+model Reserva {
+  id         String @id @default(cuid())
+  tenantId   String
+  servicioId String
+
+  /// Dia del turno en hora de pared del centro.
+  fecha      DateTime @db.Date
+  horaInicio String   @db.VarChar(5)
+
+  /// Snapshot: sobrevive a un cambio de duracion del servicio, y el conteo de solapes no
+  /// necesita join.
+  horaFin String @db.VarChar(5)
+
+  estado          EstadoReserva @default(pendiente)
+  clienteNombre   String
+  clienteEmail    String
+  clienteTelefono String
+  notas           String?
+  metodoPago      MetodoPago
+
+  /// Snapshot del monto al momento de reservar, como el precio en una factura.
+  senaCentavos Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// FK compuesta: Postgres impide que una reserva apunte a un servicio de otro tenant
+  /// aunque la aplicacion se equivoque. Es la segunda linea detras de la extension y cubre
+  /// justo lo que la extension no ve: los include anidados.
+  /// Reserva no tiene relacion directa a Tenant a proposito: asi tenantId participa de una
+  /// sola relacion y el tenant se hereda del servicio.
+  servicio Servicio @relation(fields: [tenantId, servicioId], references: [tenantId, id])
+
+  /// Sostiene el listado paginado del admin y la query de solapes.
+  @@index([tenantId, fecha, horaInicio])
+}
