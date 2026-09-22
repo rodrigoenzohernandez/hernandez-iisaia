@@ -1,0 +1,38 @@
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AuthModule } from './auth/auth.module.js';
+import { env } from './env.js';
+import { DisponibilidadModule } from './disponibilidad/disponibilidad.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
+import { ReservasModule } from './reservas/reservas.module.js';
+import { ServiciosModule } from './servicios/servicios.module.js';
+import { TenantAuthGuard } from './tenancy/tenant-auth.guard.js';
+import { VentanasAtencionModule } from './ventanas-atencion/ventanas-atencion.module.js';
+
+@Module({
+  imports: [
+    // Tope global holgado; los dos endpoints publicos que escriben llevan el suyo, mas
+    // estricto, con @Throttle.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: Math.max(120, env.throttleLimit) }]),
+    PrismaModule,
+    AuthModule,
+    ServiciosModule,
+    VentanasAtencionModule,
+    DisponibilidadModule,
+    ReservasModule,
+  ],
+  providers: [
+    // El ThrottlerGuard hay que registrarlo a mano: ThrottlerModule.forRoot solo publica las
+    // opciones y el storage. Sin esta linea, los @Throttle de los dos endpoints publicos y el
+    // tope global son decoradores muertos y la API no tiene ningun limite de peticiones.
+    // Va PRIMERO: conviene rechazar por volumen antes de gastar una query resolviendo el
+    // centro y un scrypt verificando la contrasena.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // El guard de tenant es GLOBAL y @Publico() es la excepcion: falla cerrado. Olvidarse el
+    // decorador rompe un endpoint publico en el primer curl; olvidarse un @UseGuards dejaria
+    // una ruta de administracion abierta y nadie se enteraria.
+    { provide: APP_GUARD, useClass: TenantAuthGuard },
+  ],
+})
+export class AppModule {}
