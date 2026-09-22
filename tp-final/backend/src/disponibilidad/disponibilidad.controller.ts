@@ -4,6 +4,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
 } from '@nestjs/swagger';
+import { ApiTenant } from '../common/api.decorators.js';
 import {
   CurrentTenant,
   Publico,
@@ -14,6 +15,7 @@ import { DisponibilidadService } from './disponibilidad.service.js';
 import { DisponibilidadQueryDto } from './dto/disponibilidad-query.dto.js';
 import { DisponibilidadDto } from './dto/slot.dto.js';
 
+@ApiTenant()
 @Controller('tenants/:tenantSlug/servicios/:servicioId/disponibilidad')
 export class DisponibilidadController {
   constructor(private readonly disponibilidad: DisponibilidadService) {}

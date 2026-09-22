@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Put } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
-  ApiBearerAuth,
   ApiConflictResponse,
   ApiOkResponse,
 } from '@nestjs/swagger';
+import { ApiSoloAdmin, ApiTenant } from '../common/api.decorators.js';
 import { ErrorDto } from '../common/error.dto.js';
 import {
   ReplaceVentanasDto,
@@ -12,12 +12,13 @@ import {
 } from './dto/replace-ventanas.dto.js';
 import { VentanasAtencionService } from './ventanas-atencion.service.js';
 
-@ApiBearerAuth()
+@ApiTenant()
 @Controller('tenants/:tenantSlug/ventanas-atencion')
 export class VentanasAtencionController {
   constructor(private readonly ventanas: VentanasAtencionService) {}
 
   /** Las franjas en que el centro toma turnos, con su capacidad. */
+  @ApiSoloAdmin()
   @Get()
   @ApiOkResponse({ type: VentanasAtencionDto })
   findAll(): Promise<VentanasAtencionDto> {
@@ -25,6 +26,7 @@ export class VentanasAtencionController {
   }
 
   /** Reemplaza la semana completa de franjas de atencion. */
+  @ApiSoloAdmin()
   @Put()
   @ApiOkResponse({ type: VentanasAtencionDto })
   @ApiBadRequestResponse({

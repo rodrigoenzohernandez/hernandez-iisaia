@@ -9,12 +9,12 @@ import {
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
-  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
 } from '@nestjs/swagger';
+import { ApiSoloAdmin, ApiTenant } from '../common/api.decorators.js';
 import { CurrentUsuario, Publico } from '../common/decorators.js';
 import { ErrorDto } from '../common/error.dto.js';
 import { ApiCursorPage } from '../common/pagination/api-cursor-page.decorator.js';
@@ -25,11 +25,11 @@ import { ServicioDto } from './dto/servicio.dto.js';
 import { UpdateServicioDto } from './dto/update-servicio.dto.js';
 import { ServiciosService } from './servicios.service.js';
 
-@ApiBearerAuth()
 @ApiNotFoundResponse({
   type: ErrorDto,
   description: 'El centro o el tratamiento no existe.',
 })
+@ApiTenant()
 @Controller('tenants/:tenantSlug/servicios')
 export class ServiciosController {
   constructor(private readonly servicios: ServiciosService) {}
@@ -57,6 +57,7 @@ export class ServiciosController {
   }
 
   /** Da de alta un tratamiento. Solo la administradora del centro. */
+  @ApiSoloAdmin()
   @Post()
   @ApiCreatedResponse({ type: ServicioDto })
   @ApiBadRequestResponse({ type: ErrorDto, description: 'Datos invalidos.' })
@@ -69,6 +70,7 @@ export class ServiciosController {
   }
 
   /** Edita un tratamiento. Es tambien la baja, con `{"activo": false}`. */
+  @ApiSoloAdmin()
   @Patch(':servicioId')
   @ApiOkResponse({ type: ServicioDto })
   @ApiBadRequestResponse({ type: ErrorDto, description: 'Datos invalidos.' })

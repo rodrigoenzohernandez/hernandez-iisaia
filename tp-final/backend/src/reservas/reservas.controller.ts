@@ -11,12 +11,12 @@ import { Throttle } from '@nestjs/throttler';
 import { env } from '../env.js';
 import {
   ApiBadRequestResponse,
-  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
 } from '@nestjs/swagger';
+import { ApiSoloAdmin, ApiTenant } from '../common/api.decorators.js';
 import {
   CurrentTenant,
   Publico,
@@ -31,7 +31,7 @@ import { ReservaDto } from './dto/reserva.dto.js';
 import { UpdateReservaDto } from './dto/update-reserva.dto.js';
 import { ReservasService } from './reservas.service.js';
 
-@ApiBearerAuth()
+@ApiTenant()
 @Controller('tenants/:tenantSlug/reservas')
 export class ReservasController {
   constructor(private readonly reservas: ReservasService) {}
@@ -64,6 +64,7 @@ export class ReservasController {
   }
 
   /** La agenda del centro, paginada por cursor. Solo la administradora. */
+  @ApiSoloAdmin()
   @Get()
   @ApiCursorPage(ReservaDto)
   findAll(
@@ -73,8 +74,10 @@ export class ReservasController {
   }
 
   /** Confirma o cancela un turno. */
+  @ApiSoloAdmin()
   @Patch(':reservaId')
   @ApiOkResponse({ type: ReservaDto })
+  @ApiBadRequestResponse({ type: ErrorDto, description: 'El estado pedido no existe.' })
   @ApiNotFoundResponse({ type: ErrorDto, description: 'La reserva no existe.' })
   @ApiConflictResponse({
     type: ErrorDto,

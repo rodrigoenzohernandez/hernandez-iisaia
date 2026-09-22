@@ -6,12 +6,14 @@ import {
   ApiNotFoundResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { ApiTenant } from '../common/api.decorators.js';
 import { Publico } from '../common/decorators.js';
 import { ErrorDto } from '../common/error.dto.js';
 import { AuthService } from './auth.service.js';
 import { CrearSesionDto } from './dto/crear-sesion.dto.js';
 import { SesionDto } from './dto/sesion.dto.js';
 
+@ApiTenant()
 @Controller('tenants/:tenantSlug/sesiones')
 export class SesionesController {
   constructor(private readonly auth: AuthService) {}

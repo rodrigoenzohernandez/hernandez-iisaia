@@ -5,7 +5,8 @@ import 'reflect-metadata';
 
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
+import { construirOpenApi } from './openapi.js';
 import { AppModule } from './app.module.js';
 import { env } from './env.js';
 import { TenantContext } from './tenancy/tenant-context.js';
@@ -44,26 +45,10 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  SwaggerModule.setup(
-    'docs',
-    app,
-    SwaggerModule.createDocument(
-      app,
-      new DocumentBuilder()
-        .setTitle('API de turnos')
-        .setDescription(
-          'SaaS multi-tenant de turnos para centros de estetica. Cada centro es un tenant y ' +
-            'viaja en el path. Los montos son enteros en centavos. Las horas son hora de ' +
-            'pared del centro, en formato HH:mm.',
-        )
-        .setVersion('1.0.0')
-        .addBearerAuth()
-        .build(),
-    ),
-    { useGlobalPrefix: true },
-  );
+  SwaggerModule.setup('docs', app, construirOpenApi(app), { useGlobalPrefix: true });
 
   await app.listen(env.port);
 }
+
 
 void bootstrap();
