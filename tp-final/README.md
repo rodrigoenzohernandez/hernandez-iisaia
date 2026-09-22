@@ -25,6 +25,10 @@ El contrato también está versionado en [backend/openapi.json](backend/openapi.
 debería exigir Docker, Postgres y el seed. Con la API corriendo, el mismo documento se sirve
 en `/api/v1/docs-json`.
 
+Para integrar el frontend está [docs/2.frontend-mvp-integracion.md](docs/2.frontend-mvp-integracion.md),
+que cubre lo que un OpenAPI no puede decir: el orden de las llamadas, qué hacer con cada
+código de error, y las reglas del contrato que no se ven en los tipos.
+
 Las dos variables sin default hay que generarlas, porque el proceso no arranca sin ellas:
 
 ```bash
@@ -77,6 +81,7 @@ Un solo proceso sirve la API bajo `/api/v1`. La base corre en Docker; la aplicac
 tp-final/
 ├── docs/
 │   ├── 1.backend-mvp-plan.md      el plan con el que arranqué, sin editar
+│   ├── 2.frontend-mvp-integracion.md  la guía para integrar el front
 │   └── verificacion.md            lo genera verificar.sh; no se commitea, ver abajo
 └── backend/
     ├── docker-compose.yml         solo Postgres 17, con healthcheck, en el puerto 5442

@@ -19,6 +19,9 @@ export const ApiTenant = () =>
   applyDecorators(
     ApiParam({
       name: 'tenantSlug',
+      // El type explicito no sobra: sin el, un cliente generado del spec tipa el parametro
+      // como `unknown` y obliga a castear en cada llamada.
+      type: String,
       description: 'Identificador del centro en la URL, por ejemplo `lo-de-lili`.',
       example: 'lo-de-lili',
     }),

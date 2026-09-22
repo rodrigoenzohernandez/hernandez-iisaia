@@ -11,7 +11,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -104,7 +105,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -158,7 +160,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -263,7 +266,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -311,7 +315,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -408,7 +413,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -473,7 +479,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -589,7 +596,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -641,7 +649,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -774,7 +783,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
@@ -863,7 +873,8 @@
             "in": "path",
             "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
             "schema": {
-              "example": "lo-de-lili"
+              "example": "lo-de-lili",
+              "type": "string"
             }
           }
         ],
