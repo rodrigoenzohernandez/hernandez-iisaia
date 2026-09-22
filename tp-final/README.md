@@ -18,8 +18,12 @@ npm run start:dev
 ```
 
 La API queda en `http://localhost:3100/api/v1` y la documentación interactiva en
-`http://localhost:3100/api/v1/docs`. El OpenAPI crudo, que es lo que se usa para generar un
-cliente, está en `/api/v1/docs-json`.
+`http://localhost:3100/api/v1/docs`.
+
+El contrato también está versionado en [backend/openapi.json](backend/openapi.json), que
+`npm run spec` regenera sin levantar el servidor ni tocar la base. Ver qué endpoints hay no
+debería exigir Docker, Postgres y el seed. Con la API corriendo, el mismo documento se sirve
+en `/api/v1/docs-json`.
 
 Las dos variables sin default hay que generarlas, porque el proceso no arranca sin ellas:
 
@@ -80,6 +84,7 @@ tp-final/
     │   ├── schema.prisma          las 5 tablas
     │   ├── migrations/            la migración inicial, generada por Prisma
     │   └── seed.ts                3 centros, idempotente, con PrismaClient crudo
+    ├── openapi.json               el contrato, regenerado con `npm run spec`
     ├── verificacion/
     │   ├── verificar.sh        los 173 casos de dominio
     │   └── verificar-limite.sh que el límite de peticiones exista
