@@ -14,6 +14,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
+    "start:verify": "nest build && THROTTLE_LIMIT=1000 JOBS_INTERVAL_MS=2000 EMAIL_PROVIDER=log node dist/main.js",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.ts\"",
     "db:up": "docker compose up -d --wait",

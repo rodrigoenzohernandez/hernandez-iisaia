@@ -4,9 +4,11 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module.js';
 import { env } from './env.js';
 import { DisponibilidadModule } from './disponibilidad/disponibilidad.module.js';
+import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ReservasModule } from './reservas/reservas.module.js';
 import { ServiciosModule } from './servicios/servicios.module.js';
+import { TareasModule } from './tareas/tareas.module.js';
 import { TenantAuthGuard } from './tenancy/tenant-auth.guard.js';
 import { VentanasAtencionModule } from './ventanas-atencion/ventanas-atencion.module.js';
 
@@ -18,11 +20,13 @@ import { VentanasAtencionModule } from './ventanas-atencion/ventanas-atencion.mo
       { ttl: 60_000, limit: Math.max(120, env.throttleLimit) },
     ]),
     PrismaModule,
+    NotificacionesModule,
     AuthModule,
     ServiciosModule,
     VentanasAtencionModule,
     DisponibilidadModule,
     ReservasModule,
+    TareasModule,
   ],
   providers: [
     // El ThrottlerGuard hay que registrarlo a mano: ThrottlerModule.forRoot solo publica las

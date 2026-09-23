@@ -66,6 +66,9 @@ proximo() {
   ' "$1"
 }
 LUNES=$(proximo 1); SABADO=$(proximo 6); DOMINGO=$(proximo 7)
+# Una semana despues del proximo lunes: los turnos de la seccion de mails van ahi para no
+# ocupar horarios que otras secciones esperan libres.
+LUNES2=$(node -e 'const d = new Date(`${process.argv[1]}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 7); console.log(d.toISOString().slice(0, 10))' "$LUNES")
 PASADO=2020-01-06                 # un lunes, para que el unico motivo de rechazo sea la fecha
 INEXISTENTE=czzzzzzzzzzzzzzzzzzzzzzzz
 
@@ -140,6 +143,21 @@ con_rol() {
     const firma = createHmac("sha256", process.env.JWT_SECRET).update(firmado).digest("base64url");
     console.log(`${firmado}.${firma}`);
   ' "$1" "$2"
+}
+
+# sql <consulta> — una lectura contra la base del compose, sin formato. La verificacion mira
+# la cola de mails asi: con EMAIL_PROVIDER=log los mails no salen a ningun lado mirable.
+sql() { docker exec turnos-db psql -U turnos -d turnos -tAc "$1"; }
+
+# esperar <segundos> <consulta> <valor> — repite la consulta hasta que devuelve el valor o se
+# acaba el tiempo, y deja en stdout el ultimo resultado. Para lo que pasa en segundo plano.
+esperar() {
+  local fin=$((SECONDS + $1)) r
+  while :; do
+    r=$(sql "$2")
+    [[ $r == "$3" || $SECONDS -ge $fin ]] && { printf '%s' "$r"; return; }
+    sleep 0.5
+  done
 }
 
 # header <curl args...> — los headers de la respuesta, en minuscula, para buscar con grep.
@@ -285,6 +303,41 @@ CODIGO=$(curl -s -o "$TMP/body" -w '%{http_code}' -X POST "$BASE$T/sesiones" -H 
 check 'un body de 200 kb' 413 "$CODIGO"
 check 'con codigo payload_too_large' payload_too_large "$(jq -r .code "$TMP/body")"
 
+seccion 'Notificaciones por mail'
+N_MAILS='select count(*) from "Notificacion"'
+req 'un alta confirmada, con HTML en el nombre' 201 POST "$T/reservas" \
+  "$(reserva "$S30" "$LUNES2" 09:00 mails@example.com | jq -c '.clienteNombre = "<b>Ana</b> Mails"')"
+RESERVA_MAILS=$(jq -r .id "$TMP/body")
+check 'encola la confirmacion para la clienta' 1 \
+  "$(sql "$N_MAILS where para = 'mails@example.com' and asunto like 'Tu turno en Lo de Lili%'")"
+check 'y sale en el acto, sin esperar a la tarea periodica' enviada \
+  "$(esperar 10 "select estado from \"Notificacion\" where para = 'mails@example.com'" enviada)"
+check 'el HTML de la clienta llega escapado, no inyectado' t \
+  "$(sql "select bool_and(html like '%&lt;b&gt;Ana&lt;/b&gt;%' and html not like '%<b>Ana%') from \"Notificacion\" where para = 'mails@example.com'")"
+check 'el centro recibe el aviso del turno nuevo' 1 \
+  "$(sql "$N_MAILS where para = 'lili@lodelili.test' and asunto like 'Turno nuevo%' and texto like '%mails@example.com%'")"
+check 'un alta pendiente de pago no manda confirmacion' 0 \
+  "$(sql "$N_MAILS where para = 'mp@example.com'")"
+req 'la administradora cancela el turno' 200 PATCH "$T/reservas/$RESERVA_MAILS" '{"estado":"cancelada"}' "$TOKEN"
+check 'la clienta recibe el mail de cancelacion' 1 \
+  "$(sql "$N_MAILS where para = 'mails@example.com' and asunto like 'Se cancel%'")"
+
+# El recordatorio sale 24 horas antes. Para no depender del dia en que corre el script, el
+# turno se crea lejos y despues se mueve a 12 horas de ahora: es el unico dato que esta seccion
+# toca por fuera de la API.
+req 'un turno lejano, sin recordatorio todavia' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES2" 10:30 recordatorio@example.com)"
+RESERVA_REC=$(jq -r .id "$TMP/body")
+check 'al reservar lejos no se marca el recordatorio' '' \
+  "$(sql "select \"recordatorioEnviadoAt\" from \"Reserva\" where id = '$RESERVA_REC'")"
+sql "update \"Reserva\" set fecha = (now() at time zone 'America/Argentina/Buenos_Aires' + interval '12 hours')::date,
+     \"horaInicio\" = to_char(now() at time zone 'America/Argentina/Buenos_Aires' + interval '12 hours', 'HH24:MI')
+     where id = '$RESERVA_REC'" >/dev/null
+check 'a 12 horas del turno sale el recordatorio (si falla: levantar con npm run start:verify)' 1 \
+  "$(esperar 15 "$N_MAILS where para = 'recordatorio@example.com' and asunto like 'Recordatorio%'" 1)"
+sleep 5
+check 'una sola vez, aunque la tarea siga corriendo' 1 \
+  "$(sql "$N_MAILS where para = 'recordatorio@example.com' and asunto like 'Recordatorio%'")"
+
 seccion 'ABM de tratamientos'
 NUEVO='{"nombre":"Masaje descontracturante","duracionMinutos":45,"precioCentavos":1200000,"senaCentavos":400000}'
 req 'crear sin token' 401 POST "$T/servicios" "$NUEVO"
@@ -380,7 +433,10 @@ req 'cancelar libera el cupo' 200 PATCH "$T/reservas/$RESERVA1" '{"estado":"canc
 req 'y el horario vuelve a ofrecerse' 200 GET "$T/servicios/$S60/disponibilidad?fecha=$LUNES"
 check 'cuposDisponibles en 09:00 volvio a 1' 1 "$(jq '[.data[] | select(.hora == "09:00")][0].cuposDisponibles' "$TMP/body")"
 req 'filtrar por estado' 200 GET "$T/reservas?estado=cancelada&limit=50" '' "$TOKEN"
-check 'las dos canceladas' 2 "$(jq '.data | length' "$TMP/body")"
+check 'el filtro trae solo canceladas' true "$(jq 'all(.data[]; .estado == "cancelada")' "$TMP/body")"
+# Contar el total ataba el caso a lo que cancelan las otras secciones: se buscan las dos de esta.
+check 'entre ellas, las dos que cancelo esta seccion' 2 \
+  "$(jq --arg a "$RESERVA_MP" --arg b "$RESERVA1" '[.data[] | select(.id == $a or .id == $b)] | length' "$TMP/body")"
 req 'filtrar por un estado invalido' 400 GET "$T/reservas?estado=inventado" '' "$TOKEN"
 req 'filtrar por rango de fechas' 200 GET "$T/reservas?desde=$LUNES&hasta=$LUNES&limit=50" '' "$TOKEN"
 check 'todas las reservas son del lunes' true \

@@ -180,7 +180,8 @@ const prisma = new PrismaClient({
 });
 
 async function main(): Promise<void> {
-  // Orden de FK: reservas -> ventanas/servicios -> usuarios -> tenants.
+  // Orden de FK: hijos antes que padres, y los tenants al final.
+  await prisma.notificacion.deleteMany();
   await prisma.reserva.deleteMany();
   await prisma.ventanaAtencion.deleteMany();
   await prisma.servicio.deleteMany();

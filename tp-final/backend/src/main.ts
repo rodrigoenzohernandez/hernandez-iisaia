@@ -12,6 +12,7 @@ import { construirOpenApi } from './openapi.js';
 import { AppModule } from './app.module.js';
 import { ErroresFilter } from './common/errores.filter.js';
 import { env } from './env.js';
+import { TareasService } from './tareas/tareas.service.js';
 import { TenantContext } from './tenancy/tenant-context.js';
 
 async function bootstrap(): Promise<void> {
@@ -71,6 +72,9 @@ async function bootstrap(): Promise<void> {
   });
 
   await app.listen(env.port);
+  // Despues de listen y aca, no en un hook: el exportador del OpenAPI inicializa la app sin
+  // levantar el servidor, y ahi no tiene que correr nada contra la base.
+  app.get(TareasService).iniciar();
 }
 
 void bootstrap();

@@ -88,9 +88,10 @@ export class ReservasController {
   // Es un PATCH del estado y no un POST /cancelar: cancelar es cambiarle un campo al
   // recurso, no crear uno nuevo. Cancelar libera el cupo; `cancelada` es terminal.
   update(
+    @CurrentTenant() tenant: TenantRequest,
     @Param('reservaId') reservaId: string,
     @Body() dto: UpdateReservaDto,
   ): Promise<ReservaDto> {
-    return this.reservas.update(reservaId, dto);
+    return this.reservas.update(tenant, reservaId, dto);
   }
 }

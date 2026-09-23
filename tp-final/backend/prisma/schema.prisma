@@ -34,6 +34,12 @@ enum MetodoPago {
   mercadopago
 }
 
+enum EstadoNotificacion {
+  pendiente
+  enviada
+  fallida
+}
+
 /// Raiz del arbol: el unico modelo sin tenantId y el unico que la extension no filtra.
 /// No hay endpoint que lo lea ni que lo liste. Los tenants se crean por seed.
 model Tenant {
@@ -48,9 +54,10 @@ model Tenant {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  usuarios  Usuario[]
-  servicios Servicio[]
-  ventanas  VentanaAtencion[]
+  usuarios       Usuario[]
+  servicios      Servicio[]
+  ventanas       VentanaAtencion[]
+  notificaciones Notificacion[]
 }
 
 model Usuario {
@@ -147,6 +154,10 @@ model Reserva {
   /// Snapshot del monto al momento de reservar, como el precio en una factura.
   senaCentavos Int
 
+  /// Cuando salio el recordatorio. Tambien se marca al reservar dentro de las 24 horas
+  /// previas: ahi el mail de confirmacion ya hace de recordatorio.
+  recordatorioEnviadoAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -159,4 +170,31 @@ model Reserva {
 
   /// Sostiene el listado paginado del admin y la query de solapes.
   @@index([tenantId, fecha, horaInicio])
+}
+
+/// Cola de mails (outbox). La fila se escribe en la MISMA transaccion que el cambio que la
+/// origina, asi un turno confirmado nunca se queda sin su mail y un reintento de la
+/// transaccion no lo manda dos veces. Una tarea la despacha y reintenta con backoff.
+model Notificacion {
+  id       String @id @default(cuid())
+  tenantId String
+  para     String
+  asunto   String
+  html     String
+  texto    String
+
+  estado           EstadoNotificacion @default(pendiente)
+  intentos         Int                @default(0)
+  /// Tambien hace de lease: quien despacha la corre para adelante antes de mandar, asi dos
+  /// despachadores en paralelo no toman la misma fila.
+  proximoIntentoAt DateTime           @default(now())
+  proveedorId      String?
+  ultimoError      String?
+  enviadaAt        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, estado, proximoIntentoAt])
 }

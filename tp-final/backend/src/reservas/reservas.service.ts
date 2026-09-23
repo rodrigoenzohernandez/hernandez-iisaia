@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EstadoReserva, MetodoPago, type Prisma } from '@prisma/client';
+import type { TenantRequest } from '../common/decorators.js';
 import {
   aDate,
   aFecha,
@@ -16,14 +17,22 @@ import {
   DIAS_MAX_A_FUTURO,
   diaSemanaISO,
   esFechaReal,
+  minutosHasta,
   ocupacionMaxima,
   sumarDias,
   ventanaDe,
 } from '../common/horario.js';
+import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
+import {
+  avisoTurnoNuevo,
+  turnoCancelado,
+  turnoConfirmado,
+} from '../notificaciones/plantillas.js';
 import type { CursorPageDto } from '../common/pagination/cursor-page.dto.js';
 import { paginate } from '../common/pagination/paginate.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { runSerializable } from '../prisma/run-serializable.js';
+import { RECORDATORIO_MINUTOS } from './recordatorios.service.js';
 import type { CreateReservaDto } from './dto/create-reserva.dto.js';
 import type { ListReservasQueryDto } from './dto/list-reservas-query.dto.js';
 import { reservaSelect, type ReservaDto } from './dto/reserva.dto.js';
@@ -58,10 +67,13 @@ function exigirFechaReal(fecha: string, campo = 'fecha'): void {
 
 @Injectable()
 export class ReservasService {
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly notificaciones: NotificacionesService,
+  ) {}
 
   async create(
-    tenant: { zonaHoraria: string },
+    tenant: TenantRequest,
     dto: CreateReservaDto,
   ): Promise<ReservaDto> {
     // Fuera de la transaccion a proposito: la duracion y la sena se congelan en la reserva,
@@ -69,7 +81,12 @@ export class ReservasService {
     // queda en menos statements.
     const servicio = await this.db.servicio.findFirst({
       where: { id: dto.servicioId, activo: true },
-      select: { id: true, duracionMinutos: true, senaCentavos: true },
+      select: {
+        id: true,
+        nombre: true,
+        duracionMinutos: true,
+        senaCentavos: true,
+      },
     });
     if (!servicio) {
       throw new NotFoundException({
@@ -95,8 +112,12 @@ export class ReservasService {
     }
 
     const horaFin = aHora(aMinutos(dto.hora) + servicio.duracionMinutos);
+    // Un turno que empieza en menos de 24 horas no necesita recordatorio: el mail de
+    // confirmacion que sale ahora ya lo es.
+    const sinRecordatorio =
+      minutosHasta(dto.fecha, dto.hora, ahora) <= RECORDATORIO_MINUTOS;
 
-    return runSerializable(this.db, async (tx) => {
+    const reserva = await runSerializable(this.db, async (tx) => {
       // Leer las franjas DENTRO de la transaccion es lo que hace que un PUT de horarios
       // concurrente conflictue con este alta en vez de pisarla.
       const ventanas = await tx.ventanaAtencion.findMany({
@@ -158,11 +179,40 @@ export class ReservasService {
           clienteEmail: dto.clienteEmail,
           clienteTelefono: dto.clienteTelefono,
           notas: dto.notas ?? null,
+          recordatorioEnviadoAt: sinRecordatorio ? new Date() : null,
         } as Prisma.ReservaUncheckedCreateInput,
         select: reservaSelect,
       });
+
+      // Dentro de la transaccion: si SERIALIZABLE la reintenta, los mails se reintentan con
+      // ella y no quedan duplicados.
+      if (fila.estado === EstadoReserva.confirmada) {
+        const datos = {
+          centro: tenant.nombre,
+          clienteNombre: dto.clienteNombre,
+          servicio: servicio.nombre,
+          fecha: dto.fecha,
+          hora: dto.hora,
+        };
+        await this.notificaciones.encolar(
+          tx,
+          dto.clienteEmail,
+          turnoConfirmado(datos),
+        );
+        await this.notificaciones.encolarAlCentro(
+          tx,
+          avisoTurnoNuevo({
+            ...datos,
+            clienteEmail: dto.clienteEmail,
+            clienteTelefono: dto.clienteTelefono,
+            notas: dto.notas,
+          }),
+        );
+      }
       return aDto(fila);
     });
+    this.notificaciones.despacharAhora();
+    return reserva;
   }
 
   async findAll(
@@ -198,7 +248,11 @@ export class ReservasService {
     return { data: pagina.data.map(aDto), nextCursor: pagina.nextCursor };
   }
 
-  async update(reservaId: string, dto: UpdateReservaDto): Promise<ReservaDto> {
+  async update(
+    tenant: TenantRequest,
+    reservaId: string,
+    dto: UpdateReservaDto,
+  ): Promise<ReservaDto> {
     // `cancelada` es terminal. Sin eso, descancelar resucita una reserva sobre un cupo que ya
     // volvio a ocuparse: sobrecupo desde el panel, sin necesidad de concurrencia.
     const ORIGENES: Record<EstadoReservaDto, EstadoReserva[]> = {
@@ -209,18 +263,38 @@ export class ReservasService {
       ],
     };
 
-    // El estado esperado va en el WHERE y no en un if despues de leerlo: leer, validar en
-    // memoria y escribir con where solo por id es un read-modify-write, y dos PATCH
-    // simultaneos pasaban los dos. El UPDATE condicional es atomico.
-    const { count } = await this.db.reserva.updateMany({
-      where: { id: reservaId, estado: { in: ORIGENES[dto.estado] } },
-      data: { estado: dto.estado },
+    const { count, fila } = await this.db.$transaction(async (tx) => {
+      // El estado esperado va en el WHERE y no en un if despues de leerlo: leer, validar en
+      // memoria y escribir con where solo por id es un read-modify-write, y dos PATCH
+      // simultaneos pasaban los dos. El UPDATE condicional es atomico.
+      const { count } = await tx.reserva.updateMany({
+        where: { id: reservaId, estado: { in: ORIGENES[dto.estado] } },
+        data: { estado: dto.estado },
+      });
+      const fila = await tx.reserva.findFirst({
+        where: { id: reservaId },
+        select: { ...reservaSelect, servicio: { select: { nombre: true } } },
+      });
+      // El mail solo si el cambio ocurrio, y en la misma transaccion que el cambio.
+      if (count > 0 && fila) {
+        const datos = {
+          centro: tenant.nombre,
+          clienteNombre: fila.clienteNombre,
+          servicio: fila.servicio.nombre,
+          fecha: aFecha(fila.fecha),
+          hora: fila.horaInicio,
+        };
+        await this.notificaciones.encolar(
+          tx,
+          fila.clienteEmail,
+          dto.estado === EstadoReservaDto.confirmada
+            ? turnoConfirmado(datos)
+            : turnoCancelado(datos),
+        );
+      }
+      return { count, fila };
     });
-
-    const fila = await this.db.reserva.findFirst({
-      where: { id: reservaId },
-      select: reservaSelect,
-    });
+    this.notificaciones.despacharAhora();
     if (!fila) {
       throw new NotFoundException({
         code: 'reserva_not_found',
@@ -235,6 +309,7 @@ export class ReservasService {
         message: `Una reserva ${fila.estado} no puede pasar a ${dto.estado}.`,
       });
     }
-    return aDto(fila);
+    const { servicio: _servicio, ...reserva } = fila;
+    return aDto(reserva);
   }
 }

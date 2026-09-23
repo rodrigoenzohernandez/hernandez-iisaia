@@ -48,6 +48,18 @@ if (trustProxy !== undefined && !/^\d+$/.test(trustProxy)) {
   );
 }
 
+/**
+ * Proveedor de mails. `log` imprime cada mail en la consola, que es lo que hace falta en
+ * desarrollo para ver el codigo de ingreso de una clienta; en produccion no se acepta.
+ */
+const emailProvider = process.env.EMAIL_PROVIDER ?? 'log';
+if (emailProvider !== 'log' && emailProvider !== 'resend') {
+  throw new Error('EMAIL_PROVIDER tiene que ser log o resend');
+}
+if (produccion && emailProvider !== 'resend') {
+  throw new Error('En produccion EMAIL_PROVIDER tiene que ser resend');
+}
+
 export const env = {
   databaseUrl: requerido('DATABASE_URL'),
   jwtSecret,
@@ -59,4 +71,17 @@ export const env = {
   throttleLimit: Number(process.env.THROTTLE_LIMIT ?? 5),
   corsOrigin,
   trustProxy: trustProxy === undefined ? undefined : Number(trustProxy),
+  email: {
+    provider: emailProvider,
+    resendApiKey:
+      emailProvider === 'resend' ? requerido('RESEND_API_KEY') : undefined,
+    // Sin dominio verificado, Resend solo deja mandar desde onboarding@resend.dev y solo a
+    // la cuenta duenia de la API key.
+    from: process.env.EMAIL_FROM ?? 'Turnos <onboarding@resend.dev>',
+  },
+  // Pisa el intervalo de todas las tareas periodicas. Solo para la verificacion, que no
+  // puede esperar diez minutos a un recordatorio.
+  jobsIntervalMs: process.env.JOBS_INTERVAL_MS
+    ? Number(process.env.JOBS_INTERVAL_MS)
+    : undefined,
 };
