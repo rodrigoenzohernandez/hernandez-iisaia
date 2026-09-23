@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module.js';
+import { ClientesModule } from './clientes/clientes.module.js';
 import { env } from './env.js';
 import { DisponibilidadModule } from './disponibilidad/disponibilidad.module.js';
 import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
@@ -22,6 +23,7 @@ import { VentanasAtencionModule } from './ventanas-atencion/ventanas-atencion.mo
     PrismaModule,
     NotificacionesModule,
     AuthModule,
+    ClientesModule,
     ServiciosModule,
     VentanasAtencionModule,
     DisponibilidadModule,

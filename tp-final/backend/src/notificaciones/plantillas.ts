@@ -113,3 +113,14 @@ export const avisoTurnoNuevo = (
       ...(d.notas ? [`Notas: ${d.notas}`] : []),
     ],
   );
+
+/** El codigo de ingreso de una clienta. */
+export const codigoAcceso = (d: {
+  centro: string;
+  codigo: string;
+  minutos: number;
+}): Plantilla =>
+  armar(d.centro, `Tu código para entrar a ${d.centro}: ${d.codigo}`, [
+    `Tu código es ${d.codigo}. Vence en ${d.minutos} minutos y sirve una sola vez.`,
+    'Si no lo pediste, ignorá este mail: sin el código nadie puede entrar a tu cuenta.',
+  ]);

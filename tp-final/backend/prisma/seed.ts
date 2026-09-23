@@ -153,6 +153,7 @@ const TENANTS = [
     nombre: 'Lo de Lili',
     activo: true,
     email: 'lili@lodelili.test',
+    clienta: 'clienta@lodelili.test',
     servicios: SERVICIOS_LILI,
     ventanas: ventanasLili,
   },
@@ -161,6 +162,7 @@ const TENANTS = [
     nombre: 'Bella Piel',
     activo: true,
     email: 'admin@bellapiel.test',
+    clienta: 'clienta@bellapiel.test',
     servicios: SERVICIOS_BELLA,
     ventanas: ventanasLili,
   },
@@ -170,6 +172,7 @@ const TENANTS = [
     nombre: 'Centro Cerrado',
     activo: false,
     email: 'admin@cerrado.test',
+    clienta: 'clienta@cerrado.test',
     servicios: [],
     ventanas: [],
   },
@@ -181,8 +184,10 @@ const prisma = new PrismaClient({
 
 async function main(): Promise<void> {
   // Orden de FK: hijos antes que padres, y los tenants al final.
+  await prisma.codigoAcceso.deleteMany();
   await prisma.notificacion.deleteMany();
   await prisma.reserva.deleteMany();
+  await prisma.cliente.deleteMany();
   await prisma.ventanaAtencion.deleteMany();
   await prisma.servicio.deleteMany();
   await prisma.usuario.deleteMany();
@@ -201,6 +206,15 @@ async function main(): Promise<void> {
         activo: t.activo,
         usuarios: {
           create: { email: t.email, nombre: 'Administradora', passwordHash },
+        },
+        // Una clienta con el perfil completo, para probar "mis turnos" sin reservar antes. Entra
+        // con el codigo que le llega por mail: no tiene contrasena.
+        clientes: {
+          create: {
+            email: t.clienta,
+            nombre: 'Clienta de Prueba',
+            telefono: '1155500000',
+          },
         },
         servicios: { create: t.servicios },
         ventanas: { create: t.ventanas },

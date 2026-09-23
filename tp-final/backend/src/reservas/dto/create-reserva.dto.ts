@@ -10,10 +10,16 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { MetodoPago } from '@prisma/client';
+import { aEmail } from '../../common/transforms.js';
 
 /**
- * El alta publica de un turno. Los datos que pide el paso 3 del prototipo y nada mas:
- * ninguna contrasena, porque la clienta no tiene cuenta.
+ * El alta de un turno. La hacen tres personas distintas con el mismo body:
+ *   - sin sesion, la clienta deja nombre, email y telefono, que son obligatorios;
+ *   - con sesion de clienta, el email sale de la cuenta, y nombre y telefono del body o del
+ *     perfil;
+ *   - con sesion de administracion, el centro carga el turno a nombre de una clienta, y los
+ *     tres datos son obligatorios.
+ * Por eso el DTO los declara opcionales y el service exige cada caso.
  *
  * Lo que NO esta y no puede estar: horaFin, senaCentavos y la duracion. Los calcula el
  * servidor desde el tratamiento. Un precio que manda el cliente es un bug de plata; una
@@ -49,7 +55,8 @@ export class CreateReservaDto {
   })
   metodoPago!: MetodoPago;
 
-  /** Un solo campo, como el formulario del prototipo. */
+  /** Un solo campo, como el formulario del prototipo. Obligatorio sin sesion de clienta. */
+  @IsOptional()
   @IsString()
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
@@ -57,21 +64,24 @@ export class CreateReservaDto {
   @Length(2, 120, {
     message: 'El nombre tiene que tener entre 2 y 120 caracteres.',
   })
-  clienteNombre!: string;
+  clienteNombre?: string;
 
-  // Se normaliza porque es la clave con la que se detecta el doble submit: sin esto,
-  // "Ana@Example.com " y "ana@example.com" pasan como dos personas distintas.
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim().toLowerCase() : value,
-  )
+  /**
+   * La identidad de la clienta: la reserva queda asociada a este email aunque no tenga
+   * cuenta. Obligatorio sin sesion de clienta; con sesion, sale de la cuenta.
+   */
+  @IsOptional()
+  @Transform(aEmail)
   @IsEmail({}, { message: 'El email no es valido.' })
-  clienteEmail!: string;
+  clienteEmail?: string;
 
+  /** Obligatorio sin sesion de clienta. */
+  @IsOptional()
   @IsString()
   @Length(6, 30, {
     message: 'El telefono tiene que tener entre 6 y 30 caracteres.',
   })
-  clienteTelefono!: string;
+  clienteTelefono?: string;
 
   @IsOptional()
   @IsString()

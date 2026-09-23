@@ -6,6 +6,7 @@ import {
   ApiParam,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Roles } from './decorators.js';
 import { ErrorDto } from './error.dto.js';
 
 /**
@@ -50,5 +51,23 @@ export const ApiSoloAdmin = () =>
       type: ErrorDto,
       description:
         'El token es de otro centro, o de una cuenta que no es de administracion.',
+    }),
+  );
+
+/**
+ * Ruta de clienta: exige su rol y documenta los rechazos. El rol y la documentacion van en el
+ * mismo decorador para que no puedan desalinearse.
+ */
+export const SoloClienta = () =>
+  applyDecorators(
+    Roles('cliente'),
+    ApiBearerAuth(),
+    ApiUnauthorizedResponse({
+      type: ErrorDto,
+      description: 'Falta el token o no es valido.',
+    }),
+    ApiForbiddenResponse({
+      type: ErrorDto,
+      description: 'El token es de otro centro, o no es de una clienta.',
     }),
   );

@@ -6,7 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EstadoReserva, MetodoPago, type Prisma } from '@prisma/client';
-import type { TenantRequest } from '../common/decorators.js';
+import { ClientesService } from '../clientes/clientes.service.js';
+import type { TenantRequest, UsuarioRequest } from '../common/decorators.js';
 import {
   aDate,
   aFecha,
@@ -35,7 +36,11 @@ import { runSerializable } from '../prisma/run-serializable.js';
 import { RECORDATORIO_MINUTOS } from './recordatorios.service.js';
 import type { CreateReservaDto } from './dto/create-reserva.dto.js';
 import type { ListReservasQueryDto } from './dto/list-reservas-query.dto.js';
-import { reservaSelect, type ReservaDto } from './dto/reserva.dto.js';
+import {
+  reservaSelect,
+  type EstadoReservaSoloDto,
+  type ReservaDto,
+} from './dto/reserva.dto.js';
 import {
   EstadoReservaDto,
   type UpdateReservaDto,
@@ -65,17 +70,88 @@ function exigirFechaReal(fecha: string, campo = 'fecha'): void {
   }
 }
 
+function reservaNoExiste(): never {
+  throw new NotFoundException({
+    code: 'reserva_not_found',
+    message: 'La reserva no existe.',
+  });
+}
+
+/** Los datos de contacto que quedan copiados en la reserva. */
+type Contacto = { nombre: string; email: string; telefono: string };
+
 @Injectable()
 export class ReservasService {
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly notificaciones: NotificacionesService,
+    private readonly clientes: ClientesService,
   ) {}
+
+  /**
+   * De quien es el turno y con que datos de contacto, segun quien reserva.
+   *
+   * Sin sesion y en la carga del centro, los tres datos vienen en el body. Con sesion de
+   * clienta, el email es el de la cuenta: aceptar otro en el body dejaria reservar a nombre
+   * de otra persona desde una cuenta propia.
+   */
+  private async duenia(
+    dto: CreateReservaDto,
+    usuario?: UsuarioRequest,
+  ): Promise<{ clienteId: string; contacto: Contacto }> {
+    if (usuario?.rol === 'cliente') {
+      const cuenta = await this.clientes.findMe(usuario.id);
+      if (dto.clienteEmail && dto.clienteEmail !== cuenta.email) {
+        throw new BadRequestException({
+          code: 'validation_error',
+          message: 'La reserva va a nombre del email de tu cuenta.',
+        });
+      }
+      const nombre = dto.clienteNombre ?? cuenta.nombre;
+      const telefono = dto.clienteTelefono ?? cuenta.telefono;
+      if (!nombre || !telefono) {
+        throw new BadRequestException({
+          code: 'validation_error',
+          message: 'Completa tu nombre y tu telefono para reservar.',
+        });
+      }
+      // Completa el perfil si le faltaba algo; nunca pisa lo que ya tenia.
+      await this.clientes.asegurar(cuenta.email, { nombre, telefono });
+      return {
+        clienteId: cuenta.id,
+        contacto: { nombre, email: cuenta.email, telefono },
+      };
+    }
+
+    if (!dto.clienteNombre || !dto.clienteEmail || !dto.clienteTelefono) {
+      throw new BadRequestException({
+        code: 'validation_error',
+        message: 'Faltan los datos de la clienta: nombre, email y telefono.',
+      });
+    }
+    const cliente = await this.clientes.asegurar(dto.clienteEmail, {
+      nombre: dto.clienteNombre,
+      telefono: dto.clienteTelefono,
+    });
+    return {
+      clienteId: cliente.id,
+      contacto: {
+        nombre: dto.clienteNombre,
+        email: dto.clienteEmail,
+        telefono: dto.clienteTelefono,
+      },
+    };
+  }
 
   async create(
     tenant: TenantRequest,
     dto: CreateReservaDto,
+    usuario?: UsuarioRequest,
   ): Promise<ReservaDto> {
+    // La carga del centro es la administradora anotando a alguien que llamo o que esta en el
+    // mostrador: nace confirmada, sin cobro online, y puede ser con menos anticipacion.
+    const cargaDelCentro = usuario?.rol === 'admin';
+
     // Fuera de la transaccion a proposito: la duracion y la sena se congelan en la reserva,
     // asi que perder serializacion sobre ellas no cuesta nada, y la transaccion interactiva
     // queda en menos statements.
@@ -98,7 +174,10 @@ export class ReservasService {
     exigirFechaReal(dto.fecha);
 
     const ahora = ahoraEn(tenant.zonaHoraria);
-    if (demasiadoTarde(dto.fecha, dto.hora, ahora)) {
+    const pasado = cargaDelCentro
+      ? minutosHasta(dto.fecha, dto.hora, ahora) < 0
+      : demasiadoTarde(dto.fecha, dto.hora, ahora);
+    if (pasado) {
       throw new ConflictException({
         code: 'past_date',
         message: 'Ese horario ya paso o esta demasiado cerca.',
@@ -111,6 +190,7 @@ export class ReservasService {
       });
     }
 
+    const { clienteId, contacto } = await this.duenia(dto, usuario);
     const horaFin = aHora(aMinutos(dto.hora) + servicio.duracionMinutos);
     // Un turno que empieza en menos de 24 horas no necesita recordatorio: el mail de
     // confirmacion que sale ahora ya lo es.
@@ -151,7 +231,7 @@ export class ReservasService {
       // Doble submit del formulario publico: con capacidad mayor a 1 entraban dos reservas
       // identicas de la misma persona.
       const duplicada = solapadas.some(
-        (r) => r.horaInicio === dto.hora && r.clienteEmail === dto.clienteEmail,
+        (r) => r.horaInicio === dto.hora && r.clienteEmail === contacto.email,
       );
       // Un solo codigo para los dos casos: uno distinto para el duplicado dejaba averiguar,
       // sin token, si un email dado tiene turno a una hora dada.
@@ -165,6 +245,7 @@ export class ReservasService {
       const fila = await tx.reserva.create({
         data: {
           servicioId: servicio.id,
+          clienteId,
           fecha: aDate(dto.fecha),
           horaInicio: dto.hora,
           // Calculados por el servidor, nunca por el cliente.
@@ -172,12 +253,17 @@ export class ReservasService {
           senaCentavos: servicio.senaCentavos,
           metodoPago: dto.metodoPago,
           // Efectivo confirma: la duenia cobra la sena en el local. Mercado Pago queda
-          // pendiente hasta que exista la integracion real y alguien confirme el pago.
+          // pendiente hasta que exista la integracion real y alguien confirme el pago. La
+          // carga del centro confirma siempre: el centro cobra como quiera.
           estado:
-            dto.metodoPago === MetodoPago.efectivo ? 'confirmada' : 'pendiente',
-          clienteNombre: dto.clienteNombre,
-          clienteEmail: dto.clienteEmail,
-          clienteTelefono: dto.clienteTelefono,
+            cargaDelCentro || dto.metodoPago === MetodoPago.efectivo
+              ? 'confirmada'
+              : 'pendiente',
+          // Copia, como la sena: si la clienta cambia su telefono, el turno de ayer conserva
+          // el que dejo al reservar.
+          clienteNombre: contacto.nombre,
+          clienteEmail: contacto.email,
+          clienteTelefono: contacto.telefono,
           notas: dto.notas ?? null,
           recordatorioEnviadoAt: sinRecordatorio ? new Date() : null,
         } as Prisma.ReservaUncheckedCreateInput,
@@ -189,25 +275,28 @@ export class ReservasService {
       if (fila.estado === EstadoReserva.confirmada) {
         const datos = {
           centro: tenant.nombre,
-          clienteNombre: dto.clienteNombre,
+          clienteNombre: contacto.nombre,
           servicio: servicio.nombre,
           fecha: dto.fecha,
           hora: dto.hora,
         };
         await this.notificaciones.encolar(
           tx,
-          dto.clienteEmail,
+          contacto.email,
           turnoConfirmado(datos),
         );
-        await this.notificaciones.encolarAlCentro(
-          tx,
-          avisoTurnoNuevo({
-            ...datos,
-            clienteEmail: dto.clienteEmail,
-            clienteTelefono: dto.clienteTelefono,
-            notas: dto.notas,
-          }),
-        );
+        // El centro no necesita que le avisen de un turno que cargo el mismo.
+        if (!cargaDelCentro) {
+          await this.notificaciones.encolarAlCentro(
+            tx,
+            avisoTurnoNuevo({
+              ...datos,
+              clienteEmail: contacto.email,
+              clienteTelefono: contacto.telefono,
+              notas: dto.notas,
+            }),
+          );
+        }
       }
       return aDto(fila);
     });
@@ -215,14 +304,19 @@ export class ReservasService {
     return reserva;
   }
 
+  /** El listado del centro, o el de una sola clienta si viene clienteId. */
   async findAll(
     query: ListReservasQueryDto,
+    clienteId?: string,
   ): Promise<CursorPageDto<ReservaDto>> {
     // El regex del DTO deja pasar fechas que no existen, y desde ahi entran al where.
     if (query.desde) exigirFechaReal(query.desde, 'desde');
     if (query.hasta) exigirFechaReal(query.hasta, 'hasta');
 
     const filtros = {
+      // Puesto por el servidor desde el token, nunca desde la query: "mis turnos" no puede
+      // listar los de otra persona cambiando un parametro.
+      ...(clienteId ? { clienteId } : {}),
       ...(query.estado ? { estado: query.estado } : {}),
       ...(query.servicioId ? { servicioId: query.servicioId } : {}),
       ...(query.desde || query.hasta
@@ -246,6 +340,30 @@ export class ReservasService {
       }),
     );
     return { data: pagina.data.map(aDto), nextCursor: pagina.nextCursor };
+  }
+
+  /** Una reserva: la ve su duenia o la administracion. Para cualquier otra persona no existe. */
+  async findOne(
+    reservaId: string,
+    usuario: UsuarioRequest,
+  ): Promise<ReservaDto> {
+    const fila = await this.db.reserva.findFirst({
+      where: {
+        id: reservaId,
+        ...(usuario.rol === 'cliente' ? { clienteId: usuario.id } : {}),
+      },
+      select: reservaSelect,
+    });
+    return fila ? aDto(fila) : reservaNoExiste();
+  }
+
+  /** Solo el estado, sin datos personales: lo consulta quien vuelve de pagar sin sesion. */
+  async estado(reservaId: string): Promise<EstadoReservaSoloDto> {
+    const fila = await this.db.reserva.findFirst({
+      where: { id: reservaId },
+      select: { estado: true },
+    });
+    return fila ?? reservaNoExiste();
   }
 
   async update(
@@ -295,12 +413,7 @@ export class ReservasService {
       return { count, fila };
     });
     this.notificaciones.despacharAhora();
-    if (!fila) {
-      throw new NotFoundException({
-        code: 'reserva_not_found',
-        message: 'La reserva no existe.',
-      });
-    }
+    if (!fila) reservaNoExiste();
     // La reserva existe pero el UPDATE no la alcanzo: estaba en un estado del que no se
     // puede salir hacia el pedido.
     if (count === 0) {

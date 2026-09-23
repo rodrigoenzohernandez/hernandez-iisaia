@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
+import { ClientesModule } from '../clientes/clientes.module.js';
 import { RecordatoriosService } from './recordatorios.service.js';
-import { ReservasController } from './reservas.controller.js';
+import {
+  MisReservasController,
+  ReservasController,
+} from './reservas.controller.js';
 import { ReservasService } from './reservas.service.js';
 
 @Module({
-  controllers: [ReservasController],
+  imports: [ClientesModule],
+  controllers: [ReservasController, MisReservasController],
   providers: [ReservasService, RecordatoriosService],
   exports: [RecordatoriosService],
 })

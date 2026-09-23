@@ -32,6 +32,9 @@ export const CODIGOS_DE_ERROR = [
   'too_many_requests', // se paso el limite de peticiones; esperar y reintentar
   'internal_error', // fallo del servidor; el detalle queda en el log, no en la respuesta
   'http_error', // cualquier otro error HTTP que no tenga un codigo propio
+  'invalid_code', // el codigo de ingreso no es valido, vencio, ya se uso o se agotaron los intentos
+  'too_many_codes', // se pidieron demasiados codigos para ese email; esperar unos minutos
+  'cliente_not_found', // la clienta de la sesion ya no existe
 ] as const;
 
 export type CodigoDeError = (typeof CODIGOS_DE_ERROR)[number];

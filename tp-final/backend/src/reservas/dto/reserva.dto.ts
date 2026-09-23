@@ -30,7 +30,18 @@ export class ReservaDto {
   notas!: string | null;
 
   servicioId!: string;
+
+  /** La clienta duenia del turno. Existe aunque haya reservado sin cuenta. */
+  clienteId!: string;
+
   createdAt!: Date;
+}
+
+/** Lo unico que ve quien vuelve de pagar sin sesion: el estado, sin datos personales. */
+export class EstadoReservaSoloDto {
+  /** `pendiente`, `confirmada` o `cancelada`. */
+  @ApiProperty({ example: 'confirmada' })
+  estado!: string;
 }
 
 export const reservaSelect = {
@@ -46,5 +57,6 @@ export const reservaSelect = {
   clienteTelefono: true,
   notas: true,
   servicioId: true,
+  clienteId: true,
   createdAt: true,
 } as const;

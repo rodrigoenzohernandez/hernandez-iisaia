@@ -58,6 +58,8 @@ model Tenant {
   servicios      Servicio[]
   ventanas       VentanaAtencion[]
   notificaciones Notificacion[]
+  clientes       Cliente[]
+  codigosAcceso  CodigoAcceso[]
 }
 
 model Usuario {
@@ -135,6 +137,8 @@ model Reserva {
   id         String @id @default(cuid())
   tenantId   String
   servicioId String
+  /// Toda reserva tiene duenia, tambien la que se hizo sin cuenta: se asocia por email.
+  clienteId  String
 
   /// Dia del turno en hora de pared del centro.
   fecha      DateTime @db.Date
@@ -161,15 +165,53 @@ model Reserva {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  /// FK compuesta: Postgres impide que una reserva apunte a un servicio de otro tenant
-  /// aunque la aplicacion se equivoque. Es la segunda linea detras de la extension y cubre
-  /// justo lo que la extension no ve: los include anidados.
-  /// Reserva no tiene relacion directa a Tenant a proposito: asi tenantId participa de una
-  /// sola relacion y el tenant se hereda del servicio.
+  /// FKs compuestas: Postgres impide que una reserva apunte a un servicio o a una clienta de
+  /// otro tenant aunque la aplicacion se equivoque. Son la segunda linea detras de la
+  /// extension y cubren justo lo que la extension no ve: los include anidados.
+  /// Reserva no tiene relacion directa a Tenant a proposito: el tenant se hereda del
+  /// servicio y de la clienta, y las dos FKs lo obligan a ser el mismo.
   servicio Servicio @relation(fields: [tenantId, servicioId], references: [tenantId, id])
+  cliente  Cliente  @relation(fields: [tenantId, clienteId], references: [tenantId, id])
 
   /// Sostiene el listado paginado del admin y la query de solapes.
   @@index([tenantId, fecha, horaInicio])
+}
+
+/// Una clienta del centro. No tiene contrasena: entra con un codigo que le llega por mail, y
+/// la cuenta nace la primera vez que reserva o que entra. Es por centro, como la de
+/// administracion: la misma persona en dos centros son dos clientas.
+model Cliente {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  nombre    String?
+  telefono  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  reservas Reserva[]
+
+  @@unique([tenantId, email])
+  /// Habilita la FK compuesta de Reserva.
+  @@unique([tenantId, id])
+}
+
+/// Un codigo de ingreso de 6 digitos. Se guarda su HMAC, nunca el codigo: una base filtrada
+/// no deja entrar a nadie, ni siquiera durante los diez minutos en que vale.
+model CodigoAcceso {
+  id         String    @id @default(cuid())
+  tenantId   String
+  email      String
+  codigoHash String
+  intentos   Int       @default(0)
+  expiraAt   DateTime
+  usadoAt    DateTime?
+  createdAt  DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, email, createdAt])
 }
 
 /// Cola de mails (outbox). La fila se escribe en la MISMA transaccion que el cambio que la

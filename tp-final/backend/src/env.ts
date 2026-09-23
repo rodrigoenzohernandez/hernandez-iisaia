@@ -23,6 +23,15 @@ if (jwtSecret.length < 32) {
   throw new Error('JWT_SECRET necesita 32 caracteres o mas');
 }
 
+// Cifra los tokens de Mercado Pago y firma los codigos de ingreso. 32 bytes exactos: es la
+// clave de AES-256, y una clave corta no se estira, se rechaza.
+const encryptionKey = requerido('ENCRYPTION_KEY');
+if (Buffer.from(encryptionKey, 'base64').length !== 32) {
+  throw new Error(
+    'ENCRYPTION_KEY tiene que ser 32 bytes en base64: openssl rand -base64 32',
+  );
+}
+
 const corsOrigin = (process.env.CORS_ORIGIN ?? 'http://localhost:3101').split(
   ',',
 );
@@ -63,6 +72,7 @@ if (produccion && emailProvider !== 'resend') {
 export const env = {
   databaseUrl: requerido('DATABASE_URL'),
   jwtSecret,
+  encryptionKey,
   port: Number(process.env.PORT ?? 3100),
   // Peticiones por minuto permitidas en las escrituras publicas. Es configurable por una
   // sola razon: verificacion/verificar.sh hace decenas de altas seguidas y con el default se

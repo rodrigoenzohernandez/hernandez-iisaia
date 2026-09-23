@@ -338,6 +338,92 @@ sleep 5
 check 'una sola vez, aunque la tarea siga corriendo' 1 \
   "$(sql "$N_MAILS where para = 'recordatorio@example.com' and asunto like 'Recordatorio%'")"
 
+seccion 'Clientas: reserva con y sin cuenta'
+# El ultimo codigo de ingreso que le llego a ese email, sacado de la cola de mails.
+codigo() {
+  sql "select substring(texto from '([0-9]{6})') from \"Notificacion\"
+       where para = '$1' and asunto like 'Tu c%digo%' order by \"createdAt\" desc limit 1"
+}
+# Un codigo que seguro no es el correcto: el correcto mas uno.
+otro_codigo() { printf '%06d' $(((10#$1 + 1) % 1000000)); }
+sesion_cliente() { jq -nc --arg e "$1" --arg c "$2" '{email:$e, codigo:$c}'; }
+
+req 'reservar sin cuenta' 201 POST "$T/reservas" \
+  "$(reserva "$S30" "$LUNES2" 11:15 sofia@example.com | jq -c '.clienteNombre = "Sofia Sin Cuenta"')"
+RESERVA_SOFIA=$(jq -r .id "$TMP/body")
+check 'la reserva queda asociada a una clienta por su email' true "$(jq '.clienteId | length > 0' "$TMP/body")"
+req 'el estado de la reserva es publico' 200 GET "$T/reservas/$RESERVA_SOFIA/estado"
+check 'y solo trae el estado, ningun dato personal' '["estado"]' "$(jq -c 'keys' "$TMP/body")"
+req 'el detalle completo sin token' 401 GET "$T/reservas/$RESERVA_SOFIA"
+req 'pedir un codigo de ingreso' 202 POST "$T/clientes/codigos" '{"email":"sofia@example.com"}'
+check 'vence en 10 minutos' 10 "$(jq -r .expiraEnMinutos "$TMP/body")"
+CODIGO=$(codigo sofia@example.com)
+check 'llega por mail: seis digitos' true "$([[ $CODIGO =~ ^[0-9]{6}$ ]] && echo true || echo false)"
+check 'en la base queda la firma, no el codigo' t \
+  "$(sql "select bool_and(length(\"codigoHash\") = 64) from \"CodigoAcceso\" where email = 'sofia@example.com'")"
+req 'un codigo equivocado' 401 POST "$T/clientes/sesiones" "$(sesion_cliente sofia@example.com "$(otro_codigo "$CODIGO")")"
+check 'con codigo invalid_code' invalid_code "$(jq -r .code "$TMP/body")"
+req 'un codigo con formato invalido' 400 POST "$T/clientes/sesiones" "$(sesion_cliente sofia@example.com 12ab)"
+req 'el codigo de este centro en otro centro' 401 POST "$OTRO/clientes/sesiones" "$(sesion_cliente sofia@example.com "$CODIGO")"
+req 'entrar con el codigo' 201 POST "$T/clientes/sesiones" "$(sesion_cliente sofia@example.com "$CODIGO")"
+TOKEN_SOFIA=$(jq -r .accessToken "$TMP/body")
+check 'la cuenta es la del email de la reserva' sofia@example.com "$(jq -r .cliente.email "$TMP/body")"
+check 'y ya tiene el nombre que dejo al reservar' 'Sofia Sin Cuenta' "$(jq -r .cliente.nombre "$TMP/body")"
+req 'el mismo codigo otra vez' 401 POST "$T/clientes/sesiones" "$(sesion_cliente sofia@example.com "$CODIGO")"
+check 'sirve una sola vez' invalid_code "$(jq -r .code "$TMP/body")"
+req 'mis turnos' 200 GET "$T/clientes/me/reservas" '' "$TOKEN_SOFIA"
+check 'trae el turno que reservo sin cuenta' 1 \
+  "$(jq --arg i "$RESERVA_SOFIA" '[.data[] | select(.id == $i)] | length' "$TMP/body")"
+check 'y solo los suyos' true "$(jq 'all(.data[]; .clienteEmail == "sofia@example.com")' "$TMP/body")"
+req 'el detalle de su turno' 200 GET "$T/reservas/$RESERVA_SOFIA" '' "$TOKEN_SOFIA"
+req 'el detalle del turno de otra persona' 404 GET "$T/reservas/$RESERVA1" '' "$TOKEN_SOFIA"
+check 'para ella no existe: no confirma que el id sea valido' reserva_not_found "$(jq -r .code "$TMP/body")"
+req 'la administracion ve el detalle de cualquiera' 200 GET "$T/reservas/$RESERVA_SOFIA" '' "$TOKEN"
+req 'su perfil' 200 GET "$T/clientes/me" '' "$TOKEN_SOFIA"
+req 'editar el telefono' 200 PATCH "$T/clientes/me" '{"telefono":"1144443333"}' "$TOKEN_SOFIA"
+check 'quedo guardado' 1144443333 "$(jq -r .telefono "$TMP/body")"
+req 'el email no se edita' 400 PATCH "$T/clientes/me" '{"email":"otra@example.com"}' "$TOKEN_SOFIA"
+req 'el perfil sin token' 401 GET "$T/clientes/me"
+req 'el perfil con token de administracion' 403 GET "$T/clientes/me" '' "$TOKEN"
+req 'su token contra la agenda del centro' 403 GET "$T/reservas" '' "$TOKEN_SOFIA"
+check 'con codigo forbidden_role' forbidden_role "$(jq -r .code "$TMP/body")"
+req 'su token contra otro centro' 403 GET "$OTRO/clientes/me" '' "$TOKEN_SOFIA"
+req 'reservar con sesion, sin datos de contacto en el body' 201 POST "$T/reservas" \
+  "$(jq -nc --arg s "$S30" --arg f "$LUNES2" '{servicioId:$s, fecha:$f, hora:"12:00", metodoPago:"efectivo"}')" "$TOKEN_SOFIA"
+check 'va a nombre del email de la cuenta' sofia@example.com "$(jq -r .clienteEmail "$TMP/body")"
+check 'con el telefono del perfil' 1144443333 "$(jq -r .clienteTelefono "$TMP/body")"
+req 'con sesion y el email de otra persona en el body' 400 POST "$T/reservas" \
+  "$(jq -nc --arg s "$S30" --arg f "$LUNES2" '{servicioId:$s, fecha:$f, hora:"15:00", metodoPago:"efectivo", clienteEmail:"otra@example.com"}')" "$TOKEN_SOFIA"
+req 'una reserva sin cuenta con el email de Sofia y otro nombre' 201 POST "$T/reservas" \
+  "$(reserva "$S30" "$LUNES2" 15:45 sofia@example.com | jq -c '.clienteNombre = "Impostora"')"
+req 'el perfil de Sofia despues de eso' 200 GET "$T/clientes/me" '' "$TOKEN_SOFIA"
+check 'no le pisa el nombre' 'Sofia Sin Cuenta' "$(jq -r .nombre "$TMP/body")"
+req 'sin cuenta y sin email' 400 POST "$T/reservas" "$(reserva "$S30" "$LUNES2" 16:30 | jq -c 'del(.clienteEmail)')"
+
+req 'el centro carga un turno a nombre de una clienta' 201 POST "$T/reservas" \
+  "$(reserva "$S30" "$LUNES2" 17:15 telefono@example.com | jq -c '.metodoPago = "mercadopago"')" "$TOKEN"
+check 'nace confirmada, sin cobro online' confirmada "$(jq -r .estado "$TMP/body")"
+check 'la clienta recibe la confirmacion' 1 \
+  "$(sql "$N_MAILS where para = 'telefono@example.com' and asunto like 'Tu turno%'")"
+check 'al centro no le avisa de un turno que cargo el' 0 \
+  "$(sql "$N_MAILS where para = 'lili@lodelili.test' and texto like '%telefono@example.com%'")"
+req 'la carga del centro sin email' 400 POST "$T/reservas" "$(reserva "$S30" "$LUNES2" 18:00 | jq -c 'del(.clienteEmail)')" "$TOKEN"
+req 'la carga del centro en el pasado' 409 POST "$T/reservas" "$(reserva "$S30" "$PASADO" 09:00 pasado@example.com)" "$TOKEN"
+
+req 'un codigo para probar la fuerza bruta' 202 POST "$T/clientes/codigos" '{"email":"bruta@example.com"}'
+CODIGO_B=$(codigo bruta@example.com)
+for _ in 1 2 3 4 5; do
+  curl -s -o /dev/null -X POST "$BASE$T/clientes/sesiones" -H 'Content-Type: application/json' \
+    -d "$(sesion_cliente bruta@example.com "$(otro_codigo "$CODIGO_B")")"
+done
+req 'el codigo correcto despues de cinco intentos fallidos' 401 POST "$T/clientes/sesiones" "$(sesion_cliente bruta@example.com "$CODIGO_B")"
+check 'ya no sirve: los intentos se agotaron' invalid_code "$(jq -r .code "$TMP/body")"
+req 'segundo codigo para el mismo email' 202 POST "$T/clientes/codigos" '{"email":"bruta@example.com"}'
+req 'tercer codigo' 202 POST "$T/clientes/codigos" '{"email":"bruta@example.com"}'
+req 'cuarto codigo en quince minutos' 429 POST "$T/clientes/codigos" '{"email":"bruta@example.com"}'
+check 'con codigo too_many_codes' too_many_codes "$(jq -r .code "$TMP/body")"
+req 'un email que nunca reservo recibe el mismo 202' 202 POST "$T/clientes/codigos" '{"email":"nunca@example.com"}'
+
 seccion 'ABM de tratamientos'
 NUEVO='{"nombre":"Masaje descontracturante","duracionMinutos":45,"precioCentavos":1200000,"senaCentavos":400000}'
 req 'crear sin token' 401 POST "$T/servicios" "$NUEVO"
@@ -470,7 +556,7 @@ QUINIENTOS=$(for i in $(seq 1 8); do cat "$TMP/c$i.code"; echo; done | grep -c '
 check 'exactamente una alta entra' 1 "$CREADAS"
 check 'ningun 500: el conflicto se traduce a 409' 0 "$QUINIENTOS"
 FILAS=$(cd "$RAIZ" && docker compose exec -T db psql -U turnos -d turnos -tAc \
-  "SELECT count(*) FROM \"Reserva\" WHERE \"horaInicio\" = '11:15' AND estado <> 'cancelada';" | tr -d ' \n')
+  "SELECT count(*) FROM \"Reserva\" WHERE fecha = '$LUNES' AND \"horaInicio\" = '11:15' AND estado <> 'cancelada';" | tr -d ' \n')
 check 'y en la base hay una sola fila, nunca dos' 1 "$FILAS"
 
 seccion 'Paginacion del listado de reservas'
@@ -518,7 +604,7 @@ req 'el detalle de un inactivo con token de clienta' 404 GET "$T/servicios/$NUEV
 
 seccion 'Documentacion'
 req 'el OpenAPI se sirve' 200 GET /docs-json
-check 'documenta los 7 paths' 7 "$(jq '.paths | length' "$TMP/body")"
+check 'documenta los 12 paths' 12 "$(jq '.paths | length' "$TMP/body")"
 check 'cada operacion tiene su resumen en espanol' true \
   "$(jq '[.paths | to_entries[] | .value | to_entries[] | .value.summary // ""] | all(length > 0) and any(test("centro"))' "$TMP/body")"
 check 'ningun resumen es un parrafo: el razonamiento no va al OpenAPI' true \

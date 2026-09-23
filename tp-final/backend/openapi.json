@@ -64,6 +64,296 @@
         ]
       }
     },
+    "/api/v1/tenants/{tenantSlug}/clientes/codigos": {
+      "post": {
+        "operationId": "ClientesController_pedirCodigo",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedirCodigoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodigoPedidoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "El email no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Demasiados codigos para ese email, o demasiadas peticiones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Manda un codigo de ingreso de seis digitos al email de la clienta.",
+        "tags": [
+          "Clientes"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/clientes/sesiones": {
+      "post": {
+        "operationId": "ClientesController_ingresar",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearSesionClienteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionClienteDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Codigo invalido, vencido, ya usado o con los intentos agotados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Entra con el codigo. Si es la primera vez, crea la cuenta.",
+        "tags": [
+          "Clientes"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/clientes/me": {
+      "get": {
+        "operationId": "ClientesController_findMe",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o no es de una clienta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "El perfil de la clienta de la sesion.",
+        "tags": [
+          "Clientes"
+        ]
+      },
+      "patch": {
+        "operationId": "ClientesController_updateMe",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClienteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos invalidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o no es de una clienta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edita nombre y telefono. El email no se cambia: es la identidad de la cuenta.",
+        "tags": [
+          "Clientes"
+        ]
+      }
+    },
     "/api/v1/tenants/{tenantSlug}/servicios": {
       "get": {
         "operationId": "ServiciosController_findAll",
@@ -706,7 +996,7 @@
             }
           }
         },
-        "summary": "Reserva un turno. Publico: la clienta no tiene cuenta, deja sus datos de contacto.",
+        "summary": "Reserva un turno, con o sin cuenta. Con token de admin, el centro lo carga a nombre de una clienta.",
         "tags": [
           "Reservas"
         ]
@@ -856,6 +1146,80 @@
       }
     },
     "/api/v1/tenants/{tenantSlug}/reservas/{reservaId}": {
+      "get": {
+        "operationId": "ReservasController_findOne",
+        "parameters": [
+          {
+            "name": "reservaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservaDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "La reserva no existe, o no es de la clienta de la sesion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Una reserva. La ve su duenia o la administracion.",
+        "tags": [
+          "Reservas"
+        ]
+      },
       "patch": {
         "operationId": "ReservasController_update",
         "parameters": [
@@ -960,6 +1324,202 @@
           "Reservas"
         ]
       }
+    },
+    "/api/v1/tenants/{tenantSlug}/reservas/{reservaId}/estado": {
+      "get": {
+        "operationId": "ReservasController_estado",
+        "parameters": [
+          {
+            "name": "reservaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadoReservaSoloDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "La reserva no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "El estado de una reserva, sin datos personales. Para la pagina de vuelta de un pago.",
+        "tags": [
+          "Reservas"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/clientes/me/reservas": {
+      "get": {
+        "operationId": "MisReservasController_findAll",
+        "parameters": [
+          {
+            "name": "estado",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pendiente",
+                "confirmada",
+                "cancelada"
+              ]
+            }
+          },
+          {
+            "name": "servicioId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 40,
+              "type": "string"
+            }
+          },
+          {
+            "name": "desde",
+            "required": false,
+            "in": "query",
+            "description": "Desde esta fecha, inclusive.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hasta",
+            "required": false,
+            "in": "query",
+            "description": "Hasta esta fecha, inclusive.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "description": "Cuantos elementos devolver como maximo en esta pagina.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "El nextCursor que devolvio la pagina anterior. Es opaco: mandalo tal cual.",
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Una pagina de resultados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CursorPageDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ReservaDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o no es de una clienta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los turnos de la clienta, tambien los que reservo sin cuenta con el mismo email.",
+        "tags": [
+          "MisReservas"
+        ]
+      }
     }
   },
   "info": {
@@ -1012,7 +1572,10 @@
               "payload_too_large",
               "too_many_requests",
               "internal_error",
-              "http_error"
+              "http_error",
+              "invalid_code",
+              "too_many_codes",
+              "cliente_not_found"
             ],
             "type": "string",
             "example": "slot_full"
@@ -1085,6 +1648,113 @@
           "accessToken",
           "usuario"
         ]
+      },
+      "PedirCodigoDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "El email de la clienta. Si no tiene cuenta en el centro, se crea al entrar.",
+            "format": "email",
+            "example": "ana@example.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "CodigoPedidoDto": {
+        "type": "object",
+        "properties": {
+          "expiraEnMinutos": {
+            "type": "number",
+            "description": "Cuanto tarda en vencer el codigo que se acaba de mandar.",
+            "example": 10
+          }
+        },
+        "required": [
+          "expiraEnMinutos"
+        ]
+      },
+      "CrearSesionClienteDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "ana@example.com"
+          },
+          "codigo": {
+            "type": "string",
+            "description": "Los seis digitos que llegaron por mail.",
+            "pattern": "^\\d{6}$",
+            "example": "482913"
+          }
+        },
+        "required": [
+          "email",
+          "codigo"
+        ]
+      },
+      "ClienteDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "La identidad de la clienta en el centro. No se cambia: es a donde llega el codigo.",
+            "example": "ana@example.com"
+          },
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string",
+            "nullable": true,
+            "description": "null hasta que lo complete, reservando o desde el perfil."
+          },
+          "telefono": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "email",
+          "id",
+          "nombre",
+          "telefono"
+        ]
+      },
+      "SesionClienteDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT para el header `Authorization: Bearer <token>`. Dura 30 dias: una clienta entra poco,\ny cada ingreso le cuesta ir al mail a buscar el codigo.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "cliente": {
+            "$ref": "#/components/schemas/ClienteDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "cliente"
+        ]
+      },
+      "UpdateClienteDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "telefono": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 30
+          }
+        }
       },
       "CursorPageDto": {
         "type": "object",
@@ -1372,16 +2042,18 @@
           },
           "clienteNombre": {
             "type": "string",
-            "description": "Un solo campo, como el formulario del prototipo.",
+            "description": "Un solo campo, como el formulario del prototipo. Obligatorio sin sesion de clienta.",
             "minLength": 2,
             "maxLength": 120
           },
           "clienteEmail": {
             "type": "string",
+            "description": "La identidad de la clienta: la reserva queda asociada a este email aunque no tenga\ncuenta. Obligatorio sin sesion de clienta; con sesion, sale de la cuenta.",
             "format": "email"
           },
           "clienteTelefono": {
             "type": "string",
+            "description": "Obligatorio sin sesion de clienta.",
             "minLength": 6,
             "maxLength": 30
           },
@@ -1394,10 +2066,7 @@
           "fecha",
           "hora",
           "metodoPago",
-          "servicioId",
-          "clienteNombre",
-          "clienteEmail",
-          "clienteTelefono"
+          "servicioId"
         ]
       },
       "ReservaDto": {
@@ -1449,6 +2118,10 @@
           "servicioId": {
             "type": "string"
           },
+          "clienteId": {
+            "type": "string",
+            "description": "La clienta duenia del turno. Existe aunque haya reservado sin cuenta."
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -1467,7 +2140,21 @@
           "clienteTelefono",
           "notas",
           "servicioId",
+          "clienteId",
           "createdAt"
+        ]
+      },
+      "EstadoReservaSoloDto": {
+        "type": "object",
+        "properties": {
+          "estado": {
+            "type": "string",
+            "description": "`pendiente`, `confirmada` o `cancelada`.",
+            "example": "confirmada"
+          }
+        },
+        "required": [
+          "estado"
         ]
       },
       "UpdateReservaDto": {
