@@ -49,11 +49,17 @@ instalar Node:
 cd ..
 cp .env.example .env     # completar JWT_SECRET y SEED_ADMIN_PASSWORD
 docker compose up -d --build
-docker compose run --rm seed     # una sola vez: siembra los tres centros
 ```
 
-El seed no corre solo en cada `up` a propósito: borra y recrea, así que arrancarlo siempre
-borraría las reservas cargadas.
+La migración y la siembra inicial corren solas y en orden. El seed de Prisma borra y recrea
+—empieza por las reservas—, así que en vez de ejecutarlo a ciegas el compose primero consulta
+si la tabla `Tenant` tiene filas: siembra si está vacía y no toca nada si ya hay datos. Eso
+hace que repetir `docker compose up` sea seguro. Para volver al estado inicial a propósito,
+borrando lo cargado:
+
+```bash
+docker compose --profile resembrar run --rm resembrar
+```
 
 **Las dos direcciones de la API no son la misma.** `NEXT_PUBLIC_API_BASE_URL` se hornea en el
 bundle del navegador durante el build y tiene que ser una dirección que resuelva la clienta
