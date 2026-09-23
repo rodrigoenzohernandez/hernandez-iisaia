@@ -127,6 +127,21 @@ check() {
   printf '| %02d | %s | `%s` | `%s` | %s |\n' "$N" "$1" "$2" "$3" "$estado" >>"$TMP/tabla.md"
 }
 
+# con_rol <token> <rol> — el mismo token con otro rol, firmado con el JWT_SECRET del .env.
+# Prueba el guard con un rol que todavia no tiene login propio: si la firma es valida, lo
+# unico que puede frenarlo es el chequeo de rol.
+con_rol() {
+  node -e '
+    const [token, rol] = process.argv.slice(1);
+    const { createHmac } = require("node:crypto");
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    const payload = { ...JSON.parse(Buffer.from(token.split(".")[1], "base64url")), rol };
+    const firmado = `${b64({ alg: "HS256", typ: "JWT" })}.${b64(payload)}`;
+    const firma = createHmac("sha256", process.env.JWT_SECRET).update(firmado).digest("base64url");
+    console.log(`${firmado}.${firma}`);
+  ' "$1" "$2"
+}
+
 reserva() {
   jq -nc --arg s "$1" --arg f "$2" --arg h "$3" --arg e "${4:-ana@example.com}" \
     '{servicioId:$s, fecha:$f, hora:$h, metodoPago:"efectivo",
@@ -237,6 +252,15 @@ check 'con codigo wrong_tenant' wrong_tenant "$(jq -r .code "$TMP/body")"
 req 'crear un tratamiento en el otro centro con este token' 403 POST "$OTRO/servicios" \
   '{"nombre":"Colado","duracionMinutos":30,"precioCentavos":100000,"senaCentavos":30000}' "$TOKEN"
 req 'las ventanas del otro centro con este token' 403 GET "$OTRO/ventanas-atencion" '' "$TOKEN"
+
+seccion 'Roles'
+TOKEN_CLIENTA=$(con_rol "$TOKEN" cliente)
+req 'un token de clienta contra una ruta de admin' 403 GET "$T/reservas" '' "$TOKEN_CLIENTA"
+check 'con codigo forbidden_role' forbidden_role "$(jq -r .code "$TMP/body")"
+req 'un token de clienta contra el ABM de tratamientos' 403 POST "$T/servicios" \
+  '{"nombre":"Colado","duracionMinutos":30,"precioCentavos":100000,"senaCentavos":30000}' "$TOKEN_CLIENTA"
+req 'un token de clienta contra las ventanas' 403 GET "$T/ventanas-atencion" '' "$TOKEN_CLIENTA"
+req 'un rol inventado en un token bien firmado' 403 GET "$T/reservas" '' "$(con_rol "$TOKEN" duenia)"
 
 seccion 'ABM de tratamientos'
 NUEVO='{"nombre":"Masaje descontracturante","duracionMinutos":45,"precioCentavos":1200000,"senaCentavos":400000}'
@@ -408,6 +432,10 @@ check 'para la administradora si aparece' 1 \
   "$(jq --arg i "$NUEVO_ID" '[.data[] | select(.id == $i)] | length' "$TMP/body")"
 req 'el detalle de un inactivo sin token' 404 GET "$T/servicios/$NUEVO_ID"
 req 'y con token' 200 GET "$T/servicios/$NUEVO_ID" '' "$TOKEN"
+req 'el catalogo con token de clienta' 200 GET "$T/servicios?limit=100" '' "$TOKEN_CLIENTA"
+check 'una clienta con sesion no ve los inactivos: decide el rol, no el token' 0 \
+  "$(jq '[.data[] | select(.activo == false)] | length' "$TMP/body")"
+req 'el detalle de un inactivo con token de clienta' 404 GET "$T/servicios/$NUEVO_ID" '' "$TOKEN_CLIENTA"
 
 seccion 'Documentacion'
 req 'el OpenAPI se sirve' 200 GET /docs-json

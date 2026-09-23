@@ -22,10 +22,14 @@ export const ApiTenant = () =>
       // El type explicito no sobra: sin el, un cliente generado del spec tipa el parametro
       // como `unknown` y obliga a castear en cada llamada.
       type: String,
-      description: 'Identificador del centro en la URL, por ejemplo `lo-de-lili`.',
+      description:
+        'Identificador del centro en la URL, por ejemplo `lo-de-lili`.',
       example: 'lo-de-lili',
     }),
-    ApiNotFoundResponse({ type: ErrorDto, description: 'El centro no existe o esta inactivo.' }),
+    ApiNotFoundResponse({
+      type: ErrorDto,
+      description: 'El centro no existe o esta inactivo.',
+    }),
   );
 
 /**
@@ -38,6 +42,13 @@ export const ApiTenant = () =>
 export const ApiSoloAdmin = () =>
   applyDecorators(
     ApiBearerAuth(),
-    ApiUnauthorizedResponse({ type: ErrorDto, description: 'Falta el token o no es valido.' }),
-    ApiForbiddenResponse({ type: ErrorDto, description: 'El token es de otro centro.' }),
+    ApiUnauthorizedResponse({
+      type: ErrorDto,
+      description: 'Falta el token o no es valido.',
+    }),
+    ApiForbiddenResponse({
+      type: ErrorDto,
+      description:
+        'El token es de otro centro, o de una cuenta que no es de administracion.',
+    }),
   );

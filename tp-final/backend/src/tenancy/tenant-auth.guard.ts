@@ -9,19 +9,25 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { PUBLICO, type RequestConTenant } from '../common/decorators.js';
+import {
+  PUBLICO,
+  ROLES,
+  type RequestConTenant,
+  type Rol,
+} from '../common/decorators.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { TenantContext } from './tenant-context.js';
 
 /** Lo que el login firma. `tid` es el id interno del tenant, que nunca sale por la API. */
-export type JwtPayload = { sub: string; tid: string; rol: string };
+export type JwtPayload = { sub: string; tid: string; rol: Rol };
 
 /**
- * Guard global. Hace cuatro cosas, en orden:
+ * Guard global. Hace cinco cosas, en orden:
  *   1. resuelve el centro del slug del path y lo deja en el TenantContext,
  *   2. verifica el Bearer si vino,
  *   3. exige que el tenant del token sea el del path (403),
- *   4. exige sesion en todo lo que no este marcado @Publico.
+ *   4. exige sesion en todo lo que no este marcado @Publico,
+ *   5. exige que el rol del token este entre los de la ruta; sin @Roles, solo admin (403).
  */
 @Injectable()
 export class TenantAuthGuard implements CanActivate {
@@ -95,12 +101,26 @@ export class TenantAuthGuard implements CanActivate {
       req.usuario = { id: payload.sub, rol: payload.rol };
     }
 
+    if (publico) return true;
+
     // El chequeo corre SIEMPRE, con slug o sin el: un `if (!slug) return true` se saltearia
     // token, cross-check y proteccion de una sola vez.
-    if (!publico && !req.usuario) {
+    if (!req.usuario) {
       throw new UnauthorizedException({
         code: 'unauthenticated',
         message: 'Necesitas iniciar sesion.',
+      });
+    }
+    // Sin @Roles, la ruta es de administracion. Antes de las cuentas de clientas bastaba con
+    // tener token del centro; con clientas, eso le abria la agenda completa a cualquiera.
+    const roles = this.reflector.getAllAndOverride<Rol[] | undefined>(ROLES, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]) ?? ['admin'];
+    if (!roles.includes(req.usuario.rol)) {
+      throw new ForbiddenException({
+        code: 'forbidden_role',
+        message: 'Tu cuenta no tiene acceso a esta seccion.',
       });
     }
     return true;

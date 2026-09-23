@@ -16,11 +16,11 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Un solo rol en el MVP. El claim viaja en el JWT para que el guard haga un chequeo de
-/// verdad en vez de la ficcion "si hay token valido, es la duenia".
+/// El rol del personal del centro. Las clientas no son usuarias del panel: tienen su propio
+/// rol en el JWT, y el guard exige el rol de cada ruta en vez de la ficcion "si hay token
+/// valido, es la duenia".
 enum RolUsuario {
   admin
-  cliente
 }
 
 enum EstadoReserva {

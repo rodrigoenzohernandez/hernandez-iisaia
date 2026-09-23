@@ -26,6 +26,7 @@ export const CODIGOS_DE_ERROR = [
   'too_far_ahead', // la fecha esta mas alla del tope de agenda
   'invalid_transition', // la reserva no puede pasar a ese estado
   'high_contention', // hubo demasiadas reservas simultaneas; se puede reintentar
+  'forbidden_role', // el token es valido pero su rol no puede entrar a esa ruta
 ] as const;
 
 export type CodigoDeError = (typeof CODIGOS_DE_ERROR)[number];

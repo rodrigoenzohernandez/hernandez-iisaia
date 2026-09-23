@@ -43,18 +43,19 @@ export class ServiciosService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
   /**
-   * `autenticada` decide el DEFAULT del filtro, no el significado de `?activo=`.
+   * `admin` decide el DEFAULT del filtro, no el significado de `?activo=`.
    *
-   * Sin token se devuelven solo los activos: el catalogo publico no deberia ofrecer
-   * tratamientos que, si se reservan, dan 404. Con token el default es ver todo, porque el
-   * ABM necesita administrar los dados de baja. En los dos casos `?activo=` sigue siendo un
-   * filtro comun que se respeta tal como viene.
+   * Para el publico, y para una clienta con sesion, se devuelven solo los activos: el
+   * catalogo no deberia ofrecer tratamientos que, si se reservan, dan 404. Para la
+   * administradora el default es ver todo, porque el ABM necesita administrar los dados de
+   * baja. En los dos casos `?activo=` sigue siendo un filtro comun que se respeta tal como
+   * viene.
    */
   findAll(
     query: ListServiciosQueryDto,
-    autenticada: boolean,
+    admin: boolean,
   ): Promise<CursorPageDto<ServicioDto>> {
-    const activo = query.activo ?? (autenticada ? undefined : true);
+    const activo = query.activo ?? (admin ? undefined : true);
     return paginate(query, ['nombre', 'id'], (pagina) =>
       this.db.servicio.findMany({
         // El filtro del llamador y el del keyset se combinan; la extension suma el tenantId.
@@ -66,10 +67,10 @@ export class ServiciosService {
     );
   }
 
-  async findOne(servicioId: string, autenticada = true): Promise<ServicioDto> {
+  async findOne(servicioId: string, admin = true): Promise<ServicioDto> {
     const servicio = await this.db.servicio.findFirst({
-      // Mismo criterio que el listado: sin token, un tratamiento dado de baja no existe.
-      where: { id: servicioId, ...(autenticada ? {} : { activo: true }) },
+      // Mismo criterio que el listado: fuera del panel, un tratamiento dado de baja no existe.
+      where: { id: servicioId, ...(admin ? {} : { activo: true }) },
       select: servicioSelect,
     });
     return servicio ?? noExiste();
