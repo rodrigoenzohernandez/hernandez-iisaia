@@ -7,8 +7,6 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
-import { env } from '../env.js';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -19,6 +17,7 @@ import {
 import { ApiSoloAdmin, ApiTenant } from '../common/api.decorators.js';
 import {
   CurrentTenant,
+  LimiteEstricto,
   Publico,
   type TenantRequest,
 } from '../common/decorators.js';
@@ -39,7 +38,7 @@ export class ReservasController {
   /** Reserva un turno. Publico: la clienta no tiene cuenta, deja sus datos de contacto. */
   @Publico()
   @Post()
-  @Throttle({ default: { limit: env.throttleLimit, ttl: 60_000 } })
+  @LimiteEstricto()
   @ApiCreatedResponse({ type: ReservaDto })
   @ApiBadRequestResponse({
     type: ErrorDto,
@@ -77,7 +76,10 @@ export class ReservasController {
   @ApiSoloAdmin()
   @Patch(':reservaId')
   @ApiOkResponse({ type: ReservaDto })
-  @ApiBadRequestResponse({ type: ErrorDto, description: 'El estado pedido no existe.' })
+  @ApiBadRequestResponse({
+    type: ErrorDto,
+    description: 'El estado pedido no existe.',
+  })
   @ApiNotFoundResponse({ type: ErrorDto, description: 'La reserva no existe.' })
   @ApiConflictResponse({
     type: ErrorDto,

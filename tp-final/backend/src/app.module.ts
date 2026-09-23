@@ -12,9 +12,11 @@ import { VentanasAtencionModule } from './ventanas-atencion/ventanas-atencion.mo
 
 @Module({
   imports: [
-    // Tope global holgado; los dos endpoints publicos que escriben llevan el suyo, mas
-    // estricto, con @Throttle.
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: Math.max(120, env.throttleLimit) }]),
+    // Tope global holgado; las escrituras publicas llevan el suyo, mas estricto, con
+    // @LimiteEstricto.
+    ThrottlerModule.forRoot([
+      { ttl: 60_000, limit: Math.max(120, env.throttleLimit) },
+    ]),
     PrismaModule,
     AuthModule,
     ServiciosModule,
@@ -24,7 +26,7 @@ import { VentanasAtencionModule } from './ventanas-atencion/ventanas-atencion.mo
   ],
   providers: [
     // El ThrottlerGuard hay que registrarlo a mano: ThrottlerModule.forRoot solo publica las
-    // opciones y el storage. Sin esta linea, los @Throttle de los dos endpoints publicos y el
+    // opciones y el storage. Sin esta linea, los limites de las escrituras publicas y el
     // tope global son decoradores muertos y la API no tiene ningun limite de peticiones.
     // Va PRIMERO: conviene rechazar por volumen antes de gastar una query resolviendo el
     // centro y un scrypt verificando la contrasena.

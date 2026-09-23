@@ -207,7 +207,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -362,7 +362,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -440,7 +440,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -526,7 +526,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -824,7 +824,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -920,7 +920,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1006,7 +1006,13 @@
               "past_date",
               "too_far_ahead",
               "invalid_transition",
-              "high_contention"
+              "high_contention",
+              "forbidden_role",
+              "not_found",
+              "payload_too_large",
+              "too_many_requests",
+              "internal_error",
+              "http_error"
             ],
             "type": "string",
             "example": "slot_full"

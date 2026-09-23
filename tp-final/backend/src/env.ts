@@ -15,14 +15,48 @@ const requerido = (clave: string): string => {
   return valor;
 };
 
+const produccion = process.env.NODE_ENV === 'production';
+
+const jwtSecret = requerido('JWT_SECRET');
+// Un secreto corto se rompe por fuerza bruta offline con un solo token capturado.
+if (jwtSecret.length < 32) {
+  throw new Error('JWT_SECRET necesita 32 caracteres o mas');
+}
+
+const corsOrigin = (process.env.CORS_ORIGIN ?? 'http://localhost:3101').split(
+  ',',
+);
+if (
+  produccion &&
+  corsOrigin.some((o) => o === '*' || !o.startsWith('https://'))
+) {
+  throw new Error(
+    'En produccion, CORS_ORIGIN solo acepta origenes https y nunca *',
+  );
+}
+
+/**
+ * Cuantos saltos de proxy creerle a X-Forwarded-For. Sin default a proposito: detras de un
+ * proxy sin esta variable, todas las requests traen la IP del proxy y el limite de
+ * peticiones se comparte entre todos; prendido sin proxy, cualquiera falsifica el header y
+ * se saltea el limite.
+ */
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy !== undefined && !/^\d+$/.test(trustProxy)) {
+  throw new Error(
+    'TRUST_PROXY tiene que ser la cantidad de proxies, un entero',
+  );
+}
+
 export const env = {
   databaseUrl: requerido('DATABASE_URL'),
-  jwtSecret: requerido('JWT_SECRET'),
+  jwtSecret,
   port: Number(process.env.PORT ?? 3100),
-  // Peticiones por minuto permitidas en los dos endpoints publicos que escriben. Es
-  // configurable por una sola razon: verificacion/verificar.sh hace unas 25 altas seguidas y
-  // con el default se limitaria a si mismo. El limite real se prueba aparte, con
+  // Peticiones por minuto permitidas en las escrituras publicas. Es configurable por una
+  // sola razon: verificacion/verificar.sh hace decenas de altas seguidas y con el default se
+  // limitaria a si mismo. El limite real se prueba aparte, con
   // verificacion/verificar-limite.sh contra la configuracion de default.
   throttleLimit: Number(process.env.THROTTLE_LIMIT ?? 5),
-  corsOrigin: (process.env.CORS_ORIGIN ?? 'http://localhost:3101').split(','),
+  corsOrigin,
+  trustProxy: trustProxy === undefined ? undefined : Number(trustProxy),
 };

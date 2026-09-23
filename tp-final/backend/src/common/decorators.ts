@@ -3,6 +3,8 @@ import {
   ExecutionContext,
   SetMetadata,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { env } from '../env.js';
 
 export const PUBLICO = 'publico';
 export const ROLES = 'roles';
@@ -23,6 +25,13 @@ export const Publico = () => SetMetadata(PUBLICO, true);
  * olvida de declarar sus roles queda para la administradora y no para cualquier token.
  */
 export const Roles = (...roles: Rol[]) => SetMetadata(ROLES, roles);
+
+/**
+ * El limite de las escrituras publicas: login, alta de reserva y las que vengan. Un solo
+ * lugar para el valor, que `THROTTLE_LIMIT` pisa en la verificacion.
+ */
+export const LimiteEstricto = () =>
+  Throttle({ default: { limit: env.throttleLimit, ttl: 60_000 } });
 
 /** El centro de la request, resuelto por el guard desde el slug del path. */
 export type TenantRequest = {

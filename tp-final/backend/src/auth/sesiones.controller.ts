@@ -1,13 +1,11 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
-import { env } from '../env.js';
 import {
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ApiTenant } from '../common/api.decorators.js';
-import { Publico } from '../common/decorators.js';
+import { LimiteEstricto, Publico } from '../common/decorators.js';
 import { ErrorDto } from '../common/error.dto.js';
 import { AuthService } from './auth.service.js';
 import { CrearSesionDto } from './dto/crear-sesion.dto.js';
@@ -22,7 +20,7 @@ export class SesionesController {
   @Publico()
   @Post()
   @HttpCode(201)
-  @Throttle({ default: { limit: env.throttleLimit, ttl: 60_000 } })
+  @LimiteEstricto()
   @ApiCreatedResponse({ type: SesionDto })
   @ApiUnauthorizedResponse({
     type: ErrorDto,

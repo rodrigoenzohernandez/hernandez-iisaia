@@ -5,16 +5,36 @@ import 'reflect-metadata';
 
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { construirOpenApi } from './openapi.js';
 import { AppModule } from './app.module.js';
+import { ErroresFilter } from './common/errores.filter.js';
 import { env } from './env.js';
 import { TenantContext } from './tenancy/tenant-context.js';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Headers de seguridad antes que cualquier otra cosa, para que los lleven tambien las
+  // respuestas de error. Entre otros, saca el X-Powered-By que anunciaba Express.
+  app.use(helmet());
+  if (env.trustProxy !== undefined) app.set('trust proxy', env.trustProxy);
+  // Coincide con el default de express, y se escribe igual: es el tope de lo que se parsea, y
+  // un default implicito es uno que se cambia sin darse cuenta.
+  app.useBodyParser('json', { limit: '100kb' });
+
   app.setGlobalPrefix('api/v1');
-  app.enableCors({ origin: env.corsOrigin });
+  app.enableCors({
+    origin: env.corsOrigin,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
+    // La API autentica con Bearer y no con cookies: CORS sin credenciales, y por lo mismo
+    // fuera del alcance de CSRF.
+    credentials: false,
+    maxAge: 600,
+  });
 
   // Middleware de express pelado, antes del router de Nest: abre el AsyncLocalStorage para
   // toda la request. El guard lo llena y la extension de Prisma lo lee en cada query.
@@ -22,6 +42,7 @@ async function bootstrap(): Promise<void> {
     TenantContext.run(next),
   );
 
+  app.useGlobalFilters(new ErroresFilter(app.getHttpAdapter()));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -45,10 +66,11 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  SwaggerModule.setup('docs', app, construirOpenApi(app), { useGlobalPrefix: true });
+  SwaggerModule.setup('docs', app, construirOpenApi(app), {
+    useGlobalPrefix: true,
+  });
 
   await app.listen(env.port);
 }
-
 
 void bootstrap();

@@ -142,6 +142,9 @@ con_rol() {
   ' "$1" "$2"
 }
 
+# header <curl args...> — los headers de la respuesta, en minuscula, para buscar con grep.
+header() { curl -s -o /dev/null -D - "$@" | tr -d '\r' | tr '[:upper:]' '[:lower:]'; }
+
 reserva() {
   jq -nc --arg s "$1" --arg f "$2" --arg h "$3" --arg e "${4:-ana@example.com}" \
     '{servicioId:$s, fecha:$f, hora:$h, metodoPago:"efectivo",
@@ -261,6 +264,26 @@ req 'un token de clienta contra el ABM de tratamientos' 403 POST "$T/servicios" 
   '{"nombre":"Colado","duracionMinutos":30,"precioCentavos":100000,"senaCentavos":30000}' "$TOKEN_CLIENTA"
 req 'un token de clienta contra las ventanas' 403 GET "$T/ventanas-atencion" '' "$TOKEN_CLIENTA"
 req 'un rol inventado en un token bien firmado' 403 GET "$T/reservas" '' "$(con_rol "$TOKEN" duenia)"
+
+seccion 'Seguridad base'
+H=$(header "$BASE$T/servicios")
+check 'helmet: X-Content-Type-Options nosniff' true "$(grep -q '^x-content-type-options: nosniff' <<<"$H" && echo true || echo false)"
+check 'helmet: sin X-Powered-By que anuncie Express' false "$(grep -q '^x-powered-by' <<<"$H" && echo true || echo false)"
+check 'helmet: X-Frame-Options' true "$(grep -q '^x-frame-options:' <<<"$H" && echo true || echo false)"
+H=$(header -X OPTIONS "$BASE$T/reservas" -H 'Origin: http://localhost:3101' -H 'Access-Control-Request-Method: POST')
+check 'CORS: el origen del front recibe permiso' 'http://localhost:3101' "$(sed -n 's/^access-control-allow-origin: //p' <<<"$H")"
+check 'CORS: sin credenciales, la API usa Bearer y no cookies' false "$(grep -q '^access-control-allow-credentials: true' <<<"$H" && echo true || echo false)"
+H=$(header -X OPTIONS "$BASE$T/reservas" -H 'Origin: https://malicioso.example' -H 'Access-Control-Request-Method: POST')
+check 'CORS: un origen ajeno no recibe permiso' '' "$(sed -n 's/^access-control-allow-origin: //p' <<<"$H")"
+req 'una ruta que no existe' 404 GET /nada
+check 'con el mismo contrato de error: not_found' not_found "$(jq -r .code "$TMP/body")"
+req 'un body que no es JSON valido' 400 POST "$T/sesiones" '{"email":'
+check 'validation_error, sin el mensaje del parser' 'Revisa los datos enviados.' "$(jq -r .message "$TMP/body")"
+# El body grande va por fuera de req() para no pegar 200 kb en el reporte.
+node -e 'process.stdout.write(JSON.stringify({ email: "a@b.c", password: "x".repeat(200000) }))' >"$TMP/grande.json"
+CODIGO=$(curl -s -o "$TMP/body" -w '%{http_code}' -X POST "$BASE$T/sesiones" -H 'Content-Type: application/json' --data-binary @"$TMP/grande.json")
+check 'un body de 200 kb' 413 "$CODIGO"
+check 'con codigo payload_too_large' payload_too_large "$(jq -r .code "$TMP/body")"
 
 seccion 'ABM de tratamientos'
 NUEVO='{"nombre":"Masaje descontracturante","duracionMinutos":45,"precioCentavos":1200000,"senaCentavos":400000}'

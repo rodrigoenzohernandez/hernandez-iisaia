@@ -27,6 +27,11 @@ export const CODIGOS_DE_ERROR = [
   'invalid_transition', // la reserva no puede pasar a ese estado
   'high_contention', // hubo demasiadas reservas simultaneas; se puede reintentar
   'forbidden_role', // el token es valido pero su rol no puede entrar a esa ruta
+  'not_found', // la ruta no existe
+  'payload_too_large', // el body pasa del tope
+  'too_many_requests', // se paso el limite de peticiones; esperar y reintentar
+  'internal_error', // fallo del servidor; el detalle queda en el log, no en la respuesta
+  'http_error', // cualquier otro error HTTP que no tenga un codigo propio
 ] as const;
 
 export type CodigoDeError = (typeof CODIGOS_DE_ERROR)[number];
