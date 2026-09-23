@@ -25,5 +25,10 @@ COPY --from=build /app/dist ./dist
 COPY package.json package-lock.json .npmrc prisma.config.ts ./
 COPY prisma ./prisma
 
+# El seed corre como TypeScript con el type stripping de Node, no compilado, y hace
+# `import { hashPassword } from '../src/common/password.ts'`. Sin src/ el contenedor del
+# seed muere con ERR_MODULE_NOT_FOUND. Son 264K y es la única dependencia que cruza a src.
+COPY --from=build /app/src ./src
+
 EXPOSE 3100
 CMD ["node", "dist/main.js"]

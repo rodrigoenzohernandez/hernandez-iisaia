@@ -6,7 +6,11 @@
 #
 #   cp .env.example .env     # y completar los dos secretos
 #   docker compose up -d --build
-#   docker compose run --rm seed     # una sola vez: siembra los 3 centros
+#
+# Eso es todo: la migración y la siembra inicial corren solas y en orden. El seed detecta si
+# la base ya tiene datos y en ese caso no la toca, así que `up` es seguro de repetir.
+# Para volver al estado inicial borrando lo cargado:
+#   docker compose --profile resembrar run --rm resembrar
 #
 # Frontend en http://localhost:3101 · API en http://localhost:3100/api/v1
 
@@ -14,6 +18,12 @@ name: turnos
 
 x-conexion: &conexion
   DATABASE_URL: postgresql://turnos:turnos@db:5432/turnos?schema=public
+
+# Los cuatro servicios que salen del backend comparten imagen. Sin el `image:` explícito,
+# cada uno construiría su propia copia del mismo Dockerfile: cuatro builds en vez de uno.
+x-imagen-backend: &imagen-backend
+  build: ./backend
+  image: turnos-backend:local
 
 services:
   db:
@@ -38,7 +48,7 @@ services:
 
   # Aplica las migraciones y termina. El backend espera a que salga con éxito.
   migrate:
-    build: ./backend
+    <<: *imagen-backend
     restart: 'no'
     environment: *conexion
     command: ['npx', 'prisma', 'migrate', 'deploy']
@@ -46,12 +56,39 @@ services:
       db:
         condition: service_healthy
 
-  # Siembra los 3 centros con sus tratamientos y franjas. NO corre solo: el seed borra y
-  # recrea, así que arrancarlo en cada `up` borraría las reservas que hayas cargado.
-  # Se invoca a mano:  docker compose run --rm seed
+  # Siembra los 3 centros la PRIMERA vez y solo esa vez.
+  #
+  # prisma/seed.ts arranca con cinco deleteMany, y el primero es el de reservas: correrlo en
+  # cada `up` borraría los turnos cargados. Por eso no se ejecuta a ciegas sino detrás de una
+  # consulta: si la tabla Tenant tiene filas, no se toca nada.
   seed:
-    build: ./backend
-    profiles: ['seed']
+    <<: *imagen-backend
+    restart: 'no'
+    environment:
+      <<: *conexion
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?falta SEED_ADMIN_PASSWORD en el .env (generala con 'openssl rand -base64 18')}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        estado=$$(node -e 'const {Client}=require("pg");const c=new Client({connectionString:process.env.DATABASE_URL});c.connect().then(()=>c.query(`select count(*)::int as n from "Tenant"`)).then(r=>{console.log(r.rows[0].n===0?"vacia":"con-datos");return c.end()}).catch(e=>{console.error(e.message);process.exit(1)})')
+        if [ "$$estado" = "vacia" ]; then
+          echo "Base vacia: sembrando los tres centros."
+          node prisma/seed.ts
+        else
+          echo "La base ya tiene datos, no la toco. Para rehacerla desde cero:"
+          echo "  docker compose --profile resembrar run --rm resembrar"
+        fi
+
+  # La vía explícita para volver al estado del seed, borrando todo lo cargado.
+  # No corre nunca sola: hay que pedirla por su perfil.
+  resembrar:
+    <<: *imagen-backend
+    profiles: ['resembrar']
     restart: 'no'
     environment:
       <<: *conexion
@@ -62,7 +99,7 @@ services:
         condition: service_completed_successfully
 
   backend:
-    build: ./backend
+    <<: *imagen-backend
     restart: unless-stopped
     ports:
       - '3100:3100'
@@ -77,6 +114,8 @@ services:
       db:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      seed:
         condition: service_completed_successfully
     healthcheck:
       test:
