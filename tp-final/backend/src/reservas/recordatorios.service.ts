@@ -8,12 +8,27 @@ import {
   sumarDias,
 } from '../common/horario.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
-import { recordatorio } from '../notificaciones/plantillas.js';
+import {
+  datosDelTurno,
+  recordatorio,
+  turnoDe,
+} from '../notificaciones/plantillas.js';
 import { PLANES } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 
 /** Con cuanta anticipacion sale el recordatorio. */
 export const RECORDATORIO_MINUTOS = 24 * 60;
+
+/**
+ * Lo que se guarda en recordatorioEnviadoAt al reservar o reprogramar: un turno que empieza
+ * en menos de 24 horas no necesita recordatorio, porque el mail de confirmacion ya lo es.
+ */
+export const recordatorioEnviadoAt = (
+  fecha: string,
+  hora: string,
+  ahora: { fecha: string; hora: string },
+): Date | null =>
+  minutosHasta(fecha, hora, ahora) <= RECORDATORIO_MINUTOS ? new Date() : null;
 
 @Injectable()
 export class RecordatoriosService {
@@ -41,14 +56,7 @@ export class RecordatoriosService {
           lte: aDate(sumarDias(ahora.fecha, 1)),
         },
       },
-      select: {
-        id: true,
-        fecha: true,
-        horaInicio: true,
-        clienteNombre: true,
-        clienteEmail: true,
-        servicio: { select: { nombre: true } },
-      },
+      select: { id: true, ...datosDelTurno },
     });
 
     for (const r of candidatas) {
@@ -65,13 +73,7 @@ export class RecordatoriosService {
         await this.notificaciones.encolar(
           tx,
           r.clienteEmail,
-          recordatorio({
-            centro: centro.nombre,
-            clienteNombre: r.clienteNombre,
-            servicio: r.servicio.nombre,
-            fecha: aFecha(r.fecha),
-            hora: r.horaInicio,
-          }),
+          recordatorio(turnoDe(centro.nombre, r)),
         );
       });
     }

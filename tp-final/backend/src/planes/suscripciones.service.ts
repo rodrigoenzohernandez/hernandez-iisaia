@@ -1,12 +1,10 @@
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import {
-  BadGatewayException,
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import { CuentasMercadoPagoService } from '../cobros/cuentas-mercadopago.service.js';
+  CuentasMercadoPagoService,
+  esHttps,
+  mpNoResponde,
+  mpSinConfigurar,
+} from '../cobros/cuentas-mercadopago.service.js';
 import type { TenantRequest, UsuarioRequest } from '../common/decorators.js';
 import { env } from '../env.js';
 import {
@@ -20,7 +18,12 @@ import type {
   SuscripcionDto,
   UpdateSuscripcionDto,
 } from './dto/suscripcion.dto.js';
-import { camposDelPlan, PLANES, planVigente } from './planes.js';
+import {
+  camposDelPlan,
+  PLANES,
+  planVigente,
+  suscripcionViva,
+} from './planes.js';
 
 /** Un mes despues de un cobro: hasta ahi queda pago el plan. */
 function unMesDespues(fecha: Date): Date {
@@ -84,9 +87,7 @@ export class SuscripcionesService {
       where: { id },
       select: { suscripcionMpId: true, suscripcionEstado: true },
     });
-    if (actual.suscripcionMpId && actual.suscripcionEstado !== 'cancelled') {
-      return this.estado();
-    }
+    if (suscripcionViva(actual)) return this.estado();
     // El Profesional existe para cobrar online: sin la cuenta del centro no hay a donde.
     const cuenta = await this.cuentas.estado();
     if (!cuenta.conectada || cuenta.requiereReconexion) {
@@ -112,7 +113,7 @@ export class SuscripcionesService {
         reason: `Plan ${plan.nombre} - ${tenant.nombre}`,
         amountCents: plan.precioCentavos,
         payerEmail,
-        backUrl: env.frontendUrl?.startsWith('https://')
+        backUrl: esHttps(env.frontendUrl)
           ? `${env.frontendUrl}/${tenant.slug}/admin/suscripcion`
           : undefined,
       }),
@@ -152,9 +153,7 @@ export class SuscripcionesService {
       where: { id },
       select: { suscripcionMpId: true, suscripcionEstado: true },
     });
-    if (!actual.suscripcionMpId || actual.suscripcionEstado === 'cancelled') {
-      return;
-    }
+    if (!suscripcionViva(actual)) return;
     const s = await this.llamar((mp) =>
       mp.cancelSubscription(actual.suscripcionMpId!),
     );
@@ -199,20 +198,12 @@ export class SuscripcionesService {
 
   private async llamar<T>(fn: (mp: MercadoPago) => Promise<T>): Promise<T> {
     const mp = this.cuentas.dePlataforma();
-    if (!mp) {
-      throw new ServiceUnavailableException({
-        code: 'mercadopago_not_configured',
-        message: 'El cobro de los planes no esta configurado en la plataforma.',
-      });
-    }
+    if (!mp) mpSinConfigurar();
     try {
       return await fn(mp);
     } catch (e) {
       if (!(e instanceof MercadoPagoError)) throw e;
-      throw new BadGatewayException({
-        code: 'payment_provider_unavailable',
-        message: 'Mercado Pago no respondio. Proba de nuevo en unos minutos.',
-      });
+      mpNoResponde();
     }
   }
 }

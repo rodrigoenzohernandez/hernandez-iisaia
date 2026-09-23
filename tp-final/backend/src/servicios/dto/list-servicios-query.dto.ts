@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional } from 'class-validator';
 import { CursorPageQueryDto } from '../../common/pagination/cursor-page.dto.js';
+import { aBooleano } from '../../common/transforms.js';
 
 export class ListServiciosQueryDto extends CursorPageQueryDto {
   /**
@@ -9,9 +10,7 @@ export class ListServiciosQueryDto extends CursorPageQueryDto {
    * de acceso de una ruta publica es lo que se rompe en el segundo refactor.
    */
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    value === 'true' ? true : value === 'false' ? false : value,
-  )
+  @Transform(aBooleano)
   @IsBoolean({ message: 'activo tiene que ser true o false.' })
   activo?: boolean;
 }

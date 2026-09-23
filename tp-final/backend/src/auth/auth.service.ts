@@ -2,6 +2,7 @@ import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { senuelo, verifyPassword } from '../common/password.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
+import type { JwtPayload } from '../tenancy/tenant-auth.guard.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import type { CrearSesionDto } from './dto/crear-sesion.dto.js';
 import type { SesionDto } from './dto/sesion.dto.js';
@@ -47,7 +48,7 @@ export class AuthService {
     }
 
     return {
-      accessToken: await this.jwt.signAsync({
+      accessToken: await this.jwt.signAsync<JwtPayload>({
         sub: usuario.id,
         tid: usuario.tenantId,
         rol: usuario.rol,

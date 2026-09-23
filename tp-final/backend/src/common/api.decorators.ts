@@ -33,6 +33,16 @@ export const ApiTenant = () =>
     }),
   );
 
+/** Pide token y documenta sus dos rechazos; `prohibido` dice que token no alcanza. */
+const conToken = (prohibido: string) => [
+  ApiBearerAuth(),
+  ApiUnauthorizedResponse({
+    type: ErrorDto,
+    description: 'Falta el token o no es valido.',
+  }),
+  ApiForbiddenResponse({ type: ErrorDto, description: prohibido }),
+];
+
 /**
  * Marca una operacion como de administracion: pide token y documenta sus dos rechazos.
  *
@@ -42,16 +52,9 @@ export const ApiTenant = () =>
  */
 export const ApiSoloAdmin = () =>
   applyDecorators(
-    ApiBearerAuth(),
-    ApiUnauthorizedResponse({
-      type: ErrorDto,
-      description: 'Falta el token o no es valido.',
-    }),
-    ApiForbiddenResponse({
-      type: ErrorDto,
-      description:
-        'El token es de otro centro, o de una cuenta que no es de administracion.',
-    }),
+    ...conToken(
+      'El token es de otro centro, o de una cuenta que no es de administracion.',
+    ),
   );
 
 /**
@@ -61,28 +64,12 @@ export const ApiSoloAdmin = () =>
 export const SoloClienta = () =>
   applyDecorators(
     Roles('cliente'),
-    ApiBearerAuth(),
-    ApiUnauthorizedResponse({
-      type: ErrorDto,
-      description: 'Falta el token o no es valido.',
-    }),
-    ApiForbiddenResponse({
-      type: ErrorDto,
-      description: 'El token es de otro centro, o no es de una clienta.',
-    }),
+    ...conToken('El token es de otro centro, o no es de una clienta.'),
   );
 
 /** Ruta de la plataforma: exige el rol de superadmin y documenta los rechazos. */
 export const SoloSuperadmin = () =>
   applyDecorators(
     Roles('superadmin'),
-    ApiBearerAuth(),
-    ApiUnauthorizedResponse({
-      type: ErrorDto,
-      description: 'Falta el token o no es valido.',
-    }),
-    ApiForbiddenResponse({
-      type: ErrorDto,
-      description: 'El token no es de la plataforma.',
-    }),
+    ...conToken('El token no es de la plataforma.'),
   );

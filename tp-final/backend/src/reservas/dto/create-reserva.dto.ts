@@ -10,7 +10,7 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { MetodoPago } from '@prisma/client';
-import { aEmail } from '../../common/transforms.js';
+import { aEmail, recortar } from '../../common/transforms.js';
 
 /**
  * El alta de un turno. La hacen tres personas distintas con el mismo body:
@@ -58,9 +58,7 @@ export class CreateReservaDto {
   /** Un solo campo, como el formulario del prototipo. Obligatorio sin sesion de clienta. */
   @IsOptional()
   @IsString()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
+  @Transform(recortar)
   @Length(2, 120, {
     message: 'El nombre tiene que tener entre 2 y 120 caracteres.',
   })

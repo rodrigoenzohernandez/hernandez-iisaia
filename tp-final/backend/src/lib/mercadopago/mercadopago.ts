@@ -75,6 +75,24 @@ const sinActivation = (url: string): string => {
   return u.toString();
 };
 
+/**
+ * Una configuracion del SDK nueva en CADA operacion. No es derroche: el SDK (issue #481,
+ * abierto) copia las requestOptions de cada llamada en la configuracion compartida, asi que
+ * la idempotency key de una escritura viaja en todas las siguientes. Con una configuracion
+ * compartida, un segundo reembolso volvia como el primero y no reembolsaba nada.
+ */
+const configDelSdk = (
+  accessToken: string,
+  opciones: { timeoutMs?: number; maxRetries?: number } = {},
+) =>
+  new MercadoPagoConfig({
+    accessToken,
+    options: {
+      timeout: opciones.timeoutMs ?? 10_000,
+      maxRetries: opciones.maxRetries ?? 1,
+    },
+  });
+
 /** Traduce los errores del SDK a uno solo, con la decision de reintentar ya tomada. */
 async function llamar<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -114,20 +132,8 @@ const texto = (v: unknown): string =>
 export class MercadoPago {
   constructor(private readonly opciones: MercadoPagoOptions) {}
 
-  /**
-   * Una configuracion del SDK nueva en CADA operacion. No es derroche: el SDK (issue #481,
-   * abierto) copia las requestOptions de cada llamada en la configuracion compartida, asi que
-   * la idempotency key de una escritura viaja en todas las siguientes. Con una configuracion
-   * compartida, un segundo reembolso volvia como el primero y no reembolsaba nada.
-   */
   private config(): MercadoPagoConfig {
-    return new MercadoPagoConfig({
-      accessToken: this.opciones.accessToken,
-      options: {
-        timeout: this.opciones.timeoutMs ?? 10_000,
-        maxRetries: this.opciones.maxRetries ?? 1,
-      },
-    });
+    return configDelSdk(this.opciones.accessToken, this.opciones);
   }
 
   /** Crea un link de pago de Checkout Pro. */
@@ -364,11 +370,7 @@ export class MercadoPago {
     redirectUri: string;
     platformAccessToken: string;
   }) {
-    const config = () =>
-      new MercadoPagoConfig({
-        accessToken: opciones.platformAccessToken,
-        options: { timeout: 10_000, maxRetries: 1 },
-      });
+    const config = () => configDelSdk(opciones.platformAccessToken);
     const credenciales = {
       client_id: opciones.clientId,
       client_secret: opciones.clientSecret,

@@ -7,6 +7,7 @@ import {
   ApiServiceUnavailableResponse,
 } from '@nestjs/swagger';
 import { ApiSoloAdmin, ApiTenant } from '../common/api.decorators.js';
+import { CurrentTenant, type TenantRequest } from '../common/decorators.js';
 import { ErrorDto } from '../common/error.dto.js';
 import { CuentasMercadoPagoService } from './cuentas-mercadopago.service.js';
 import {
@@ -57,10 +58,13 @@ export class CuentaMercadoPagoController {
   @ApiConflictResponse({
     type: ErrorDto,
     description:
-      'Cambiar de cuenta dejaria sin reembolso pagos de turnos por venir.',
+      'La cuenta actual tiene pagos en curso o turnos pagos por venir: si se cambia, no se podrian saldar.',
   })
-  conectar(@Body() dto: ConectarCuentaDto): Promise<CuentaMercadoPagoDto> {
-    return this.cuentas.conectar(dto.code, dto.state);
+  conectar(
+    @CurrentTenant() tenant: TenantRequest,
+    @Body() dto: ConectarCuentaDto,
+  ): Promise<CuentaMercadoPagoDto> {
+    return this.cuentas.conectar(dto.code, dto.state, tenant.zonaHoraria);
   }
 
   /** Desconecta la cuenta. El centro deja de cobrar online. */
@@ -70,11 +74,13 @@ export class CuentaMercadoPagoController {
   @ApiConflictResponse({
     type: ErrorDto,
     description:
-      'Hay pagos de turnos por venir que se tendrian que poder reembolsar, o la suscripcion al plan Profesional sigue activa.',
+      'La cuenta tiene pagos en curso o turnos pagos por venir, o la suscripcion al plan Profesional sigue activa.',
   })
   // Un DELETE de verdad, a diferencia de la baja de un tratamiento: despues la conexion no
   // existe mas. Devuelve 200 con el estado nuevo, y no 204, como el resto de la API.
-  desconectar(): Promise<CuentaMercadoPagoDto> {
-    return this.cuentas.desconectar();
+  desconectar(
+    @CurrentTenant() tenant: TenantRequest,
+  ): Promise<CuentaMercadoPagoDto> {
+    return this.cuentas.desconectar(tenant.zonaHoraria);
   }
 }

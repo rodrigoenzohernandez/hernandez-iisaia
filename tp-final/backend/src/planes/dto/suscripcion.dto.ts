@@ -4,15 +4,20 @@ import { Transform } from 'class-transformer';
 import { IsEmail, IsEnum, IsOptional, MaxLength } from 'class-validator';
 import { aEmail } from '../../common/transforms.js';
 
+/** Los estados de una suscripcion en Mercado Pago. */
+export const ESTADOS_DE_SUSCRIPCION = [
+  'pending',
+  'authorized',
+  'paused',
+  'cancelled',
+] as const;
+
 export class SuscripcionMpDto {
   @ApiProperty({ enum: Plan, example: 'profesional' })
   plan!: Plan;
 
   /** El estado en Mercado Pago. `pending` hasta que la administradora autoriza el cobro. */
-  @ApiProperty({
-    enum: ['pending', 'authorized', 'paused', 'cancelled'],
-    example: 'authorized',
-  })
+  @ApiProperty({ enum: ESTADOS_DE_SUSCRIPCION, example: 'authorized' })
   estado!: string;
 
   /** Donde la administradora autoriza el cobro mensual. Solo mientras esta `pending`. */

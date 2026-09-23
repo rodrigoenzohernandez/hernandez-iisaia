@@ -20,6 +20,15 @@ export const aDate = (fecha: string): Date =>
 /** Date de un @db.Date -> "2026-10-05". */
 export const aFecha = (valor: Date): string => valor.toISOString().slice(0, 10);
 
+/** El mes de una fecha, como rango de @db.Date: del dia 1 al dia 1 siguiente, sin incluirlo. */
+export const mesDe = (fecha: string): { gte: Date; lt: Date } => {
+  const [anio, mes] = fecha.split('-').map(Number);
+  return {
+    gte: new Date(Date.UTC(anio, mes - 1, 1)),
+    lt: new Date(Date.UTC(anio, mes, 1)),
+  };
+};
+
 /**
  * true si la fecha existe de verdad en el calendario.
  *

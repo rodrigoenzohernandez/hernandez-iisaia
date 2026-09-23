@@ -5,7 +5,8 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { Plan, Prisma } from '@prisma/client';
+import { capacidadDe } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { runSerializable } from '../prisma/run-serializable.js';
 import type {
@@ -23,7 +24,7 @@ const ORDEN = [{ diaSemana: 'asc' }, { horaInicio: 'asc' }] as const;
 export class VentanasAtencionService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
-  async findAll(capacidadMaxima: number): Promise<VentanasAtencionDto> {
+  async findAll(plan: Plan): Promise<VentanasAtencionDto> {
     // Sin paginar: son 84 filas como maximo y es configuracion. Paginar config es ceremonia.
     const ventanas = await this.db.ventanaAtencion.findMany({
       orderBy: [...ORDEN],
@@ -35,7 +36,7 @@ export class VentanasAtencionService {
     return {
       data: ventanas.map((v) => ({
         ...v,
-        capacidad: Math.min(v.capacidad, capacidadMaxima),
+        capacidad: capacidadDe(v.capacidad, plan),
       })),
     };
   }

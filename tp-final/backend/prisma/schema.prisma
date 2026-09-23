@@ -71,8 +71,8 @@ enum EstadoNotificacion {
   fallida
 }
 
-/// Raiz del arbol: el unico modelo sin tenantId y el unico que la extension no filtra.
-/// No hay endpoint que lo lea ni que lo liste. Los tenants se crean por seed.
+/// Raiz del arbol: sin tenantId, y junto con Superadmin, lo unico que la extension no filtra.
+/// Lo listan solo las rutas de la plataforma; se crea con el alta publica de centros o el seed.
 model Tenant {
   id     String @id @default(cuid())
   slug   String @unique
@@ -287,8 +287,10 @@ model Cliente {
   @@unique([tenantId, id])
 }
 
-/// Un codigo de ingreso de 6 digitos. Se guarda su HMAC, nunca el codigo: una base filtrada
-/// no deja entrar a nadie, ni siquiera durante los diez minutos en que vale.
+/// Un codigo de ingreso de 6 digitos. Se guarda su HMAC, nunca el codigo.
+/// ponytail: el mail que lo manda si lo lleva en claro, en la cola, hasta que el codigo vence
+/// y la fila se borra: una base filtrada en esos diez minutos deja entrar. Cifrar el cuerpo de
+/// la cola lo cierra, el dia que haga falta.
 model CodigoAcceso {
   id         String    @id @default(cuid())
   tenantId   String

@@ -17,6 +17,7 @@ import {
 } from '../lib/mercadopago/index.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
 import { reconectarMercadoPago } from '../notificaciones/plantillas.js';
+import { suscripcionViva } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import type { CuentaMercadoPagoDto } from './dto/cuenta-mercadopago.dto.js';
@@ -28,7 +29,34 @@ const RENOVAR_ANTES_MS = 30 * 86_400_000;
 /** Lo que viaja cifrado en el `state` de OAuth. Asi no hace falta una tabla. */
 type Estado = { tid: string; verifier: string; exp: number };
 
-const esHttps = (url?: string): url is string => !!url?.startsWith('https://');
+/** MP exige HTTPS en notification_url y en las URLs de vuelta: las demas se omiten. */
+export const esHttps = (url?: string): url is string =>
+  !!url?.startsWith('https://');
+
+/** Mercado Pago no respondio, o respondio con un error que no es del pedido. */
+export function mpNoResponde(): never {
+  throw new BadGatewayException({
+    code: 'payment_provider_unavailable',
+    message: 'Mercado Pago no respondio. Proba de nuevo en unos minutos.',
+  });
+}
+
+/** A la plataforma le falta configurar la app o la cuenta de Mercado Pago. */
+export function mpSinConfigurar(): never {
+  throw new ServiceUnavailableException({
+    code: 'mercadopago_not_configured',
+    message: 'Mercado Pago no esta configurado en la plataforma.',
+  });
+}
+
+/** Las columnas de los tokens, cifrados: las escriben la conexion y la renovacion. */
+const columnasDeTokens = (c: ConnectedAccount) => ({
+  accessTokenCifrado: cripto.cifrar(c.accessToken, 'tokens-de-mercado-pago'),
+  refreshTokenCifrado: cripto.cifrar(c.refreshToken, 'tokens-de-mercado-pago'),
+  expiraAt: c.expiresAt,
+  scope: c.scope,
+  liveMode: c.liveMode,
+});
 
 @Injectable()
 export class CuentasMercadoPagoService {
@@ -51,9 +79,9 @@ export class CuentasMercadoPagoService {
   }
 
   /**
-   * La cuenta del centro para SALDAR lo ya cobrado, como el aviso de un pago: tambien cuando
-   * espera reconexion, porque el token puede seguir sirviendo aunque la renovacion haya
-   * fallado. null solo si no hay cuenta.
+   * La cuenta del centro para SALDAR lo ya cobrado: los avisos de pago y los reembolsos.
+   * Tambien cuando espera reconexion, porque el token puede seguir sirviendo aunque la
+   * renovacion haya fallado. null solo si no hay cuenta.
    */
   async paraSaldar(slug: string): Promise<MercadoPago | null> {
     const cuenta = await this.db.cuentaMercadoPago.findFirst({
@@ -124,7 +152,11 @@ export class CuentasMercadoPagoService {
     return { url: oauth.authorizationUrl(state, verifier) };
   }
 
-  async conectar(code: string, state: string): Promise<CuentaMercadoPagoDto> {
+  async conectar(
+    code: string,
+    state: string,
+    zonaHoraria: string,
+  ): Promise<CuentaMercadoPagoDto> {
     const oauth = this.oauth();
     const estado = this.leerEstado(state);
     let cuenta: ConnectedAccount;
@@ -138,33 +170,20 @@ export class CuentasMercadoPagoService {
             'Mercado Pago rechazo la conexion. Volve a conectar desde el panel.',
         });
       }
-      throw new BadGatewayException({
-        code: 'payment_provider_unavailable',
-        message: 'Mercado Pago no respondio. Proba de nuevo en unos minutos.',
-      });
+      mpNoResponde();
     }
 
     const actual = await this.db.cuentaMercadoPago.findFirst({
       select: { mpUserId: true },
     });
     if (actual && actual.mpUserId !== cuenta.userId) {
-      await this.exigirSinPagosReembolsables();
+      await this.exigirSinPagosEnCurso(zonaHoraria);
     }
 
     const datos = {
+      ...columnasDeTokens(cuenta),
       mpUserId: cuenta.userId,
-      accessTokenCifrado: cripto.cifrar(
-        cuenta.accessToken,
-        'tokens-de-mercado-pago',
-      ),
-      refreshTokenCifrado: cripto.cifrar(
-        cuenta.refreshToken,
-        'tokens-de-mercado-pago',
-      ),
       publicKey: cuenta.publicKey,
-      scope: cuenta.scope,
-      liveMode: cuenta.liveMode,
-      expiraAt: cuenta.expiresAt,
       requiereReconexion: false,
     };
     await this.db.cuentaMercadoPago.upsert({
@@ -175,21 +194,21 @@ export class CuentasMercadoPagoService {
     return this.estado();
   }
 
-  async desconectar(): Promise<CuentaMercadoPagoDto> {
+  async desconectar(zonaHoraria: string): Promise<CuentaMercadoPagoDto> {
     // Tenant es la raiz y la extension no lo filtra: el where va explicito.
     const t = await this.db.tenant.findFirstOrThrow({
       where: { id: TenantContext.require() },
       select: { suscripcionMpId: true, suscripcionEstado: true },
     });
     // El Profesional existe para cobrar online: mientras se paga, la cuenta no se va.
-    if (t.suscripcionMpId && t.suscripcionEstado !== 'cancelled') {
+    if (suscripcionViva(t)) {
       throw new ConflictException({
         code: 'mp_account_change_blocked',
         message:
           'Tu plan cobra con esta cuenta: para desconectarla, primero pasate al plan Básico.',
       });
     }
-    await this.exigirSinPagosReembolsables();
+    await this.exigirSinPagosEnCurso(zonaHoraria);
     await this.db.cuentaMercadoPago.deleteMany();
     return this.estado();
   }
@@ -221,40 +240,33 @@ export class CuentasMercadoPagoService {
       // proceso la haya renovado recien: entonces el refresh token que se uso ya no existia,
       // y la cuenta esta bien.
       if (e instanceof MercadoPagoError && !e.retryable) {
-        const sinCambios = await this.db.cuentaMercadoPago.count({
-          where: {
-            id: cuenta.id,
-            refreshTokenCifrado: cuenta.refreshTokenCifrado,
-          },
+        await this.marcarReconexion(centro, {
+          refreshTokenCifrado: cuenta.refreshTokenCifrado,
         });
-        if (sinCambios > 0) await this.marcarReconexion(centro);
         return;
       }
       throw e;
     }
     await this.db.cuentaMercadoPago.updateMany({
       where: { id: cuenta.id, refreshTokenCifrado: cuenta.refreshTokenCifrado },
-      data: {
-        accessTokenCifrado: cripto.cifrar(
-          nueva.accessToken,
-          'tokens-de-mercado-pago',
-        ),
-        refreshTokenCifrado: cripto.cifrar(
-          nueva.refreshToken,
-          'tokens-de-mercado-pago',
-        ),
-        expiraAt: nueva.expiresAt,
-        scope: nueva.scope,
-        liveMode: nueva.liveMode,
-      },
+      // requiereReconexion en false: si otro proceso la marco con un refresh token viejo, la
+      // renovacion que gano la deja bien.
+      data: { ...columnasDeTokens(nueva), requiereReconexion: false },
     });
   }
 
-  /** MP ya no acepta los tokens del centro: se deja de cobrar online y se le avisa. */
-  async marcarReconexion(centro: { nombre: string }): Promise<void> {
+  /**
+   * MP ya no acepta los tokens del centro: se deja de cobrar online y se le avisa. `soloSi` es
+   * la condicion de la marca, en el mismo UPDATE: la renovacion marca solo si nadie la renovo
+   * mientras tanto.
+   */
+  async marcarReconexion(
+    centro: { nombre: string },
+    soloSi: Prisma.CuentaMercadoPagoWhereInput = {},
+  ): Promise<void> {
     await this.db.$transaction(async (tx) => {
       const { count } = await tx.cuentaMercadoPago.updateMany({
-        where: { requiereReconexion: false },
+        where: { requiereReconexion: false, ...soloSi },
         data: { requiereReconexion: true },
       });
       if (count > 0) {
@@ -275,11 +287,7 @@ export class CuentasMercadoPagoService {
       !mp.redirectUri ||
       !mp.platformAccessToken
     ) {
-      throw new ServiceUnavailableException({
-        code: 'mercadopago_not_configured',
-        message:
-          'La conexion con Mercado Pago no esta configurada en la plataforma.',
-      });
+      mpSinConfigurar();
     }
     return MercadoPago.oauth({
       clientId: mp.clientId,
@@ -317,14 +325,8 @@ export class CuentasMercadoPagoService {
    * pagos aprobados, cobros abiertos que la clienta todavia puede pagar, y reembolsos que no
    * salieron.
    */
-  private async exigirSinPagosReembolsables(): Promise<void> {
-    const tenant = await this.db.tenant.findFirst({
-      where: { id: TenantContext.require() },
-      select: { zonaHoraria: true },
-    });
-    const hoy = ahoraEn(
-      tenant?.zonaHoraria ?? 'America/Argentina/Buenos_Aires',
-    ).fecha;
+  private async exigirSinPagosEnCurso(zonaHoraria: string): Promise<void> {
+    const hoy = ahoraEn(zonaHoraria).fecha;
     const [pagos, cobrosAbiertos, reembolsos] = await Promise.all([
       this.db.pago.count({
         where: {

@@ -27,7 +27,7 @@ export class VentanasAtencionController {
   findAll(
     @CurrentTenant() tenant: TenantRequest,
   ): Promise<VentanasAtencionDto> {
-    return this.ventanas.findAll(PLANES[tenant.plan].capacidadMaxima);
+    return this.ventanas.findAll(tenant.plan);
   }
 
   /** Reemplaza la semana completa de franjas de atencion. */

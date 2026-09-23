@@ -51,6 +51,48 @@ export const camposDelPlan = {
   planPagoHasta: true,
 } as const;
 
+/** Lo que se lee de un centro para armar el de una request o el de una tarea. */
+export const camposDelCentro = {
+  id: true,
+  slug: true,
+  nombre: true,
+  zonaHoraria: true,
+  activo: true,
+  ...camposDelPlan,
+} as const;
+
+/**
+ * El centro como lo usa el resto de la app, con el plan ya calculado. Uno solo para el guard
+ * y las tareas: si los armaran por separado, un campo nuevo quedaria en uno solo.
+ */
+export const aCentro = (t: {
+  id: string;
+  slug: string;
+  nombre: string;
+  zonaHoraria: string;
+  activo: boolean;
+  suscripcionPlan: Plan | null;
+  suscripcionEstado: string | null;
+  planPagoHasta: Date | null;
+}) => ({
+  id: t.id,
+  slug: t.slug,
+  nombre: t.nombre,
+  zonaHoraria: t.zonaHoraria,
+  activo: t.activo,
+  plan: planVigente(t),
+});
+
+/** Si hay una suscripcion que Mercado Pago cobra, o va a cobrar cuando la autoricen. */
+export const suscripcionViva = (t: {
+  suscripcionMpId: string | null;
+  suscripcionEstado: string | null;
+}): boolean => !!t.suscripcionMpId && t.suscripcionEstado !== 'cancelled';
+
+/** La capacidad que rige en una franja: la suya, con el tope del plan. */
+export const capacidadDe = (franja: number, plan: Plan): number =>
+  Math.min(franja, PLANES[plan].capacidadMaxima);
+
 /**
  * El plan que rige ahora. Se calcula y no se guarda: sin tarea de vencimiento, y un plan no
  * puede quedar activo porque un aviso de Mercado Pago no llego.

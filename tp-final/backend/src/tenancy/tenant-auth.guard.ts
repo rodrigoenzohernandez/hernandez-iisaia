@@ -16,7 +16,7 @@ import {
   type RequestConTenant,
   type Rol,
 } from '../common/decorators.js';
-import { camposDelPlan, planVigente } from '../planes/planes.js';
+import { aCentro, camposDelCentro } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { TenantContext } from './tenant-context.js';
 
@@ -57,14 +57,7 @@ export class TenantAuthGuard implements CanActivate {
       // raiz del arbol y no tiene tenantId.
       const tenant = await this.db.tenant.findFirst({
         where: { slug },
-        select: {
-          id: true,
-          slug: true,
-          nombre: true,
-          zonaHoraria: true,
-          activo: true,
-          ...camposDelPlan,
-        },
+        select: camposDelCentro,
       });
       // Un centro dado de baja responde igual que uno que no existe: no hay por que
       // confirmar que el slug existe. La excepcion son las rutas que saldan plata ya cobrada.
@@ -81,13 +74,8 @@ export class TenantAuthGuard implements CanActivate {
       tenantId = tenant.id;
       TenantContext.set(tenant.id);
       // Al request va todo MENOS el id: el id es el claim tid y no se serializa nunca.
-      req.tenant = {
-        slug: tenant.slug,
-        nombre: tenant.nombre,
-        zonaHoraria: tenant.zonaHoraria,
-        plan: planVigente(tenant),
-        activo: tenant.activo,
-      };
+      const { id: _id, ...centro } = aCentro(tenant);
+      req.tenant = centro;
     }
 
     const header = req.headers.authorization;

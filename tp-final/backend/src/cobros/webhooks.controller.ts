@@ -54,10 +54,14 @@ export class WebhooksMercadoPagoController {
   ): Promise<{ ok: true }> {
     // Con la cuenta que haya, aunque espere reconexion: el token puede seguir sirviendo. Un
     // aviso que no se pudo procesar no se contesta 200, porque MP no lo mandaria de nuevo y
-    // el pago no se registraria nunca: con el 503, MP reintenta y el aviso se procesa cuando
-    // el centro reconecte.
+    // el pago no se registraria nunca: con el 503, MP reintenta durante unos dias, y si el
+    // centro reconecta en ese tiempo, el aviso se procesa.
     const mp = await this.cuentas.paraSaldar(tenant.slug);
-    if (!mp) throw sinCuenta();
+    if (!mp) {
+      // Visible en el log: el filtro de errores no loguea las HttpException.
+      this.logger.warn(`Aviso de pago sin cuenta de MP en ${tenant.slug}`);
+      throw sinCuenta();
+    }
     try {
       // Firma opcional: MP no garantiza firma verificable en los avisos por notification_url,
       // y rechazarlos perderia pagos reales. Lo que protege es que parseWebhook no usa el

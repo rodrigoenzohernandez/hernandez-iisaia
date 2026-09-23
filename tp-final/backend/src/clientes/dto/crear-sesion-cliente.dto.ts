@@ -1,14 +1,9 @@
-import { Transform } from 'class-transformer';
-import { IsEmail, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { aEmail } from '../../common/transforms.js';
+import { Matches } from 'class-validator';
+import { PedirCodigoDto } from './pedir-codigo.dto.js';
 
-export class CrearSesionClienteDto {
-  @ApiProperty({ example: 'ana@example.com' })
-  @Transform(aEmail)
-  @IsEmail({}, { message: 'El email no es valido.' })
-  email!: string;
-
+/** El email del pedido de codigo, con la misma normalizacion, y el codigo que llego. */
+export class CrearSesionClienteDto extends PedirCodigoDto {
   /** Los seis digitos que llegaron por mail. */
   @ApiProperty({ example: '482913' })
   @Matches(/^\d{6}$/, { message: 'El codigo son seis digitos.' })

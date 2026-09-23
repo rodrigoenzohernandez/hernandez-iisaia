@@ -18,6 +18,11 @@ try {
   // Sin .env: las variables ya vienen del entorno.
 }
 
+// Borra toda la base antes de sembrar: en produccion no corre nunca.
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('El seed borra toda la base: no corre en produccion.');
+}
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('Falta DATABASE_URL');
 

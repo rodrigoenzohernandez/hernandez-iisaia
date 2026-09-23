@@ -6,15 +6,17 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma } from '@prisma/client';
-import { aDate, ahoraEn } from '../common/horario.js';
+import type { Prisma } from '@prisma/client';
+import { aFecha, ahoraEn, mesDe } from '../common/horario.js';
 import type { CursorPageDto } from '../common/pagination/cursor-page.dto.js';
 import { paginate } from '../common/pagination/paginate.js';
 import { hashPassword, senuelo, verifyPassword } from '../common/password.js';
 import { SLUGS_RESERVADOS } from '../common/slug.js';
 import { camposDelPlan, PLANES, planVigente } from '../planes/planes.js';
 import { SuscripcionesService } from '../planes/suscripciones.service.js';
-import { DB, type Db } from '../prisma/prisma.module.js';
+import { DB, ES_DUPLICADO, type Db } from '../prisma/prisma.module.js';
+import { delMes } from '../reservas/cupo.js';
+import type { JwtPayload } from '../tenancy/tenant-auth.guard.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import type { CentroCreadoDto, CrearCentroDto } from './dto/alta-centro.dto.js';
 import type {
@@ -26,7 +28,7 @@ import type {
   UpdateCentroDto,
 } from './dto/plataforma.dto.js';
 
-/** Lo que se lee de cada centro. Los conteos van por relacion: una sola query por pagina. */
+/** Lo que se lee de cada centro. Los conteos de servicios y clientas van por relacion. */
 const centroSelect = {
   id: true,
   slug: true,
@@ -46,21 +48,12 @@ type FilaCentro = Prisma.TenantGetPayload<{ select: typeof centroSelect }>;
  * cobros son instantes, asi que van los dos rangos. Argentina esta en UTC-3 fijo desde 2009.
  */
 function mesEnCurso() {
-  const [anio, mes] = ahoraEn('America/Argentina/Buenos_Aires')
-    .fecha.split('-')
-    .map(Number);
-  const siguiente = mes === 12 ? [anio + 1, 1] : [anio, mes + 1];
-  const primero = (a: number, m: number) =>
-    `${a}-${String(m).padStart(2, '0')}-01`;
-  const desde = primero(anio, mes);
-  const hasta = primero(siguiente[0], siguiente[1]);
+  const dias = mesDe(ahoraEn('America/Argentina/Buenos_Aires').fecha);
+  const instante = (d: Date) => new Date(`${aFecha(d)}T00:00:00-03:00`);
   return {
-    nombre: desde.slice(0, 7),
-    dias: { gte: aDate(desde), lt: aDate(hasta) },
-    instantes: {
-      gte: new Date(`${desde}T00:00:00-03:00`),
-      lt: new Date(`${hasta}T00:00:00-03:00`),
-    },
+    nombre: aFecha(dias.gte).slice(0, 7),
+    dias,
+    instantes: { gte: instante(dias.gte), lt: instante(dias.lt) },
   };
 }
 type Mes = ReturnType<typeof mesEnCurso>;
@@ -105,7 +98,7 @@ export class PlataformaService {
     }
     return {
       // Sin tid: el guard solo acepta este token en las rutas sin centro.
-      accessToken: await this.jwt.signAsync({
+      accessToken: await this.jwt.signAsync<JwtPayload>({
         sub: cuenta.id,
         rol: 'superadmin',
       }),
@@ -113,6 +106,8 @@ export class PlataformaService {
     };
   }
 
+  // ponytail: dos queries por centro de la pagina, todas a la vez contra el pool. Con cientos
+  // de centros, un $queryRaw con GROUP BY "tenantId": la extension no deja agrupar entre centros.
   async centros(query: ListCentrosQueryDto): Promise<CursorPageDto<CentroDto>> {
     const mes = mesEnCurso();
     const pagina = await paginate(query, ['slug', 'id'], (p) =>
@@ -165,53 +160,36 @@ export class PlataformaService {
   }
 
   async actualizar(slug: string, dto: UpdateCentroDto): Promise<CentroDto> {
+    const centro = await this.db.tenant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (!centro) {
+      throw new NotFoundException({
+        code: 'tenant_not_found',
+        message: 'No encontramos ese centro.',
+      });
+    }
     // Un centro dado de baja no puede entrar a cancelar su plan, asi que la baja lo cancela:
     // si no, Mercado Pago le seguiria cobrando todos los meses.
     if (!dto.activo) {
-      const centro = await this.db.tenant.findUnique({
-        where: { slug },
-        select: { id: true },
-      });
-      if (centro) {
-        await TenantContext.runAs(centro.id, () =>
-          this.suscripciones.cancelar(),
-        );
-      }
+      await TenantContext.runAs(centro.id, () => this.suscripciones.cancelar());
     }
-    try {
-      const t = await this.db.tenant.update({
-        where: { slug },
-        data: { activo: dto.activo },
-        select: centroSelect,
-      });
-      return this.aCentro(t, mesEnCurso());
-    } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2025'
-      ) {
-        throw new NotFoundException({
-          code: 'tenant_not_found',
-          message: 'No encontramos ese centro.',
-        });
-      }
-      throw e;
-    }
+    const t = await this.db.tenant.update({
+      where: { id: centro.id },
+      data: { activo: dto.activo },
+      select: centroSelect,
+    });
+    return this.aCentro(t, mesEnCurso());
   }
 
   /** Crea el centro, en Basico, con su administradora, y devuelve la sesion de ella. */
   async crearCentro(dto: CrearCentroDto): Promise<CentroCreadoDto> {
     if (SLUGS_RESERVADOS.has(dto.slug)) slugTomado();
     const passwordHash = await hashPassword(dto.admin.password);
-    let t: {
-      id: string;
-      slug: string;
-      nombre: string;
-      usuarios: { id: string; nombre: string; rol: string }[];
-    };
-    try {
-      // Una sola escritura: el centro y su administradora nacen juntos o no nacen.
-      t = await this.db.tenant.create({
+    // Una sola escritura: el centro y su administradora nacen juntos o no nacen.
+    const t = await this.db.tenant
+      .create({
         data: {
           slug: dto.slug,
           nombre: dto.nombre,
@@ -229,20 +207,15 @@ export class PlataformaService {
           nombre: true,
           usuarios: { select: { id: true, nombre: true, rol: true } },
         },
+      })
+      .catch((e: unknown) => {
+        if (ES_DUPLICADO(e)) slugTomado();
+        throw e;
       });
-    } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
-        slugTomado();
-      }
-      throw e;
-    }
     const [usuario] = t.usuarios;
     return {
       centro: { slug: t.slug, nombre: t.nombre },
-      accessToken: await this.jwt.signAsync({
+      accessToken: await this.jwt.signAsync<JwtPayload>({
         sub: usuario.id,
         tid: t.id,
         rol: usuario.rol,
@@ -275,9 +248,9 @@ export class PlataformaService {
   /** Los numeros del mes del centro en contexto. */
   private async delMes(mes: Mes) {
     const [turnosDelMes, cobros] = await Promise.all([
-      this.db.reserva.count({
-        where: { fecha: mes.dias, estado: { not: 'cancelada' } },
-      }),
+      // El mismo conteo que el tope del plan: si contaran distinto, el panel diria 58 a un
+      // centro que ya no toma turnos.
+      this.db.reserva.count({ where: delMes(mes.dias) }),
       this.db.pago.aggregate({
         where: {
           estado: { in: ['aprobado', 'reembolsado'] },

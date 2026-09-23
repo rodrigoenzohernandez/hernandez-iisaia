@@ -8,19 +8,16 @@ import {
 import { Prisma } from '@prisma/client';
 import { paginate } from '../common/pagination/paginate.js';
 import type { CursorPageDto } from '../common/pagination/cursor-page.dto.js';
-import { DB, type Db } from '../prisma/prisma.module.js';
+import {
+  DB,
+  ES_DUPLICADO,
+  NO_ENCONTRADO,
+  type Db,
+} from '../prisma/prisma.module.js';
 import type { CreateServicioDto } from './dto/create-servicio.dto.js';
 import type { ListServiciosQueryDto } from './dto/list-servicios-query.dto.js';
 import { servicioSelect, type ServicioDto } from './dto/servicio.dto.js';
 import type { UpdateServicioDto } from './dto/update-servicio.dto.js';
-
-/** Violacion de unique. Aca solo puede ser (tenantId, nombre). */
-const ES_DUPLICADO = (e: unknown): boolean =>
-  e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
-
-/** La fila del update no existe, o existe en otro centro: desde afuera es lo mismo. */
-const NO_ENCONTRADO = (e: unknown): boolean =>
-  e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025';
 
 // Declaraciones y no arrow functions: TS solo estrecha el tipo con `never` si la funcion
 // es una declaracion.

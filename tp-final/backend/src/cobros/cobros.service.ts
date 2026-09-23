@@ -15,18 +15,18 @@ import {
   type PaymentStatus,
 } from '../lib/mercadopago/index.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
-import { PLANES } from '../planes/planes.js';
 import {
   avisoTurnoNuevo,
+  datosDelTurno,
   pagoDevuelto,
   reembolsoManual,
   turnoConfirmado,
+  turnoDe,
   turnoVencido,
 } from '../notificaciones/plantillas.js';
 import { DB, type Db, type Tx } from '../prisma/prisma.module.js';
 import { runSerializable } from '../prisma/run-serializable.js';
-import { exigirCupo } from '../reservas/cupo.js';
-import { TenantContext } from '../tenancy/tenant-context.js';
+import { exigirCupo, exigirTopeDelMes } from '../reservas/cupo.js';
 import { CuentasMercadoPagoService } from './cuentas-mercadopago.service.js';
 
 /** Cuanto espera el cupo a que se pague. Despues, la reserva deja de contar y vence. */
@@ -49,17 +49,23 @@ const ESPERAS_MS = [
 ];
 const LEASE_MS = 5 * 60_000;
 
-/** Lo que un mail de turno necesita de una reserva. */
-const datosDelTurno = {
-  fecha: true,
-  horaInicio: true,
+/** Lo que se lee de la reserva de un pago: los datos del mail, y lo que pide el aviso al centro. */
+const delTurno = {
+  ...datosDelTurno,
   horaFin: true,
-  clienteNombre: true,
-  clienteEmail: true,
   clienteTelefono: true,
   notas: true,
-  servicio: { select: { nombre: true, duracionMinutos: true } },
 } as const;
+
+/** La reserva que el sistema cancela: vencio sin pagarse, o el pago llego y no la confirma. */
+const canceladaPorSistema = () => ({
+  estado: 'cancelada' as const,
+  canceladaPor: 'sistema' as const,
+  canceladaAt: new Date(),
+});
+
+/** El centro del que se procesan los reembolsos. */
+type Centro = { slug: string; nombre: string };
 
 /** El descriptor del resumen de la tarjeta: MP acepta letras, numeros y espacios. */
 const descriptor = (nombre: string): string =>
@@ -117,11 +123,7 @@ export class CobrosService {
     } catch (e) {
       await this.db.reserva.update({
         where: { id: reserva.id },
-        data: {
-          estado: 'cancelada',
-          canceladaPor: 'sistema',
-          canceladaAt: new Date(),
-        },
+        data: canceladaPorSistema(),
       });
       // Un 401 al crear el cobro es que MP revoco el acceso de la cuenta.
       if (e instanceof MercadoPagoError && e.status === 401) {
@@ -150,32 +152,31 @@ export class CobrosService {
     }
     // SERIALIZABLE: dos avisos del mismo pago, o dos pagos de la misma reserva, no deciden en
     // paralelo.
-    await runSerializable(this.db, (tx) => this.decidir(tx, tenant, pago));
-    this.procesarReembolsosAhora();
-    this.notificaciones.despacharAhora();
+    const decidido = await runSerializable(this.db, (tx) =>
+      this.decidir(tx, tenant, pago),
+    );
+    // Las colas se despiertan solo si la decision encolo algo: un reembolso o un mail.
+    if (decidido) {
+      this.procesarReembolsosAhora(tenant);
+      this.notificaciones.despacharAhora();
+    }
   }
 
+  /** Registra el pago y, si es la primera vez que llega aprobado, decide. true si decidio. */
   private async decidir(
     tx: Tx,
     tenant: TenantRequest,
     pago: Payment,
-  ): Promise<void> {
-    const reserva = await tx.reserva.findFirst({
-      where: { id: pago.reference! },
-      select: {
-        id: true,
-        estado: true,
-        canceladaPor: true,
-        montoOnlineCentavos: true,
-        pagoVenceAt: true,
-        ...datosDelTurno,
-      },
-    });
-    if (!reserva) return;
-
+  ): Promise<boolean> {
     const anterior = await tx.pago.findFirst({
       where: { proveedorId: pago.id },
-      select: { id: true, decididoAt: true },
+      select: {
+        id: true,
+        decididoAt: true,
+        estado: true,
+        estadoDetalle: true,
+        reembolsadoCentavos: true,
+      },
     });
     // Se decide una sola vez: la primera vez que llega aprobado. Un aviso repetido, o un pago
     // que vuelve a aprobado despues de una disputa ganada, solo actualiza el estado; mirar el
@@ -190,6 +191,33 @@ export class CobrosService {
       aprobadoAt: pago.approvedAt,
       ...(decidirAhora ? { decididoAt: new Date() } : {}),
     };
+    // MP manda varios avisos por pago y la mayoria no trae nada nuevo: un pago ya registrado
+    // que no hay que decidir solo se actualiza, y solo si cambio. Sin leer la reserva, que no
+    // entra en conflicto con quien la este cancelando.
+    if (anterior && !decidirAhora) {
+      if (
+        anterior.estado !== datos.estado ||
+        anterior.estadoDetalle !== datos.estadoDetalle ||
+        anterior.reembolsadoCentavos !== datos.reembolsadoCentavos
+      ) {
+        await tx.pago.update({ where: { id: anterior.id }, data: datos });
+      }
+      return false;
+    }
+
+    const reserva = await tx.reserva.findFirst({
+      where: { id: pago.reference! },
+      select: {
+        id: true,
+        estado: true,
+        canceladaPor: true,
+        montoOnlineCentavos: true,
+        pagoVenceAt: true,
+        ...delTurno,
+      },
+    });
+    if (!reserva) return false;
+
     const fila = anterior
       ? await tx.pago.update({
           where: { id: anterior.id },
@@ -205,15 +233,9 @@ export class CobrosService {
           select: { id: true },
         });
 
-    if (!decidirAhora) return;
+    if (!decidirAhora) return false;
 
-    const turno = {
-      centro: tenant.nombre,
-      clienteNombre: reserva.clienteNombre,
-      servicio: reserva.servicio.nombre,
-      fecha: aFecha(reserva.fecha),
-      hora: reserva.horaInicio,
-    };
+    const turno = turnoDe(tenant.nombre, reserva);
     const devolver = async (): Promise<void> => {
       await tx.reembolso.create({
         data: {
@@ -254,57 +276,62 @@ export class CobrosService {
       if (reserva.estado === 'pendiente') {
         await tx.reserva.update({
           where: { id: reserva.id },
-          data: {
-            estado: 'cancelada',
-            canceladaPor: 'sistema',
-            canceladaAt: new Date(),
-          },
+          data: canceladaPorSistema(),
         });
       }
       return devolver();
     };
 
-    // Un centro dado de baja no toma turnos: lo que entre despues de la baja se devuelve.
-    if (!tenant.activo) return cancelarYDevolver();
+    // La decision, con sus tres salidas. Una funcion para poder salir con return en cada
+    // rama y avisar despues que se decidio.
+    const decision = async (): Promise<void> => {
+      // Un centro dado de baja no toma turnos: lo que entre despues de la baja se devuelve.
+      if (!tenant.activo) return cancelarYDevolver();
 
-    const vencida =
-      (reserva.estado === 'cancelada' && reserva.canceladaPor === 'sistema') ||
-      (reserva.estado === 'pendiente' &&
-        !!reserva.pagoVenceAt &&
-        reserva.pagoVenceAt <= new Date());
+      const vencida =
+        (reserva.estado === 'cancelada' &&
+          reserva.canceladaPor === 'sistema') ||
+        (reserva.estado === 'pendiente' &&
+          !!reserva.pagoVenceAt &&
+          reserva.pagoVenceAt <= new Date());
 
-    if (reserva.estado === 'pendiente' && !vencida) {
-      // Con Checkout Pro el monto lo fija la preferencia: uno distinto es una anomalia, y un
-      // pago que no confirma nada se devuelve.
-      if (pago.amountCents < reserva.montoOnlineCentavos) return devolver();
-      return confirmar();
-    }
-    if (vencida) {
-      // Un aviso que llega tarde, despues de la hora del turno, no reactiva nada.
-      const ahora = ahoraEn(tenant.zonaHoraria);
-      if (minutosHasta(aFecha(reserva.fecha), reserva.horaInicio, ahora) <= 0) {
-        return cancelarYDevolver();
+      if (reserva.estado === 'pendiente' && !vencida) {
+        // Con Checkout Pro el monto lo fija la preferencia: uno distinto es una anomalia, y un
+        // pago que no confirma nada se devuelve.
+        if (pago.amountCents < reserva.montoOnlineCentavos) return devolver();
+        return confirmar();
       }
-      // Vencio sin pagarse y el pago llego igual: si el horario sigue libre se reactiva, y
-      // si ya lo tomo otra persona se devuelve. Mientras estuvo vencida no contaba para el
-      // cupo, asi que hay que volver a pedirlo.
-      try {
-        await exigirCupo(tx, {
-          fecha: aFecha(reserva.fecha),
-          hora: reserva.horaInicio,
-          horaFin: reserva.horaFin,
-          duracionMinutos: reserva.servicio.duracionMinutos,
-          excluirId: reserva.id,
-          capacidadMaxima: PLANES[tenant.plan].capacidadMaxima,
-        });
-      } catch (e) {
-        if (!(e instanceof ConflictException)) throw e;
-        return cancelarYDevolver();
+      if (vencida) {
+        // Un aviso que llega tarde, despues de la hora del turno, no reactiva nada.
+        const ahora = ahoraEn(tenant.zonaHoraria);
+        if (
+          minutosHasta(aFecha(reserva.fecha), reserva.horaInicio, ahora) <= 0
+        ) {
+          return cancelarYDevolver();
+        }
+        // Vencio sin pagarse y el pago llego igual: si el horario sigue libre se reactiva, y
+        // si ya lo tomo otra persona se devuelve. Mientras estuvo vencida no contaba para el
+        // cupo, asi que hay que volver a pedirlo.
+        try {
+          await exigirTopeDelMes(tx, aFecha(reserva.fecha), tenant.plan);
+          await exigirCupo(tx, {
+            fecha: aFecha(reserva.fecha),
+            hora: reserva.horaInicio,
+            horaFin: reserva.horaFin,
+            excluirId: reserva.id,
+            plan: tenant.plan,
+          });
+        } catch (e) {
+          if (!(e instanceof ConflictException)) throw e;
+          return cancelarYDevolver();
+        }
+        return confirmar();
       }
-      return confirmar();
-    }
-    // Ya estaba confirmada (este pago sobra), o la cancelo la clienta o el centro, o no vino.
-    return devolver();
+      // Ya estaba confirmada (este pago sobra), o la cancelo la clienta o el centro, o no vino.
+      return devolver();
+    };
+    await decision();
+    return true;
   }
 
   /** Lo que se pago y sigue aprobado en una reserva. */
@@ -348,14 +375,14 @@ export class CobrosService {
     return total;
   }
 
-  /** Procesa los reembolsos pendientes sin hacer esperar a quien llama. */
-  procesarReembolsosAhora(): void {
-    this.procesarReembolsos().catch((e: unknown) =>
+  /** Procesa los reembolsos pendientes del centro en contexto sin hacer esperar a quien llama. */
+  procesarReembolsosAhora(centro: Centro): void {
+    this.procesarReembolsos(centro).catch((e: unknown) =>
       this.logger.error(`No se pudieron procesar reembolsos: ${String(e)}`),
     );
   }
 
-  async procesarReembolsos(): Promise<void> {
+  async procesarReembolsos(centro: Centro): Promise<void> {
     const pendientes = await this.db.reembolso.findMany({
       where: { estado: 'pendiente', proximoIntentoAt: { lte: new Date() } },
       orderBy: { proximoIntentoAt: 'asc' },
@@ -363,11 +390,9 @@ export class CobrosService {
       select: { id: true },
     });
     if (pendientes.length === 0) return;
-    const centro = await this.db.tenant.findFirstOrThrow({
-      where: { id: TenantContext.require() },
-      select: { slug: true, nombre: true },
-    });
-    const mp = await this.cuentas.delCentro(centro.slug);
+    // Devolver es saldar lo ya cobrado: con la cuenta que haya, aunque espere reconexion,
+    // porque el token puede seguir sirviendo.
+    const mp = await this.cuentas.paraSaldar(centro.slug);
     for (const { id } of pendientes) await this.reembolsar(id, mp, centro);
     this.notificaciones.despacharAhora();
   }
@@ -375,7 +400,7 @@ export class CobrosService {
   private async reembolsar(
     id: string,
     mp: MercadoPago | null,
-    centro: { nombre: string },
+    centro: Centro,
   ): Promise<void> {
     const ahora = new Date();
     // Tomarlo con un UPDATE condicional: el pedido inmediato y la tarea periodica pueden
@@ -400,9 +425,10 @@ export class CobrosService {
         },
       },
     });
+    let hecho: { id: string };
     try {
       if (!mp) {
-        // Sin cuenta, o esperando reconexion: se reintenta, por si la reconectan.
+        // Sin cuenta: se reintenta, por si la conectan.
         throw new MercadoPagoError(
           'El centro no tiene la cuenta de Mercado Pago conectada',
           0,
@@ -411,40 +437,20 @@ export class CobrosService {
       }
       // La idempotency key es el id de la fila: reintentar un pedido que no se sabe si salio
       // nunca reembolsa dos veces.
-      const hecho = await mp.refund(r.pago.proveedorId, {
+      const pedido = await mp.refund(r.pago.proveedorId, {
         amountCents: r.montoCentavos,
         idempotencyKey: id,
       });
       // MP puede aceptar el pedido y rechazar el reembolso: eso no se reintenta, lo resuelve
       // el centro.
-      if (hecho.status === 'rejected' || hecho.status === 'cancelled') {
+      if (pedido.status === 'rejected' || pedido.status === 'cancelled') {
         throw new MercadoPagoError(
-          `Mercado Pago rechazo el reembolso (${hecho.status})`,
+          `Mercado Pago rechazo el reembolso (${pedido.status})`,
           0,
           false,
         );
       }
-      // Lo reembolsado se copia de MP y no se suma: si un intento anterior llego a MP y no se
-      // registro, sumar lo contaria dos veces. El aviso del pago escribe el mismo estado.
-      const actual = await mp.getPayment(r.pago.proveedorId);
-      await this.db.$transaction([
-        this.db.reembolso.update({
-          where: { id },
-          data: {
-            estado: 'aprobado',
-            proveedorId: hecho.id,
-            intentos: r.intentos + 1,
-            ultimoError: null,
-          },
-        }),
-        this.db.pago.update({
-          where: { id: r.pago.id },
-          data: {
-            estado: ESTADOS[actual.status],
-            reembolsadoCentavos: actual.refundedCents,
-          },
-        }),
-      ]);
+      hecho = pedido;
     } catch (e) {
       const intentos = r.intentos + 1;
       // Definitivo es lo que MP no va a aceptar aunque se reintente: un 401 por el scope de
@@ -469,22 +475,50 @@ export class CobrosService {
         // Ningun reembolso se pierde en silencio: o sale, o el centro recibe un mail que dice
         // que no salio y como hacerlo a mano.
         if (definitivo) {
-          const t = r.pago.reserva;
           await this.notificaciones.encolarAlCentro(
             tx,
             reembolsoManual({
-              centro: centro.nombre,
-              clienteNombre: t.clienteNombre,
-              servicio: t.servicio.nombre,
-              fecha: aFecha(t.fecha),
-              hora: t.horaInicio,
+              ...turnoDe(centro.nombre, r.pago.reserva),
               montoCentavos: r.montoCentavos,
               motivo,
             }),
           );
         }
       });
+      return;
     }
+
+    // Salio: se marca en el acto, antes que nada mas. Si se marcara junto con el estado del
+    // pago y esa lectura fallara, un reembolso hecho quedaria como fallido y el centro podria
+    // devolver dos veces.
+    await this.db.reembolso.update({
+      where: { id },
+      data: {
+        estado: 'aprobado',
+        proveedorId: hecho.id,
+        intentos: r.intentos + 1,
+        ultimoError: null,
+      },
+    });
+    // Lo reembolsado se copia de MP y no se suma: si un intento anterior llego a MP y no se
+    // registro, sumar lo contaria dos veces. Si esta lectura falla, lo corrige el proximo aviso
+    // del pago, que escribe el mismo estado.
+    await mp
+      .getPayment(r.pago.proveedorId)
+      .then((actual) =>
+        this.db.pago.update({
+          where: { id: r.pago.id },
+          data: {
+            estado: ESTADOS[actual.status],
+            reembolsadoCentavos: actual.refundedCents,
+          },
+        }),
+      )
+      .catch((e: unknown) =>
+        this.logger.warn(
+          `Reembolso ${id} hecho, sin el estado del pago: ${String(e)}`,
+        ),
+      );
   }
 
   /** Cancela las reservas impagas del centro cuyo tiempo para pagar ya paso. */
@@ -500,23 +534,13 @@ export class CobrosService {
         // toca.
         const { count } = await tx.reserva.updateMany({
           where: { id: r.id, estado: 'pendiente', pagoVenceAt: { lt: ahora } },
-          data: {
-            estado: 'cancelada',
-            canceladaPor: 'sistema',
-            canceladaAt: ahora,
-          },
+          data: canceladaPorSistema(),
         });
         if (count === 0) return;
         await this.notificaciones.encolar(
           tx,
           r.clienteEmail,
-          turnoVencido({
-            centro: centro.nombre,
-            clienteNombre: r.clienteNombre,
-            servicio: r.servicio.nombre,
-            fecha: aFecha(r.fecha),
-            hora: r.horaInicio,
-          }),
+          turnoVencido(turnoDe(centro.nombre, r)),
         );
       });
     }

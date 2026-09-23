@@ -128,7 +128,7 @@ tiene que dar lo mismo: escribir estados, no incrementos.
 | La plata viaja en decimales. | Centavos enteros en toda la API. |
 | Los tipos del SDK tienen todo opcional. | Tipos chicos y estrictos. |
 | El SDK no tipa PKCE. | Genera el challenge S256 y lo agrega a la URL. |
-| Errores de SDK con muchas formas. | Un solo `MercadoPagoError`, con `retryable` para 429, 5xx y red. |
+| Errores de SDK con muchas formas. | Un solo `MercadoPagoError`, con `retryable` para 423, 424, 429, 5xx y red. |
 | La firma usa el `data.id` del query, no el del body. | Lo toma del query, con el validador del propio SDK. |
 | Un estado nuevo de MP podría confirmar un cobro. | Todo estado desconocido cae en `pending`. |
 

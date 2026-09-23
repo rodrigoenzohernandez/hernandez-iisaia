@@ -64,12 +64,17 @@ export class NotificacionesService {
     );
   }
 
-  async despacharPendientes(): Promise<void> {
-    // Lo vencido no se manda ni se guarda: un codigo de ingreso en claro no queda en la base
-    // mas alla de su vencimiento, igual que de CodigoAcceso solo queda la firma.
+  /**
+   * Borra los mails vencidos: un codigo de ingreso en claro no queda en la base mas alla de su
+   * vencimiento. Lo corre la tarea periodica; el despacho, por su lado, nunca manda uno vencido.
+   */
+  async borrarVencidas(): Promise<void> {
     await this.db.notificacion.deleteMany({
       where: { venceAt: { lte: new Date() } },
     });
+  }
+
+  async despacharPendientes(): Promise<void> {
     const pendientes = await this.db.notificacion.findMany({
       where: { estado: 'pendiente', proximoIntentoAt: { lte: new Date() } },
       orderBy: { proximoIntentoAt: 'asc' },
@@ -82,18 +87,19 @@ export class NotificacionesService {
   private async enviar(id: string): Promise<void> {
     const ahora = new Date();
     // Tomarla es un UPDATE condicional y no leer y despues escribir: el despacho de la
-    // request y el de la tarea periodica pueden cruzarse, y solo uno gana la fila.
-    const { count } = await this.db.notificacion.updateMany({
-      where: { id, estado: 'pendiente', proximoIntentoAt: { lte: ahora } },
+    // request y el de la tarea periodica pueden cruzarse, y solo uno gana la fila. Un mail
+    // vencido no se toma: lo borra la tarea.
+    const [n] = await this.db.notificacion.updateManyAndReturn({
+      where: {
+        id,
+        estado: 'pendiente',
+        proximoIntentoAt: { lte: ahora },
+        OR: [{ venceAt: null }, { venceAt: { gt: ahora } }],
+      },
       data: { proximoIntentoAt: new Date(ahora.getTime() + LEASE_MS) },
     });
-    if (count === 0) return;
+    if (!n) return;
 
-    const n = await this.db.notificacion.findFirstOrThrow({ where: { id } });
-    if (n.venceAt && n.venceAt <= ahora) {
-      await this.db.notificacion.deleteMany({ where: { id } });
-      return;
-    }
     try {
       const { id: proveedorId } = await this.sender.send({
         to: n.para,

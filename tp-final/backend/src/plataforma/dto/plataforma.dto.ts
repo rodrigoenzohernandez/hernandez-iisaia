@@ -1,26 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Plan } from '@prisma/client';
 import { Transform } from 'class-transformer';
-import {
-  IsBoolean,
-  IsEmail,
-  IsOptional,
-  IsString,
-  Length,
-} from 'class-validator';
+import { IsBoolean, IsOptional } from 'class-validator';
+import { CrearSesionDto } from '../../auth/dto/crear-sesion.dto.js';
 import { CursorPageQueryDto } from '../../common/pagination/cursor-page.dto.js';
-import { aEmail } from '../../common/transforms.js';
+import { aBooleano } from '../../common/transforms.js';
+import { ESTADOS_DE_SUSCRIPCION } from '../../planes/dto/suscripcion.dto.js';
 
-export class CrearSesionPlataformaDto {
-  @ApiProperty({ example: 'superadmin@turnos.test' })
-  @Transform(aEmail)
-  @IsEmail({}, { message: 'El email no es valido.' })
-  email!: string;
-
-  @IsString()
-  @Length(1, 200, { message: 'La contrasena es obligatoria.' })
-  password!: string;
-}
+/** El mismo login que el de un centro, con su normalizacion del email. */
+export class CrearSesionPlataformaDto extends CrearSesionDto {}
 
 export class SuperadminDto {
   id!: string;
@@ -39,9 +27,7 @@ export class SesionPlataformaDto {
 export class ListCentrosQueryDto extends CursorPageQueryDto {
   /** Solo los activos, o solo los dados de baja. Sin el filtro, todos. */
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    value === 'true' ? true : value === 'false' ? false : value,
-  )
+  @Transform(aBooleano)
   @IsBoolean({ message: 'activo tiene que ser true o false.' })
   activo?: boolean;
 }
@@ -62,7 +48,7 @@ export class CentroDto {
   @ApiProperty({
     type: String,
     nullable: true,
-    enum: ['pending', 'authorized', 'paused', 'cancelled'],
+    enum: ESTADOS_DE_SUSCRIPCION,
   })
   suscripcionEstado!: string | null;
 

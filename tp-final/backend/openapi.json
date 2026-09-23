@@ -497,7 +497,7 @@
             }
           },
           "409": {
-            "description": "Cambiar de cuenta dejaria sin reembolso pagos de turnos por venir.",
+            "description": "La cuenta actual tiene pagos en curso o turnos pagos por venir: si se cambia, no se podrian saldar.",
             "content": {
               "application/json": {
                 "schema": {
@@ -573,7 +573,7 @@
             }
           },
           "409": {
-            "description": "Hay pagos de turnos por venir que se tendrian que poder reembolsar, o la suscripcion al plan Profesional sigue activa.",
+            "description": "La cuenta tiene pagos en curso o turnos pagos por venir, o la suscripcion al plan Profesional sigue activa.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1330,8 +1330,8 @@
               "type": "string",
               "enum": [
                 "pendiente",
-                "confirmada",
                 "cancelada",
+                "confirmada",
                 "ausente"
               ]
             }
@@ -1707,8 +1707,8 @@
               "type": "string",
               "enum": [
                 "pendiente",
-                "confirmada",
                 "cancelada",
+                "confirmada",
                 "ausente"
               ]
             }
@@ -2522,6 +2522,7 @@
         "properties": {
           "email": {
             "type": "string",
+            "description": "El email de la clienta. Si no tiene cuenta en el centro, se crea al entrar.",
             "format": "email",
             "example": "ana@example.com"
           },
@@ -2839,14 +2840,14 @@
             "minimum": 0,
             "maximum": 720
           },
-          "activo": {
-            "type": "boolean"
-          },
           "cancelacionHorasAntes": {
             "type": "number",
             "description": "Hasta cuantas horas antes la clienta cancela con reembolso total.",
             "minimum": 0,
             "maximum": 720
+          },
+          "activo": {
+            "type": "boolean"
           }
         }
       },
@@ -3344,11 +3345,13 @@
         "properties": {
           "email": {
             "type": "string",
+            "description": "Email de la persona administradora del centro. Se normaliza como en el alta del centro:\nsi no, quien se registro como \"Lucia@...\" no podria volver a entrar escribiendolo igual.",
             "format": "email",
-            "example": "superadmin@turnos.test"
+            "example": "admin@ejemplo.test"
           },
           "password": {
             "type": "string",
+            "description": "Su contrasena.",
             "minLength": 1,
             "maxLength": 200
           }

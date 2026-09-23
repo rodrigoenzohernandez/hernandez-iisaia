@@ -1,4 +1,4 @@
-import { aDate } from '../common/horario.js';
+import { aDate, aFecha } from '../common/horario.js';
 
 /** Un mail listo para encolar. */
 export type Plantilla = { asunto: string; html: string; texto: string };
@@ -11,6 +11,32 @@ export type DatosTurno = {
   fecha: string;
   hora: string;
 };
+
+/** Lo que un mail de turno lee de una reserva. Quien necesita mas campos los suma. */
+export const datosDelTurno = {
+  fecha: true,
+  horaInicio: true,
+  clienteNombre: true,
+  clienteEmail: true,
+  servicio: { select: { nombre: true } },
+} as const;
+
+/** Los datos del mail, desde una reserva leida con datosDelTurno. */
+export const turnoDe = (
+  centro: string,
+  r: {
+    fecha: Date;
+    horaInicio: string;
+    clienteNombre: string;
+    servicio: { nombre: string };
+  },
+): DatosTurno => ({
+  centro,
+  clienteNombre: r.clienteNombre,
+  servicio: r.servicio.nombre,
+  fecha: aFecha(r.fecha),
+  hora: r.horaInicio,
+});
 
 const escapar = (s: string): string =>
   s

@@ -64,9 +64,6 @@ export class ReservasController {
   })
   // Publica y no @Roles: se puede reservar sin cuenta. El token, si viene, cambia de quien es
   // el turno (la clienta de la sesion) o quien lo carga (el centro), no si se puede reservar.
-  // Con `efectivo` la reserva nace confirmada, porque la sena se cobra en el local. Con
-  // `mercadopago` nace pendiente y la administradora la confirma cuando el pago exista: sin
-  // integracion real, dejarla nacer confirmada haria que el metodo de pago no signifique nada.
   create(
     @CurrentTenant() tenant: TenantRequest,
     @Body() dto: CreateReservaDto,

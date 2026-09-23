@@ -9,7 +9,7 @@ import { CuentasMercadoPagoService } from '../cobros/cuentas-mercadopago.service
 import type { TenantRequest } from '../common/decorators.js';
 import { env } from '../env.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
-import { camposDelPlan, planVigente } from '../planes/planes.js';
+import { aCentro, camposDelCentro } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { RecordatoriosService } from '../reservas/recordatorios.service.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
@@ -44,7 +44,10 @@ export class TareasService implements OnApplicationShutdown {
       this.cadaTanto(
         'mails',
         30_000,
-        () => this.notificaciones.despacharPendientes(),
+        async () => {
+          await this.notificaciones.borrarVencidas();
+          await this.notificaciones.despacharPendientes();
+        },
         { tambienInactivos: true },
       ),
       this.cadaTanto('recordatorios', 10 * 60_000, (centro) =>
@@ -53,7 +56,7 @@ export class TareasService implements OnApplicationShutdown {
       this.cadaTanto(
         'reembolsos',
         60_000,
-        () => this.cobros.procesarReembolsos(),
+        (centro) => this.cobros.procesarReembolsos(centro),
         { tambienInactivos: true },
       ),
       // Tambien en un centro dado de baja: sus cobros abiertos tienen que vencer, y la clienta
@@ -74,7 +77,10 @@ export class TareasService implements OnApplicationShutdown {
     for (const parar of this.paradas) parar();
   }
 
-  /** Corre fn para cada centro activo cada `ms`, sin superponer corridas de la misma tarea. */
+  /**
+   * Corre fn para cada centro cada `ms`, sin superponer corridas de la misma tarea. Solo los
+   * activos, salvo con `tambienInactivos`: lo que salda plata ya cobrada.
+   */
   private cadaTanto(
     nombre: string,
     ms: number,
@@ -105,24 +111,10 @@ export class TareasService implements OnApplicationShutdown {
     // Tenant es la raiz y la extension no lo filtra: es lo unico que se lee sin contexto.
     const filas = await this.db.tenant.findMany({
       where: tambienInactivos ? {} : { activo: true },
-      select: {
-        id: true,
-        slug: true,
-        nombre: true,
-        zonaHoraria: true,
-        activo: true,
-        ...camposDelPlan,
-      },
+      select: camposDelCentro,
     });
     for (const fila of filas) {
-      const centro: Centro = {
-        id: fila.id,
-        slug: fila.slug,
-        nombre: fila.nombre,
-        zonaHoraria: fila.zonaHoraria,
-        activo: fila.activo,
-        plan: planVigente(fila),
-      };
+      const centro: Centro = aCentro(fila);
       // Con runAs, cada query de fn queda sellada con el centro, como en una request. Un
       // centro que falla no frena a los demas.
       await TenantContext.runAs(centro.id, () => fn(centro)).catch(

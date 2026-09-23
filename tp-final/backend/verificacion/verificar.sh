@@ -174,6 +174,16 @@ esperar() {
   done
 }
 
+# Lo unico que el script toca por fuera de la API: mover el tiempo de una reserva.
+ZONA="now() at time zone 'America/Argentina/Buenos_Aires'"
+a_doce_horas() {
+  sql "update \"Reserva\" set fecha = ($ZONA + interval '12 hours')::date,
+       \"horaInicio\" = to_char($ZONA + interval '12 hours', 'HH24:MI'),
+       \"horaFin\" = to_char($ZONA + interval '12 hours 30 minutes', 'HH24:MI') where id = '$1'" >/dev/null
+}
+a_ayer() { sql "update \"Reserva\" set fecha = ($ZONA)::date - 1 where id = '$1'" >/dev/null; }
+vencer_pago() { sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where id = '$1'" >/dev/null; }
+
 # header <curl args...> — los headers de la respuesta, en minuscula, para buscar con grep.
 header() { curl -s --max-time 30 -o /dev/null -D - "$@" | tr -d '\r' | tr '[:upper:]' '[:lower:]'; }
 
@@ -345,9 +355,7 @@ req 'un turno lejano, sin recordatorio todavia' 201 POST "$T/reservas" "$(reserv
 RESERVA_REC=$(jq -r .id "$TMP/body")
 check 'al reservar lejos no se marca el recordatorio' '' \
   "$(sql "select \"recordatorioEnviadoAt\" from \"Reserva\" where id = '$RESERVA_REC'")"
-sql "update \"Reserva\" set fecha = (now() at time zone 'America/Argentina/Buenos_Aires' + interval '12 hours')::date,
-     \"horaInicio\" = to_char(now() at time zone 'America/Argentina/Buenos_Aires' + interval '12 hours', 'HH24:MI')
-     where id = '$RESERVA_REC'" >/dev/null
+a_doce_horas "$RESERVA_REC"
 check 'a 12 horas del turno sale el recordatorio (si falla: levantar con npm run start:verify)' 1 \
   "$(esperar 15 "$N_MAILS where para = 'recordatorio@example.com' and asunto like 'Recordatorio%'" 1)"
 sleep 5
@@ -659,14 +667,6 @@ reservar_pagada() {
 turno() { jq -nc --arg s "$S30" --arg f "$1" --arg h "$2" '{servicioId:$s, fecha:$f, hora:$h, metodoPago:"efectivo"}'; }
 estado_de() { sql "select estado || coalesce(' ' || \"canceladaPor\", '') from \"Reserva\" where id = '$1'"; }
 reembolsos_de() { sql "select count(*) || ' ' || coalesce(sum(r.\"montoCentavos\"), 0) from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"reservaId\" = '$1' and r.estado <> 'fallido'"; }
-reembolso_estado() { sql "select r.estado from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"reservaId\" = '$1' order by r.\"createdAt\" desc limit 1"; }
-ZONA="now() at time zone 'America/Argentina/Buenos_Aires'"
-a_doce_horas() {
-  sql "update \"Reserva\" set fecha = ($ZONA + interval '12 hours')::date,
-       \"horaInicio\" = to_char($ZONA + interval '12 hours', 'HH24:MI'),
-       \"horaFin\" = to_char($ZONA + interval '12 hours 30 minutes', 'HH24:MI') where id = '$1'" >/dev/null
-}
-a_ayer() { sql "update \"Reserva\" set fecha = ($ZONA)::date - 1 where id = '$1'" >/dev/null; }
 
 req 'Bella Piel, sin Mercado Pago: turno en efectivo' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$LUNES3" 09:00 sinmp@example.com)"
 check 'entra confirmado y sin cobro online, como en el MVP' 'confirmada null' "$(jq -r '"\(.estado) \(.cobro)"' "$TMP/body")"
@@ -751,7 +751,7 @@ check 'y la reserva sigue confirmada' confirmada "$(estado_de "$R_TOTAL")"
 
 req 'una reserva que nunca se paga' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 10:30 vence@example.com)"
 R_VENCE=$(jq -r .id "$TMP/body"); PREF_VENCE=$(pref_de)
-sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where id = '$R_VENCE'" >/dev/null
+vencer_pago "$R_VENCE"
 check 'al vencer se cancela sola (si falla: levantar con npm run start:verify)' 'cancelada sistema' \
   "$(esperar 15 "select estado || ' ' || \"canceladaPor\" from \"Reserva\" where id = '$R_VENCE'" 'cancelada sistema')"
 check 'y la clienta recibe el aviso' 1 "$(sql "$N_MAILS where para = 'vence@example.com' and asunto like '%venci%'")"
@@ -761,7 +761,7 @@ avisar "$(pagar "$PREF_VENCE")" >/dev/null
 check 'un pago tardio con el horario libre la reactiva' confirmada "$(estado_de "$R_VENCE")"
 req 'otra que vence' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 11:15 vence2@example.com)"
 R_VENCE2=$(jq -r .id "$TMP/body"); PREF_VENCE2=$(pref_de)
-sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where id = '$R_VENCE2'" >/dev/null
+vencer_pago "$R_VENCE2"
 esperar 15 "select estado from \"Reserva\" where id = '$R_VENCE2'" cancelada >/dev/null
 req 'otra persona toma ese horario' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 11:15 ganadora@example.com)"
 avisar "$(pagar "$PREF_VENCE2")" >/dev/null
@@ -770,7 +770,7 @@ check 'y se devuelve entero' aprobado "$(esperar 10 "select r.estado from \"Reem
 check 'con un mail que explica por que' 1 "$(sql "$N_MAILS where para = 'vence2@example.com' and asunto like 'Te devolvemos%'")"
 req 'una que vence y cuyo turno despues pasa' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 16:30 tarde@example.com)"
 R_TARDE=$(jq -r .id "$TMP/body"); PREF_TARDE=$(pref_de)
-sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where id = '$R_TARDE'" >/dev/null
+vencer_pago "$R_TARDE"
 esperar 15 "select estado from \"Reserva\" where id = '$R_TARDE'" cancelada >/dev/null
 a_ayer "$R_TARDE"
 avisar "$(pagar "$PREF_TARDE")" >/dev/null
@@ -833,6 +833,9 @@ req 'el servicio vuelve a su politica' 200 PATCH "$T/servicios/$S30" '{"reprogra
 req 'la reserva vieja conserva la politica que acepto' 200 GET "$T/reservas/$R_S4" '' "$TOKEN_SOFIA"
 check 'sigue sin reprogramacion y con 24 horas para cancelar' 'null 24' "$(jq -r '"\(.reprogramacionHorasAntes) \(.cancelacionHorasAntes)"' "$TMP/body")"
 req 'cancelacionHorasAntes null en el servicio' 400 PATCH "$T/servicios/$S30" '{"cancelacionHorasAntes":null}' "$TOKEN"
+req 'un nombre en null: 400 y no el 500 de la columna' 400 PATCH "$T/servicios/$S30" '{"nombre":null}' "$TOKEN"
+req 'reprogramacionHorasAntes en null sigue valiendo: apaga la reprogramacion' 200 PATCH "$T/servicios/$S30" '{"reprogramacionHorasAntes":null}' "$TOKEN"
+req 'y vuelve a su politica' 200 PATCH "$T/servicios/$S30" '{"reprogramacionHorasAntes":24}' "$TOKEN"
 
 req 'el centro cancela sin decir si reembolsa' 400 PATCH "$T/reservas/$R_S4" '{"estado":"cancelada"}' "$TOKEN"
 req 'reembolsar en null tampoco es una respuesta' 400 PATCH "$T/reservas/$R_S4" '{"estado":"cancelada","reembolsar":null}' "$TOKEN"
@@ -868,7 +871,7 @@ req 'el centro la confirma a mano, porque le pagaron de otra forma' 200 PATCH "$
 check 'queda confirmada sin pago online' 'confirmada 0' "$(jq -r '"\(.estado) \(.cobro.pagadoCentavos)"' "$TMP/body")"
 req 'una pendiente cuyo pago vence' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 17:15 vencida-mano@example.com)"
 R_VM=$(jq -r .id "$TMP/body")
-sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where id = '$R_VM'" >/dev/null
+vencer_pago "$R_VM"
 req 'otra persona toma el horario que dejo' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 17:15 toma-mano@example.com)"
 req 'el centro quiere confirmar la vencida a mano igual' 409 PATCH "$T/reservas/$R_VM" '{"estado":"confirmada"}' "$TOKEN"
 check 'no hay sobrecupo: una sola reserva viva en ese horario' 1 \

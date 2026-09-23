@@ -30,13 +30,15 @@ import { PLANES } from '../planes/planes.js';
 import {
   avisoCancelacion,
   avisoTurnoNuevo,
+  datosDelTurno,
   turnoCancelado,
   turnoConfirmado,
+  turnoDe,
   turnoReprogramado,
 } from '../notificaciones/plantillas.js';
-import { DB, type Db, type Tx } from '../prisma/prisma.module.js';
+import { DB, type Db } from '../prisma/prisma.module.js';
 import { runSerializable } from '../prisma/run-serializable.js';
-import { exigirCupo } from './cupo.js';
+import { exigirCupo, exigirTopeDelMes } from './cupo.js';
 import type { CreateReservaDto } from './dto/create-reserva.dto.js';
 import type { ListReservasQueryDto } from './dto/list-reservas-query.dto.js';
 import {
@@ -48,10 +50,23 @@ import {
   EstadoReservaDto,
   type UpdateReservaDto,
 } from './dto/update-reserva.dto.js';
-import { RECORDATORIO_MINUTOS } from './recordatorios.service.js';
+import { recordatorioEnviadoAt } from './recordatorios.service.js';
 
 type Fila = Prisma.ReservaGetPayload<{ select: typeof reservaSelect }>;
 type Ahora = { fecha: string; hora: string };
+
+/**
+ * Si faltan al menos `horas` para el turno. Es la regla de las dos politicas, y la usan las
+ * banderas que ve el front y las acciones que la aplican: escritas por separado, el boton
+ * podria decir una cosa y el PATCH hacer otra.
+ */
+const enPlazo = (
+  r: { fecha: Date; horaInicio: string },
+  horas: number | null,
+  ahora: Ahora,
+): boolean =>
+  horas !== null &&
+  minutosHasta(aFecha(r.fecha), r.horaInicio, ahora) >= horas * 60;
 
 /**
  * La reserva como sale por la API. La fecha sale como "YYYY-MM-DD", igual que entra. El
@@ -72,7 +87,6 @@ function aDto(fila: Fila, ahora: Ahora): ReservaDto {
     pagos.filter((p) => p.estado === 'aprobado'),
     'montoCentavos',
   );
-  const faltan = minutosHasta(aFecha(fila.fecha), fila.horaInicio, ahora);
   const pendiente = fila.estado === 'pendiente';
   return {
     ...resto,
@@ -89,12 +103,11 @@ function aDto(fila: Fila, ahora: Ahora): ReservaDto {
         : null,
     puedeReprogramar:
       fila.estado === 'confirmada' &&
-      fila.reprogramacionHorasAntes !== null &&
-      faltan >= fila.reprogramacionHorasAntes * 60,
+      enPlazo(fila, fila.reprogramacionHorasAntes, ahora),
     puedeCancelarConReembolso:
       fila.estado === 'confirmada' &&
       pagadoVigente > 0 &&
-      faltan >= fila.cancelacionHorasAntes * 60,
+      enPlazo(fila, fila.cancelacionHorasAntes, ahora),
   };
 }
 
@@ -125,37 +138,6 @@ function transicionInvalida(desde: string, hacia: string): never {
     code: 'invalid_transition',
     message: `Una reserva ${desde} no puede pasar a ${hacia}.`,
   });
-}
-
-/**
- * El tope de turnos por mes del plan, contados por el mes del turno y sin los cancelados. Va
- * DENTRO de la transaccion SERIALIZABLE de quien llama: dos altas simultaneas no lo pasan, y
- * una reprogramacion hacia otro mes tambien lo respeta.
- */
-async function exigirTopeDelMes(
-  tx: Tx,
-  fecha: string,
-  tope: number | null,
-  excluirId?: string,
-): Promise<void> {
-  if (tope === null) return;
-  const [anio, mes] = fecha.split('-').map(Number);
-  const tomados = await tx.reserva.count({
-    where: {
-      fecha: {
-        gte: new Date(Date.UTC(anio, mes - 1, 1)),
-        lt: new Date(Date.UTC(anio, mes, 1)),
-      },
-      estado: { not: 'cancelada' },
-      ...(excluirId ? { id: { not: excluirId } } : {}),
-    },
-  });
-  if (tomados >= tope) {
-    throw new ConflictException({
-      code: 'monthly_limit_reached',
-      message: 'El centro ya no toma mas turnos para ese mes.',
-    });
-  }
 }
 
 function soloElCentro(): never {
@@ -196,16 +178,8 @@ function exigirHorarioReservable(
 /** Los datos de contacto que quedan copiados en la reserva. */
 type Contacto = { nombre: string; email: string; telefono: string };
 
-/** Lo que un mail de turno necesita de una reserva. */
-const datosDelTurno = {
-  estado: true,
-  fecha: true,
-  horaInicio: true,
-  horaFin: true,
-  clienteNombre: true,
-  clienteEmail: true,
-  servicio: { select: { nombre: true } },
-} as const;
+/** Lo que se lee de una reserva para cambiarla y avisarlo por mail. */
+const delTurno = { ...datosDelTurno, estado: true, horaFin: true } as const;
 
 @Injectable()
 export class ReservasService {
@@ -245,7 +219,9 @@ export class ReservasService {
         });
       }
       // Completa el perfil si le faltaba algo; nunca pisa lo que ya tenia.
-      await this.clientes.asegurar(cuenta.email, { nombre, telefono });
+      if (!cuenta.nombre || !cuenta.telefono) {
+        await this.clientes.asegurar(cuenta.email, { nombre, telefono });
+      }
       return {
         clienteId: cuenta.id,
         contacto: { nombre, email: cuenta.email, telefono },
@@ -336,20 +312,15 @@ export class ReservasService {
 
     const { clienteId, contacto } = await this.duenia(dto, usuario);
     const horaFin = aHora(aMinutos(dto.hora) + servicio.duracionMinutos);
-    // Un turno que empieza en menos de 24 horas no necesita recordatorio: el mail de
-    // confirmacion ya lo es.
-    const sinRecordatorio =
-      minutosHasta(dto.fecha, dto.hora, ahora) <= RECORDATORIO_MINUTOS;
 
-    const id = await runSerializable(this.db, async (tx) => {
-      await exigirTopeDelMes(tx, dto.fecha, plan.turnosPorMes);
+    const fila = await runSerializable(this.db, async (tx) => {
+      await exigirTopeDelMes(tx, dto.fecha, tenant.plan);
       await exigirCupo(tx, {
         fecha: dto.fecha,
         hora: dto.hora,
         horaFin,
-        duracionMinutos: servicio.duracionMinutos,
         email: contacto.email,
-        capacidadMaxima: plan.capacidadMaxima,
+        plan: tenant.plan,
       });
 
       const fila = await tx.reserva.create({
@@ -376,9 +347,9 @@ export class ReservasService {
           clienteEmail: contacto.email,
           clienteTelefono: contacto.telefono,
           notas: dto.notas ?? null,
-          recordatorioEnviadoAt: sinRecordatorio ? new Date() : null,
+          recordatorioEnviadoAt: recordatorioEnviadoAt(dto.fecha, dto.hora, ahora),
         } as Prisma.ReservaUncheckedCreateInput,
-        select: { id: true, estado: true },
+        select: reservaSelect,
       });
 
       // Dentro de la transaccion: si SERIALIZABLE la reintenta, los mails se reintentan con
@@ -409,21 +380,24 @@ export class ReservasService {
           );
         }
       }
-      return fila.id;
+      return fila;
     });
 
+    // La respuesta sale de la fila recien escrita, sin volver a leerla: una reserva nueva no
+    // tiene pagos, y el link de pago es el que devuelve Mercado Pago.
+    let checkoutUrl = fila.checkoutUrl;
     if (mp && pagoVenceAt) {
-      await this.cobros.iniciarCobro(tenant, mp, {
-        id,
+      ({ checkoutUrl } = await this.cobros.iniciarCobro(tenant, mp, {
+        id: fila.id,
         montoOnlineCentavos: montoOnline,
         pagoVenceAt,
         clienteEmail: contacto.email,
         servicio: servicio.nombre,
         esSena: dto.metodoPago === MetodoPago.efectivo,
-      });
+      }));
     }
-    this.notificaciones.despacharAhora();
-    return this.leer(tenant, id);
+    if (fila.estado === 'confirmada') this.notificaciones.despacharAhora();
+    return aDto({ ...fila, checkoutUrl }, ahora);
   }
 
   /** El listado del centro, o el de una sola clienta si viene clienteId. */
@@ -558,7 +532,7 @@ export class ReservasService {
     await runSerializable(this.db, async (tx) => {
       const r = await tx.reserva.findFirstOrThrow({
         where: { id: reservaId },
-        select: { ...datosDelTurno, pagoVenceAt: true },
+        select: { ...delTurno, pagoVenceAt: true },
       });
       if (r.estado !== 'pendiente') transicionInvalida(r.estado, 'confirmada');
       // Una pendiente cuyo pago vencio ya no retiene el cupo, y otra persona puede haberlo
@@ -568,9 +542,8 @@ export class ReservasService {
           fecha: aFecha(r.fecha),
           hora: r.horaInicio,
           horaFin: r.horaFin,
-          duracionMinutos: aMinutos(r.horaFin) - aMinutos(r.horaInicio),
           excluirId: reservaId,
-          capacidadMaxima: PLANES[tenant.plan].capacidadMaxima,
+          plan: tenant.plan,
         });
       }
       await tx.reserva.update({
@@ -580,7 +553,7 @@ export class ReservasService {
       await this.notificaciones.encolar(
         tx,
         r.clienteEmail,
-        turnoConfirmado(this.turno(tenant, r)),
+        turnoConfirmado(turnoDe(tenant.nombre, r)),
       );
     });
   }
@@ -612,7 +585,7 @@ export class ReservasService {
     await runSerializable(this.db, async (tx) => {
       const r = await tx.reserva.findFirstOrThrow({
         where: { id: reservaId },
-        select: { ...datosDelTurno, cancelacionHorasAntes: true },
+        select: { ...delTurno, cancelacionHorasAntes: true },
       });
       if (r.estado !== 'pendiente' && r.estado !== 'confirmada') {
         transicionInvalida(r.estado, 'cancelada');
@@ -620,8 +593,7 @@ export class ReservasService {
       const pagado = await this.cobros.pagado(tx, reservaId);
       let devolver: boolean;
       if (clienta) {
-        const faltan = minutosHasta(aFecha(r.fecha), r.horaInicio, ahora);
-        devolver = faltan >= r.cancelacionHorasAntes * 60;
+        devolver = enPlazo(r, r.cancelacionHorasAntes, ahora);
       } else {
         if (pagado > 0 && reembolsar === undefined) {
           throw new BadRequestException({
@@ -644,7 +616,7 @@ export class ReservasService {
       const reembolso = devolver
         ? await this.cobros.reembolsarTodo(tx, reservaId)
         : 0;
-      const turno = this.turno(tenant, r);
+      const turno = turnoDe(tenant.nombre, r);
       await this.notificaciones.encolar(
         tx,
         r.clienteEmail,
@@ -661,7 +633,7 @@ export class ReservasService {
         );
       }
     });
-    this.cobros.procesarReembolsosAhora();
+    this.cobros.procesarReembolsosAhora(tenant);
   }
 
   /**
@@ -683,14 +655,12 @@ export class ReservasService {
     await runSerializable(this.db, async (tx) => {
       const r = await tx.reserva.findFirstOrThrow({
         where: { id: reservaId },
-        select: { ...datosDelTurno, reprogramacionHorasAntes: true },
+        select: { ...delTurno, reprogramacionHorasAntes: true },
       });
       if (clienta) {
-        const faltan = minutosHasta(aFecha(r.fecha), r.horaInicio, ahora);
         if (
           r.estado !== 'confirmada' ||
-          r.reprogramacionHorasAntes === null ||
-          faltan < r.reprogramacionHorasAntes * 60
+          !enPlazo(r, r.reprogramacionHorasAntes, ahora)
         ) {
           throw new ConflictException({
             code: 'reschedule_not_allowed',
@@ -708,19 +678,17 @@ export class ReservasService {
       // La duracion reservada, no la del servicio de hoy: es una copia, como la sena.
       const duracion = aMinutos(r.horaFin) - aMinutos(r.horaInicio);
       const horaFin = aHora(aMinutos(hora) + duracion);
-      await exigirTopeDelMes(
-        tx,
-        fecha,
-        PLANES[tenant.plan].turnosPorMes,
-        reservaId,
-      );
+      // Moverlo dentro del mismo mes no cambia cuantos turnos tiene el mes: el tope se mira
+      // solo si cambia de mes.
+      if (fecha.slice(0, 7) !== aFecha(r.fecha).slice(0, 7)) {
+        await exigirTopeDelMes(tx, fecha, tenant.plan);
+      }
       await exigirCupo(tx, {
         fecha,
         hora,
         horaFin,
-        duracionMinutos: duracion,
         excluirId: reservaId,
-        capacidadMaxima: PLANES[tenant.plan].capacidadMaxima,
+        plan: tenant.plan,
       });
       await tx.reserva.update({
         where: { id: reservaId },
@@ -729,17 +697,14 @@ export class ReservasService {
           horaInicio: hora,
           horaFin,
           // El recordatorio vuelve a salir para el horario nuevo, salvo que ya este cerca.
-          recordatorioEnviadoAt:
-            minutosHasta(fecha, hora, ahora) <= RECORDATORIO_MINUTOS
-              ? new Date()
-              : null,
+          recordatorioEnviadoAt: recordatorioEnviadoAt(fecha, hora, ahora),
         },
       });
       await this.notificaciones.encolar(
         tx,
         r.clienteEmail,
         turnoReprogramado({
-          ...this.turno(tenant, r),
+          ...turnoDe(tenant.nombre, r),
           fecha,
           hora,
           fechaAnterior: aFecha(r.fecha),
@@ -771,35 +736,5 @@ export class ReservasService {
       data: { estado: 'ausente' },
     });
     if (count === 0) transicionInvalida('cambiada', 'ausente');
-  }
-
-  /** La reserva recien escrita, como sale por la API. */
-  private async leer(
-    tenant: TenantRequest,
-    reservaId: string,
-  ): Promise<ReservaDto> {
-    const fila = await this.db.reserva.findFirstOrThrow({
-      where: { id: reservaId },
-      select: reservaSelect,
-    });
-    return aDto(fila, ahoraEn(tenant.zonaHoraria));
-  }
-
-  private turno(
-    tenant: TenantRequest,
-    r: {
-      clienteNombre: string;
-      fecha: Date;
-      horaInicio: string;
-      servicio: { nombre: string };
-    },
-  ) {
-    return {
-      centro: tenant.nombre,
-      clienteNombre: r.clienteNombre,
-      servicio: r.servicio.nombre,
-      fecha: aFecha(r.fecha),
-      hora: r.horaInicio,
-    };
   }
 }

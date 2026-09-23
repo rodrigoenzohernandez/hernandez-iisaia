@@ -3,9 +3,9 @@
  *
  *   npm run mp:conectar-prueba -- <slug>
  *
- * Toma SEED_MP_ACCESS_TOKEN, SEED_MP_PUBLIC_KEY y SEED_MP_USER_ID del entorno y escribe la
- * misma fila que dejaria OAuth, con el token cifrado: el resto de la API no distingue una
- * cuenta de la otra. Sin refresh token, asi que la renovacion la saltea.
+ * Toma SEED_MP_ACCESS_TOKEN y SEED_MP_USER_ID del entorno (SEED_MP_PUBLIC_KEY es opcional) y
+ * escribe la misma fila que dejaria OAuth, con el token cifrado: el resto de la API no
+ * distingue una cuenta de la otra. Sin refresh token, asi que la renovacion la saltea.
  *
  * Como el seed, usa PrismaClient crudo: no hay request ni contexto de tenant.
  */
@@ -78,7 +78,7 @@ if (import.meta.main) {
   const credenciales = credencialesDePrueba();
   if (!slug || !credenciales) {
     console.error(
-      'Uso: npm run mp:conectar-prueba -- <slug>, con SEED_MP_ACCESS_TOKEN, SEED_MP_PUBLIC_KEY y SEED_MP_USER_ID en el entorno.',
+      'Uso: npm run mp:conectar-prueba -- <slug>, con SEED_MP_ACCESS_TOKEN y SEED_MP_USER_ID en el entorno.',
     );
     process.exit(1);
   }

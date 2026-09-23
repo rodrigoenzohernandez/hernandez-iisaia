@@ -8,12 +8,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { cripto } from '../common/cripto.js';
 import type { TenantRequest } from '../common/decorators.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
 import { codigoAcceso } from '../notificaciones/plantillas.js';
-import { DB, type Db } from '../prisma/prisma.module.js';
+import { DB, ES_DUPLICADO, type Db } from '../prisma/prisma.module.js';
+import type { JwtPayload } from '../tenancy/tenant-auth.guard.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import {
   clienteSelect,
@@ -137,7 +138,7 @@ export class ClientesService {
     if (usado.count === 0) throw invalido;
 
     const cliente = await this.asegurar(email);
-    const accessToken = await this.jwt.signAsync(
+    const accessToken = await this.jwt.signAsync<JwtPayload>(
       { sub: cliente.id, tid: TenantContext.require(), rol: 'cliente' },
       { expiresIn: '30d' },
     );
@@ -179,10 +180,7 @@ export class ClientesService {
       });
     } catch (e) {
       // Dos altas simultaneas del mismo email nuevo: la que pierde el unique usa la otra.
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (ES_DUPLICADO(e)) {
         return this.db.cliente.findFirstOrThrow({
           where: { email },
           select: clienteSelect,
