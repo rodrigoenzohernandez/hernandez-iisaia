@@ -109,6 +109,18 @@ model Tenant {
   cuentaMercadoPago CuentaMercadoPago?
 }
 
+/// La cuenta de la plataforma, que ve todos los centros. Global a proposito: no tiene
+/// tenantId, y es la unica excepcion al chequeo de arranque ademas de Tenant. No hay alta por
+/// la API: el unico que existe lo crea el seed.
+model Superadmin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  nombre       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model Usuario {
   id           String     @id @default(cuid())
   tenantId     String

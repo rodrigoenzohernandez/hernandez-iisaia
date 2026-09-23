@@ -1,17 +1,10 @@
-import { randomBytes } from 'node:crypto';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { hashPassword, verifyPassword } from '../common/password.js';
+import { senuelo, verifyPassword } from '../common/password.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import type { CrearSesionDto } from './dto/crear-sesion.dto.js';
 import type { SesionDto } from './dto/sesion.dto.js';
-
-/**
- * Hash señuelo contra el que se verifica cuando el email no existe. Se calcula una vez, al
- * importar el modulo, sobre un valor aleatorio que nadie conoce.
- */
-const senuelo = await hashPassword(randomBytes(32).toString('hex'));
 
 @Injectable()
 export class AuthService {

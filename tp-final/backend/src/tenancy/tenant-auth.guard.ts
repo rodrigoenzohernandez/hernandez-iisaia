@@ -19,14 +19,18 @@ import { camposDelPlan, planVigente } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { TenantContext } from './tenant-context.js';
 
-/** Lo que el login firma. `tid` es el id interno del tenant, que nunca sale por la API. */
-export type JwtPayload = { sub: string; tid: string; rol: Rol };
+/**
+ * Lo que el login firma. `tid` es el id interno del tenant, que nunca sale por la API; el
+ * token de la plataforma no lo lleva.
+ */
+export type JwtPayload = { sub: string; tid?: string; rol: Rol };
 
 /**
  * Guard global. Hace cinco cosas, en orden:
  *   1. resuelve el centro del slug del path y lo deja en el TenantContext,
  *   2. verifica el Bearer si vino,
- *   3. exige que el tenant del token sea el del path (403),
+ *   3. exige que el token sea del lugar del path (403): con centro, de ese centro; sin
+ *      centro, de la plataforma,
  *   4. exige sesion en todo lo que no este marcado @Publico,
  *   5. exige que el rol del token este entre los de la ruta; sin @Roles, solo admin (403).
  */
@@ -94,14 +98,22 @@ export class TenantAuthGuard implements CanActivate {
           message: 'Tu sesion vencio. Volve a entrar.',
         });
       }
-      // El path nombra el centro, pero el token es la autoridad. Si no coinciden, 403.
-      if (!tenantId || payload.tid !== tenantId) {
+      // El path nombra el lugar, pero el token es la autoridad. Una ruta de centro acepta
+      // solo tokens de ese centro; una sin centro, solo el de la plataforma.
+      const suyo = tenantId
+        ? payload.rol !== 'superadmin' && payload.tid === tenantId
+        : payload.rol === 'superadmin' && payload.tid === undefined;
+      if (suyo) {
+        req.usuario = { id: payload.sub, rol: payload.rol };
+      } else if (tenantId || !publico) {
+        // Una ruta publica sin centro (los planes, el alta de un centro) no depende de quien
+        // pregunta: un token ajeno ahi se ignora, asi un front que manda el token en cada
+        // request no las rompe.
         throw new ForbiddenException({
           code: 'wrong_tenant',
           message: 'Esa cuenta no pertenece a este centro.',
         });
       }
-      req.usuario = { id: payload.sub, rol: payload.rol };
     }
 
     if (publico) return true;

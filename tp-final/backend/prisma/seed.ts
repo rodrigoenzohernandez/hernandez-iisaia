@@ -9,6 +9,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { hashPassword } from '../src/common/password.ts';
+import { SLUG } from '../src/common/slug.ts';
 import { conectarCuentaDePrueba, credencialesDePrueba } from './conectar-mp.ts';
 
 try {
@@ -26,11 +27,8 @@ if (!password) throw new Error('Falta SEED_ADMIN_PASSWORD');
 // este seed. El throttler cubre el resto.
 if (password.length < 12)
   throw new Error('SEED_ADMIN_PASSWORD necesita 12 caracteres o mas');
-
-// El unique de Postgres es byte-exacto: "Lo-De-Lili" y "lo-de-lili" convivirian como dos
-// centros distintos, y con homoglifos Unicode se arma un slug que una persona lee igual que
-// el de la victima. El seed es el unico creador de tenants, asi que la regla es una regex.
-const SLUG = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+const superadminEmail =
+  process.env.SEED_SUPERADMIN_EMAIL ?? 'superadmin@turnos.test';
 
 /**
  * Grilla verificada en el bundle del prototipo, que ofrece
@@ -201,9 +199,10 @@ async function main(): Promise<void> {
   await prisma.servicio.deleteMany();
   await prisma.usuario.deleteMany();
   await prisma.tenant.deleteMany();
+  await prisma.superadmin.deleteMany();
 
-  // Un solo hash para los tres administradores: es un seed de desarrollo y la contrasena
-  // sale del entorno, nunca de un literal. Nunca se loguea.
+  // Un solo hash para las tres administradoras y la plataforma: es un seed de desarrollo y
+  // la contrasena sale del entorno, nunca de un literal. Nunca se loguea.
   const passwordHash = await hashPassword(password!);
 
   for (const t of TENANTS) {
@@ -232,6 +231,11 @@ async function main(): Promise<void> {
     });
   }
 
+  // La cuenta de la plataforma: la unica que existe, porque no hay alta por la API.
+  await prisma.superadmin.create({
+    data: { email: superadminEmail, nombre: 'Plataforma', passwordHash },
+  });
+
   // Lo de Lili cobra con Mercado Pago si hay credenciales de prueba en el entorno: la misma
   // fila que dejaria OAuth. Sin credenciales, queda sin cobro online, como en el MVP.
   const credenciales = credencialesDePrueba();
@@ -247,7 +251,7 @@ async function main(): Promise<void> {
       `${t.slug} (${t.servicios.length} servicios, ${t.plan ? 'Profesional' : 'Básico'})`,
   ).join(', ');
   console.log(
-    `Seed OK. Centros: ${centros}.` +
+    `Seed OK. Centros: ${centros}. Plataforma: ${superadminEmail}.` +
       (credenciales ? ' Lo de Lili cobra con la cuenta de prueba de MP.' : ''),
   );
 }

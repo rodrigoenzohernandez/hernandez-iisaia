@@ -7,7 +7,9 @@ import { TenantContext } from './tenant-context.js';
  * de mas abajo y la FK compuesta de Reserva en el esquema.
  */
 const COLUMNA = 'tenantId';
-const RAIZ = 'Tenant';
+// Los unicos modelos sin tenantId: la raiz del arbol y la cuenta de la plataforma. Cualquier
+// otro que se sume a esta lista se tiene que poder justificar en el review.
+const GLOBALES = new Set(['Tenant', 'Superadmin']);
 
 const modelos = Prisma.dmmf.datamodel.models;
 const conTenant = new Set(
@@ -21,11 +23,11 @@ const conTenant = new Set(
 // convierte en un crash al boot.
 const sinTenant = modelos
   .map((m) => m.name)
-  .filter((n) => n !== RAIZ && !conTenant.has(n));
+  .filter((n) => !GLOBALES.has(n) && !conTenant.has(n));
 if (sinTenant.length > 0) {
   throw new Error(
     `Modelos sin columna ${COLUMNA}: ${sinTenant.join(', ')}. ` +
-      `Agregala, o sumalos a la excepcion de ${RAIZ} si de verdad son globales.`,
+      `Agregala, o sumalos a GLOBALES si de verdad son globales.`,
   );
 }
 

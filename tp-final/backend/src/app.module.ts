@@ -8,6 +8,7 @@ import { env } from './env.js';
 import { DisponibilidadModule } from './disponibilidad/disponibilidad.module.js';
 import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
 import { PlanesModule } from './planes/planes.module.js';
+import { PlataformaModule } from './plataforma/plataforma.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ReservasModule } from './reservas/reservas.module.js';
 import { ServiciosModule } from './servicios/servicios.module.js';
@@ -32,6 +33,7 @@ import { VentanasAtencionModule } from './ventanas-atencion/ventanas-atencion.mo
     DisponibilidadModule,
     ReservasModule,
     PlanesModule,
+    PlataformaModule,
     TareasModule,
   ],
   providers: [

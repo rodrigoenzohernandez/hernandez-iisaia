@@ -54,6 +54,14 @@ medir 'POST /sesiones' "$T/sesiones" '{"email":"nadie@ejemplo.test","password":"
 echo '(esperando que se cierre la ventana de un minuto)'
 sleep 61
 medir 'POST /reservas' "$T/reservas" '{}'
+# Cada ruta tiene su propio contador, asi que las que siguen no esperan la ventana. Con un
+# body invalido: el throttler cuenta antes de validar, y no se crea nada.
+medir 'POST /clientes/codigos' "$T/clientes/codigos" '{}'
+medir 'POST /clientes/sesiones' "$T/clientes/sesiones" '{}'
+medir 'POST /plataforma/sesiones' /plataforma/sesiones '{"email":"nadie@ejemplo.test","password":"incorrecta"}'
+# El alta de centros tiene su propio limite, 3 por hora: queda ultima porque no se libera en
+# un minuto.
+medir 'POST /tenants' /tenants '{}'
 
 printf '\n%d fallas\n' "$FALLAS"
 [[ $FALLAS -eq 0 ]]

@@ -2039,6 +2039,316 @@
           "Suscripcion"
         ]
       }
+    },
+    "/api/v1/plataforma/sesiones": {
+      "post": {
+        "operationId": "PlataformaController_ingresar",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearSesionPlataformaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionPlataformaDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales incorrectas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inicia sesion en la plataforma. No hay alta: la cuenta la crea el seed.",
+        "tags": [
+          "Plataforma"
+        ]
+      }
+    },
+    "/api/v1/plataforma/tenants": {
+      "get": {
+        "operationId": "PlataformaController_centros",
+        "parameters": [
+          {
+            "name": "activo",
+            "required": false,
+            "in": "query",
+            "description": "Solo los activos, o solo los dados de baja. Sin el filtro, todos.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "description": "Cuantos elementos devolver como maximo en esta pagina.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "El nextCursor que devolvio la pagina anterior. Es opaco: mandalo tal cual.",
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Una pagina de resultados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CursorPageDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CentroDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de la plataforma.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los centros, con su plan, su cuenta de Mercado Pago y los numeros del mes.",
+        "tags": [
+          "Plataforma"
+        ]
+      }
+    },
+    "/api/v1/plataforma/resumen": {
+      "get": {
+        "operationId": "PlataformaController_resumen",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumenDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de la plataforma.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los numeros de toda la plataforma en el mes en curso.",
+        "tags": [
+          "Plataforma"
+        ]
+      }
+    },
+    "/api/v1/plataforma/tenants/{slug}": {
+      "patch": {
+        "operationId": "PlataformaController_actualizar",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCentroDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CentroDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de la plataforma.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Da de baja un centro, o lo reactiva.",
+        "tags": [
+          "Plataforma"
+        ]
+      }
+    },
+    "/api/v1/tenants": {
+      "post": {
+        "operationId": "AltaCentroController_crear",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearCentroDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CentroCreadoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Algun dato es invalido: el slug, el email o la contrasena.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "slug_taken: el slug ya esta en uso o es una palabra reservada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Da de alta un centro en el plan Basico, con quien lo crea como administradora.",
+        "tags": [
+          "AltaCentro"
+        ]
+      }
     }
   },
   "info": {
@@ -2105,7 +2415,8 @@
               "monthly_limit_reached",
               "plan_limit_reached",
               "mercadopago_not_connected",
-              "invalid_signature"
+              "invalid_signature",
+              "slug_taken"
             ],
             "type": "string",
             "example": "slot_full"
@@ -3026,6 +3337,311 @@
         },
         "required": [
           "plan"
+        ]
+      },
+      "CrearSesionPlataformaDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "superadmin@turnos.test"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "SuperadminDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nombre",
+          "email"
+        ]
+      },
+      "SesionPlataformaDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT para el header `Authorization: Bearer <token>`. Vale solo en /plataforma.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "superadmin": {
+            "$ref": "#/components/schemas/SuperadminDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "superadmin"
+        ]
+      },
+      "CentroDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "example": "lo-de-lili"
+          },
+          "plan": {
+            "description": "El plan que rige hoy.",
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "type": "string"
+          },
+          "suscripcionEstado": {
+            "type": "string",
+            "nullable": true,
+            "description": "El estado de la suscripcion en Mercado Pago. null si nunca se suscribio.",
+            "enum": [
+              "pending",
+              "authorized",
+              "paused",
+              "cancelled"
+            ]
+          },
+          "pagoHasta": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "Hasta cuando esta pago el plan."
+          },
+          "mercadoPago": {
+            "description": "Si el centro cobra con Mercado Pago.",
+            "enum": [
+              "conectada",
+              "requiere_reconexion",
+              "sin_conectar"
+            ],
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "activo": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Cuando se dio de alta."
+          },
+          "servicios": {
+            "type": "number"
+          },
+          "clientas": {
+            "type": "number"
+          },
+          "turnosDelMes": {
+            "type": "number",
+            "description": "Turnos del mes en curso, por la fecha del turno y sin los cancelados."
+          },
+          "cobradoDelMesCentavos": {
+            "type": "number",
+            "description": "Lo cobrado online en el mes en curso, sin lo que ya se devolvio de esos pagos."
+          }
+        },
+        "required": [
+          "slug",
+          "plan",
+          "suscripcionEstado",
+          "pagoHasta",
+          "mercadoPago",
+          "nombre",
+          "activo",
+          "createdAt",
+          "servicios",
+          "clientas",
+          "turnosDelMes",
+          "cobradoDelMesCentavos"
+        ]
+      },
+      "PorPlanDto": {
+        "type": "object",
+        "properties": {
+          "basico": {
+            "type": "number"
+          },
+          "profesional": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "basico",
+          "profesional"
+        ]
+      },
+      "ResumenDto": {
+        "type": "object",
+        "properties": {
+          "mes": {
+            "type": "string",
+            "description": "El mes de los numeros, en la hora de Argentina.",
+            "example": "2026-09"
+          },
+          "centros": {
+            "type": "number"
+          },
+          "centrosActivos": {
+            "type": "number"
+          },
+          "centrosNuevos": {
+            "type": "number",
+            "description": "Los que se dieron de alta en el mes."
+          },
+          "porPlan": {
+            "description": "Los centros activos, por plan vigente.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PorPlanDto"
+              }
+            ]
+          },
+          "ingresoMensualCentavos": {
+            "type": "number",
+            "description": "Suscripciones autorizadas por el precio del plan: lo que se espera cobrar por mes."
+          },
+          "turnosDelMes": {
+            "type": "number"
+          },
+          "cobradoDelMesCentavos": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mes",
+          "centros",
+          "centrosActivos",
+          "centrosNuevos",
+          "porPlan",
+          "ingresoMensualCentavos",
+          "turnosDelMes",
+          "cobradoDelMesCentavos"
+        ]
+      },
+      "UpdateCentroDto": {
+        "type": "object",
+        "properties": {
+          "activo": {
+            "type": "boolean",
+            "description": "false da de baja el centro: sus rutas responden 404 y deja de tomar turnos."
+          }
+        },
+        "required": [
+          "activo"
+        ]
+      },
+      "AdministradoraDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "example": "Lucia Gomez"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "example": "lucia@esteticaluz.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "De 12 a 128 caracteres. El tope existe para que un body gigante no ponga a trabajar a scrypt.",
+            "minLength": 12,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "nombre",
+          "email",
+          "password"
+        ]
+      },
+      "CrearCentroDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80,
+            "example": "Estetica Luz"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Va en la URL del centro: minusculas, numeros y guiones, de 3 a 40 caracteres.",
+            "example": "estetica-luz"
+          },
+          "admin": {
+            "description": "Quien da de alta el centro: queda como su administradora.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdministradoraDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "nombre",
+          "slug",
+          "admin"
+        ]
+      },
+      "CentroCreadoResumenDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "nombre"
+        ]
+      },
+      "CentroCreadoDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT para el header `Authorization: Bearer <token>`.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/UsuarioSesionDto"
+          },
+          "centro": {
+            "$ref": "#/components/schemas/CentroCreadoResumenDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "usuario",
+          "centro"
         ]
       }
     }

@@ -987,9 +987,94 @@ check 'Profesional: a 12 horas sale el recordatorio' 1 "$(esperar 15 "$N_MAILS w
 sleep 3
 check 'Basico: no sale, es del Profesional' 0 "$(sql "$N_MAILS where para = 'recordatorio-basico@example.com' and asunto like 'Recordatorio%'")"
 
+seccion 'Plataforma: superadmin y alta de centros'
+SUPERADMIN=${SEED_SUPERADMIN_EMAIL:-superadmin@turnos.test}
+centro_nuevo() {
+  jq -nc --arg s "$1" --arg p "${2:-una-contrasena-larga}" \
+    '{nombre:"Estetica Luz", slug:$s, admin:{nombre:"Lucia Gomez", email:"Lucia@EsteticaLuz.test", password:$p}}'
+}
+req 'alta de un centro' 201 POST /tenants "$(centro_nuevo estetica-luz)"
+check 'nace con su administradora y la sesion lista' 'estetica-luz admin true' \
+  "$(jq -r '"\(.centro.slug) \(.usuario.rol) \(.accessToken | length > 20)"' "$TMP/body")"
+TOKEN_NUEVO=$(jq -r .accessToken "$TMP/body")
+req 'la administradora nueva entra a su panel' 200 GET /tenants/estetica-luz/suscripcion '' "$TOKEN_NUEVO"
+check 'en el plan Basico' basico "$(jq -r .plan "$TMP/body")"
+req 'el catalogo publico del centro nuevo' 200 GET /tenants/estetica-luz/servicios
+check 'existe, sin tratamientos todavia' 0 "$(jq '.data | length' "$TMP/body")"
+req 'la administradora nueva inicia sesion, con el email normalizado' 201 POST /tenants/estetica-luz/sesiones \
+  '{"email":"lucia@esteticaluz.test","password":"una-contrasena-larga"}'
+req 'el mismo slug otra vez' 409 POST /tenants "$(centro_nuevo estetica-luz)"
+check 'con codigo slug_taken' slug_taken "$(jq -r .code "$TMP/body")"
+req 'un slug reservado' 409 POST /tenants "$(centro_nuevo plataforma)"
+req 'un slug con mayusculas' 400 POST /tenants "$(centro_nuevo Estetica-Luz)"
+req 'una contrasena de menos de 12 caracteres' 400 POST /tenants "$(centro_nuevo otro-centro corta)"
+req 'un campo de mas: el plan no se elige en el alta' 400 POST /tenants "$(centro_nuevo otro-centro | jq -c '.plan = "profesional"')"
+req 'un token de centro no bloquea una ruta publica sin centro' 200 GET /planes '' "$TOKEN"
+
+req 'la plataforma con una contrasena equivocada' 401 POST /plataforma/sesiones \
+  "$(jq -nc --arg e "$SUPERADMIN" '{email:$e, password:"incorrecta"}')"
+req 'la plataforma con un email que no existe' 401 POST /plataforma/sesiones \
+  "$(jq -nc --arg p "$PASSWORD" '{email:"nadie@turnos.test", password:$p}')"
+check 'el mismo codigo para las dos fallas' invalid_credentials "$(jq -r .code "$TMP/body")"
+req 'una administradora de centro no entra a la plataforma' 401 POST /plataforma/sesiones \
+  "$(jq -nc --arg p "$PASSWORD" '{email:"lili@lodelili.test", password:$p}')"
+req 'entrar a la plataforma' 201 POST /plataforma/sesiones "$(jq -nc --arg e "$SUPERADMIN" --arg p "$PASSWORD" '{email:$e, password:$p}')"
+TOKEN_PLATAFORMA=$(jq -r .accessToken "$TMP/body")
+req 'el token de la plataforma en una ruta de centro' 403 GET "$T/reservas" '' "$TOKEN_PLATAFORMA"
+check 'con codigo wrong_tenant' wrong_tenant "$(jq -r .code "$TMP/body")"
+req 'y en una ruta publica de centro' 403 GET "$T/servicios" '' "$TOKEN_PLATAFORMA"
+req 'el token de un centro en la plataforma' 403 GET /plataforma/tenants '' "$TOKEN"
+check 'con codigo wrong_tenant' wrong_tenant "$(jq -r .code "$TMP/body")"
+req 'el token de una clienta en la plataforma' 403 GET /plataforma/tenants '' "$TOKEN_SOFIA"
+req 'un token de centro con el rol cambiado a superadmin' 403 GET /plataforma/tenants '' "$(con_rol "$TOKEN" superadmin)"
+req 'la plataforma sin token' 401 GET /plataforma/tenants
+
+req 'los centros, de a dos' 200 GET '/plataforma/tenants?limit=2' '' "$TOKEN_PLATAFORMA"
+PAGINA1=$(jq -r '[.data[].slug] | join(" ")' "$TMP/body"); CURSOR_C=$(jq -r .nextCursor "$TMP/body")
+req 'la pagina siguiente' 200 GET "/plataforma/tenants?limit=2&cursor=$CURSOR_C" '' "$TOKEN_PLATAFORMA"
+check 'entre las dos estan los cuatro, por slug' 'bella-piel centro-cerrado estetica-luz lo-de-lili' \
+  "$PAGINA1 $(jq -r '[.data[].slug] | join(" ")' "$TMP/body")"
+req 'solo los dados de baja' 200 GET '/plataforma/tenants?activo=false' '' "$TOKEN_PLATAFORMA"
+check 'es el centro cerrado' centro-cerrado "$(jq -r '[.data[].slug] | join(" ")' "$TMP/body")"
+req 'todos los centros' 200 GET '/plataforma/tenants?limit=100' '' "$TOKEN_PLATAFORMA"
+jq '.data[] | select(.slug == "lo-de-lili")' "$TMP/body" >"$TMP/lili.json"
+check 'Lo de Lili: Profesional, con la cuenta de MP esperando reconexion' 'profesional requiere_reconexion' \
+  "$(jq -r '"\(.plan) \(.mercadoPago)"' "$TMP/lili.json")"
+check 'Bella Piel: Basico, con la suscripcion cancelada y la cuenta desconectada' 'basico cancelled sin_conectar' \
+  "$(jq -r '.data[] | select(.slug == "bella-piel") | "\(.plan) \(.suscripcionEstado) \(.mercadoPago)"' "$TMP/body")"
+LILI_ID=$(sql "select id from \"Tenant\" where slug = 'lo-de-lili'")
+MES_BA="date_trunc('month', $ZONA)"
+COBRADO="select coalesce(sum(\"montoCentavos\" - \"reembolsadoCentavos\"), 0) from \"Pago\" where estado in ('aprobado', 'reembolsado') and date_trunc('month', \"aprobadoAt\" at time zone 'UTC' at time zone 'America/Argentina/Buenos_Aires') = $MES_BA"
+check 'sus tratamientos y sus clientas coinciden con la base' \
+  "$(sql "select (select count(*) from \"Servicio\" where \"tenantId\" = '$LILI_ID') || ' ' || (select count(*) from \"Cliente\" where \"tenantId\" = '$LILI_ID')")" \
+  "$(jq -r '"\(.servicios) \(.clientas)"' "$TMP/lili.json")"
+check 'los turnos del mes coinciden con la base' \
+  "$(sql "select count(*) from \"Reserva\" where \"tenantId\" = '$LILI_ID' and estado <> 'cancelada' and date_trunc('month', fecha) = $MES_BA")" \
+  "$(jq -r .turnosDelMes "$TMP/lili.json")"
+check 'y lo cobrado en el mes, sin lo devuelto' "$(sql "$COBRADO and \"tenantId\" = '$LILI_ID'")" "$(jq -r .cobradoDelMesCentavos "$TMP/lili.json")"
+check 'que no es cero: hubo cobros en esta corrida' true "$(jq '.cobradoDelMesCentavos > 0' "$TMP/lili.json")"
+
+req 'el resumen de la plataforma' 200 GET /plataforma/resumen '' "$TOKEN_PLATAFORMA"
+check 'cuatro centros, tres activos, los cuatro nuevos este mes' '4 3 4' \
+  "$(jq -r '"\(.centros) \(.centrosActivos) \(.centrosNuevos)"' "$TMP/body")"
+check 'los activos por plan: Lo de Lili en Profesional, los otros dos en Basico' '2 1' \
+  "$(jq -r '"\(.porPlan.basico) \(.porPlan.profesional)"' "$TMP/body")"
+check 'ninguna suscripcion paga: la de Bella Piel se cancelo' 0 "$(jq -r .ingresoMensualCentavos "$TMP/body")"
+check 'lo cobrado coincide con la base' "$(sql "$COBRADO")" "$(jq -r .cobradoDelMesCentavos "$TMP/body")"
+
+req 'dar de baja el centro nuevo' 200 PATCH /plataforma/tenants/estetica-luz '{"activo":false}' "$TOKEN_PLATAFORMA"
+check 'queda inactivo' false "$(jq -r .activo "$TMP/body")"
+req 'su catalogo publico ya no existe' 404 GET /tenants/estetica-luz/servicios
+req 'y su administradora no entra' 404 GET /tenants/estetica-luz/suscripcion '' "$TOKEN_NUEVO"
+req 'reactivarlo' 200 PATCH /plataforma/tenants/estetica-luz '{"activo":true}' "$TOKEN_PLATAFORMA"
+req 'vuelve a responder' 200 GET /tenants/estetica-luz/servicios
+req 'un centro que no existe' 404 PATCH /plataforma/tenants/no-existe '{"activo":false}' "$TOKEN_PLATAFORMA"
+req 'un campo de mas' 400 PATCH /plataforma/tenants/estetica-luz '{"activo":true,"plan":"profesional"}' "$TOKEN_PLATAFORMA"
+req 'dar de baja un centro con token de centro' 403 PATCH /plataforma/tenants/estetica-luz '{"activo":false}' "$TOKEN_NUEVO"
+
 seccion 'Documentacion'
 req 'el OpenAPI se sirve' 200 GET /docs-json
-check 'documenta los 16 paths: los webhooks no, porque no son para el front' 16 "$(jq '.paths | length' "$TMP/body")"
+check 'documenta los 21 paths: los webhooks no, porque no son para el front' 21 "$(jq '.paths | length' "$TMP/body")"
 check 'cada operacion tiene su resumen en espanol' true \
   "$(jq '[.paths | to_entries[] | .value | to_entries[] | .value.summary // ""] | all(length > 0) and any(test("centro"))' "$TMP/body")"
 check 'ningun resumen es un parrafo: el razonamiento no va al OpenAPI' true \

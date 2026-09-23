@@ -39,14 +39,22 @@ export class TareasService implements OnApplicationShutdown {
 
   iniciar(): void {
     this.paradas = [
-      this.cadaTanto('mails', 30_000, () =>
-        this.notificaciones.despacharPendientes(),
+      // Un centro dado de baja deja de tomar turnos, pero lo que les debe a sus clientas no:
+      // los reembolsos, y los mails que los cuentan, siguen saliendo.
+      this.cadaTanto(
+        'mails',
+        30_000,
+        () => this.notificaciones.despacharPendientes(),
+        { tambienInactivos: true },
       ),
       this.cadaTanto('recordatorios', 10 * 60_000, (centro) =>
         this.recordatorios.enviar(centro),
       ),
-      this.cadaTanto('reembolsos', 60_000, () =>
-        this.cobros.procesarReembolsos(),
+      this.cadaTanto(
+        'reembolsos',
+        60_000,
+        () => this.cobros.procesarReembolsos(),
+        { tambienInactivos: true },
       ),
       this.cadaTanto('vencimientos', 60_000, (centro) =>
         this.cobros.vencerImpagas(centro),
@@ -66,12 +74,13 @@ export class TareasService implements OnApplicationShutdown {
     nombre: string,
     ms: number,
     fn: (centro: Centro) => Promise<void>,
+    { tambienInactivos = false } = {},
   ): () => void {
     let corriendo = false;
     const timer = setInterval(() => {
       if (corriendo) return;
       corriendo = true;
-      this.porCadaCentro(nombre, fn)
+      this.porCadaCentro(nombre, fn, tambienInactivos)
         .catch((e: unknown) => this.logger.error(`${nombre}: ${String(e)}`))
         .finally(() => {
           corriendo = false;
@@ -86,10 +95,11 @@ export class TareasService implements OnApplicationShutdown {
   private async porCadaCentro(
     nombre: string,
     fn: (centro: Centro) => Promise<void>,
+    tambienInactivos: boolean,
   ): Promise<void> {
     // Tenant es la raiz y la extension no lo filtra: es lo unico que se lee sin contexto.
     const filas = await this.db.tenant.findMany({
-      where: { activo: true },
+      where: tambienInactivos ? {} : { activo: true },
       select: {
         id: true,
         slug: true,

@@ -103,6 +103,9 @@ export const env = {
   // limitaria a si mismo. El limite real se prueba aparte, con
   // verificacion/verificar-limite.sh contra la configuracion de default.
   throttleLimit: Number(process.env.THROTTLE_LIMIT ?? 5),
+  // El alta de centros va por hora y mas baja: crea una cuenta y un centro por pedido.
+  // THROTTLE_LIMIT la pisa igual que a las otras, para la verificacion.
+  altasDeCentroPorHora: Number(process.env.THROTTLE_LIMIT ?? 3),
   corsOrigin,
   trustProxy: trustProxy === undefined ? undefined : Number(trustProxy),
   email: {

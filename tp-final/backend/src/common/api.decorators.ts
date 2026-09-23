@@ -71,3 +71,18 @@ export const SoloClienta = () =>
       description: 'El token es de otro centro, o no es de una clienta.',
     }),
   );
+
+/** Ruta de la plataforma: exige el rol de superadmin y documenta los rechazos. */
+export const SoloSuperadmin = () =>
+  applyDecorators(
+    Roles('superadmin'),
+    ApiBearerAuth(),
+    ApiUnauthorizedResponse({
+      type: ErrorDto,
+      description: 'Falta el token o no es valido.',
+    }),
+    ApiForbiddenResponse({
+      type: ErrorDto,
+      description: 'El token no es de la plataforma.',
+    }),
+  );

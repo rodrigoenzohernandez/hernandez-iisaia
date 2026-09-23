@@ -34,6 +34,10 @@ export const Roles = (...roles: Rol[]) => SetMetadata(ROLES, roles);
 export const LimiteEstricto = () =>
   Throttle({ default: { limit: env.throttleLimit, ttl: 60_000 } });
 
+/** El alta de centros: por hora, porque cada pedido crea un centro y una cuenta. */
+export const LimiteAltaDeCentro = () =>
+  Throttle({ default: { limit: env.altasDeCentroPorHora, ttl: 3_600_000 } });
+
 /** El centro de la request, resuelto por el guard desde el slug del path. */
 export type TenantRequest = {
   slug: string;

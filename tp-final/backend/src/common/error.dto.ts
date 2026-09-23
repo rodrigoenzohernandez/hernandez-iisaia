@@ -46,6 +46,7 @@ export const CODIGOS_DE_ERROR = [
   'plan_limit_reached', // lo pedido pasa un limite del plan del centro
   'mercadopago_not_connected', // el plan pide la cuenta de Mercado Pago del centro conectada
   'invalid_signature', // la firma del aviso de Mercado Pago no es valida
+  'slug_taken', // ya hay un centro con ese slug, o es una palabra reservada
 ] as const;
 
 export type CodigoDeError = (typeof CODIGOS_DE_ERROR)[number];
