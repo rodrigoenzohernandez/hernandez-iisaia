@@ -42,6 +42,10 @@ export const CODIGOS_DE_ERROR = [
   'invalid_state', // el state de la conexion con Mercado Pago vencio o no es de este centro
   'mp_account_change_blocked', // hay pagos de turnos futuros que dependen de esta cuenta
   'mercadopago_not_configured', // la plataforma no tiene configurada la app de Mercado Pago
+  'monthly_limit_reached', // el centro llego al tope de turnos del mes de su plan
+  'plan_limit_reached', // lo pedido pasa un limite del plan del centro
+  'mercadopago_not_connected', // el plan pide la cuenta de Mercado Pago del centro conectada
+  'invalid_signature', // la firma del aviso de Mercado Pago no es valida
 ] as const;
 
 export type CodigoDeError = (typeof CODIGOS_DE_ERROR)[number];

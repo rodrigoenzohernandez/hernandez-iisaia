@@ -26,6 +26,7 @@ import {
 import type { CursorPageDto } from '../common/pagination/cursor-page.dto.js';
 import { paginate } from '../common/pagination/paginate.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
+import { PLANES } from '../planes/planes.js';
 import {
   avisoCancelacion,
   avisoTurnoNuevo,
@@ -273,12 +274,16 @@ export class ReservasService {
 
     const ahora = ahoraEn(tenant.zonaHoraria);
     exigirHorarioReservable(dto.fecha, dto.hora, ahora, cargaDelCentro);
+    const plan = PLANES[tenant.plan];
+    await this.exigirTopeDelMes(dto.fecha, plan.turnosPorMes);
 
     // Que se cobra online, y con que cuenta. Se decide antes de la transaccion: una llamada a
-    // Mercado Pago no va nunca adentro.
-    const mp = cargaDelCentro
-      ? null
-      : await this.cuentas.delCentro(tenant.slug);
+    // Mercado Pago no va nunca adentro. Sin el plan que lo incluye no se cobra online, aunque
+    // la cuenta siga conectada.
+    const mp =
+      cargaDelCentro || !plan.cobroOnline
+        ? null
+        : await this.cuentas.delCentro(tenant.slug);
     let montoOnline = 0;
     if (!cargaDelCentro && dto.metodoPago === MetodoPago.mercadopago) {
       if (!mp) {
@@ -313,6 +318,7 @@ export class ReservasService {
         horaFin,
         duracionMinutos: servicio.duracionMinutos,
         email: contacto.email,
+        capacidadMaxima: plan.capacidadMaxima,
       });
 
       const fila = await tx.reserva.create({
@@ -387,6 +393,35 @@ export class ReservasService {
     }
     this.notificaciones.despacharAhora();
     return this.leer(tenant, id);
+  }
+
+  /**
+   * El tope de turnos por mes del plan, contados por el mes del turno.
+   *
+   * ponytail: afuera de la transaccion, asi que es un tope blando: dos altas simultaneas
+   * pueden pasarlo por una. Llevarlo adentro del SERIALIZABLE si algun centro lo aprovecha.
+   */
+  private async exigirTopeDelMes(
+    fecha: string,
+    tope: number | null,
+  ): Promise<void> {
+    if (tope === null) return;
+    const [anio, mes] = fecha.split('-').map(Number);
+    const tomados = await this.db.reserva.count({
+      where: {
+        fecha: {
+          gte: new Date(Date.UTC(anio, mes - 1, 1)),
+          lt: new Date(Date.UTC(anio, mes, 1)),
+        },
+        estado: { not: 'cancelada' },
+      },
+    });
+    if (tomados >= tope) {
+      throw new ConflictException({
+        code: 'monthly_limit_reached',
+        message: 'El centro ya no toma mas turnos para ese mes.',
+      });
+    }
   }
 
   /** El listado del centro, o el de una sola clienta si viene clienteId. */
@@ -666,6 +701,7 @@ export class ReservasService {
         horaFin,
         duracionMinutos: duracion,
         excluirId: reservaId,
+        capacidadMaxima: PLANES[tenant.plan].capacidadMaxima,
       });
       await tx.reserva.update({
         where: { id: reservaId },

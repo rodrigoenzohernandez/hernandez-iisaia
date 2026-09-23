@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { TenantRequest } from '../common/decorators.js';
 import {
   aDate,
   aHora,
@@ -17,6 +18,7 @@ import {
   ocupacionMaxima,
   sumarDias,
 } from '../common/horario.js';
+import { PLANES } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { reservaViva } from '../reservas/cupo.js';
 import type { DisponibilidadDto, SlotDto } from './dto/slot.dto.js';
@@ -26,7 +28,7 @@ export class DisponibilidadService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
   async find(
-    tenant: { zonaHoraria: string },
+    tenant: TenantRequest,
     servicioId: string,
     fecha: string,
   ): Promise<DisponibilidadDto> {
@@ -75,6 +77,10 @@ export class DisponibilidadService {
       }),
     ]);
 
+    // La de la franja con el tope del plan, igual que en el alta: un centro que bajo de plan
+    // no conserva el turno doble.
+    const capacidad = (v: { capacidad: number }) =>
+      Math.min(v.capacidad, PLANES[tenant.plan].capacidadMaxima);
     const data: SlotDto[] = ventanas
       .flatMap((ventana) =>
         iniciosDeGrilla(ventana, servicio.duracionMinutos).map((hora) => {
@@ -87,7 +93,7 @@ export class DisponibilidadService {
             hora,
             // Piso en 0: si la capacidad bajo con reservas ya tomadas, el sobrecupo no se
             // reporta como un numero negativo.
-            cuposDisponibles: Math.max(0, ventana.capacidad - ocupados),
+            cuposDisponibles: Math.max(0, capacidad(ventana) - ocupados),
           };
         }),
       )

@@ -15,6 +15,7 @@ import {
   type PaymentStatus,
 } from '../lib/mercadopago/index.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
+import { PLANES } from '../planes/planes.js';
 import {
   avisoTurnoNuevo,
   pagoDevuelto,
@@ -266,6 +267,7 @@ export class CobrosService {
           horaFin: reserva.horaFin,
           duracionMinutos: reserva.servicio.duracionMinutos,
           excluirId: reserva.id,
+          capacidadMaxima: PLANES[tenant.plan].capacidadMaxima,
         });
       } catch (e) {
         if (!(e instanceof ConflictException)) throw e;

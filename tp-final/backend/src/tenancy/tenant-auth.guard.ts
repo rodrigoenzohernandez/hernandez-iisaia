@@ -15,6 +15,7 @@ import {
   type RequestConTenant,
   type Rol,
 } from '../common/decorators.js';
+import { camposDelPlan, planVigente } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { TenantContext } from './tenant-context.js';
 
@@ -57,6 +58,7 @@ export class TenantAuthGuard implements CanActivate {
           nombre: true,
           zonaHoraria: true,
           activo: true,
+          ...camposDelPlan,
         },
       });
       // Un centro dado de baja responde igual que uno que no existe: no hay por que
@@ -74,6 +76,7 @@ export class TenantAuthGuard implements CanActivate {
         slug: tenant.slug,
         nombre: tenant.nombre,
         zonaHoraria: tenant.zonaHoraria,
+        plan: planVigente(tenant),
       };
     }
 

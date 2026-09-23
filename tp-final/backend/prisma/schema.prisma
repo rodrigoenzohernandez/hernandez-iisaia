@@ -59,6 +59,12 @@ enum MetodoPago {
   mercadopago
 }
 
+/// Los planes de la plataforma. Lo que habilita cada uno vive en src/planes/planes.ts.
+enum Plan {
+  basico
+  profesional
+}
+
 enum EstadoNotificacion {
   pendiente
   enviada
@@ -78,6 +84,21 @@ model Tenant {
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  /// La suscripcion del centro a la plataforma. Vive en la raiz y no en una tabla con
+  /// tenantId porque el webhook de suscripciones llega a la ruta de la plataforma, sin centro
+  /// en la URL: con la extension, una tabla filtrada seria inalcanzable desde ahi.
+  ///
+  /// El plan vigente no se guarda: se calcula de estos campos (src/planes/planes.ts), asi un
+  /// plan no puede quedar activo porque un aviso no llego.
+  suscripcionPlan   Plan?
+  /// El id de la preapproval en Mercado Pago.
+  suscripcionMpId   String?   @unique
+  suscripcionEstado String?
+  /// Donde la administradora autoriza la suscripcion, mientras esta pendiente.
+  suscripcionUrl    String?
+  /// Hasta cuando esta pago el plan. Cada cobro mensual aprobado lo extiende.
+  planPagoHasta     DateTime?
 
   usuarios          Usuario[]
   servicios         Servicio[]

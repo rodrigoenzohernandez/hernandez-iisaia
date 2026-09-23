@@ -153,6 +153,11 @@ const TENANTS = [
     slug: 'lo-de-lili',
     nombre: 'Lo de Lili',
     activo: true,
+    // Cliente fundadora: el Profesional de cortesia, sin suscripcion en Mercado Pago.
+    plan: {
+      suscripcionPlan: 'profesional' as const,
+      planPagoHasta: new Date('2099-12-31'),
+    },
     email: 'lili@lodelili.test',
     clienta: 'clienta@lodelili.test',
     servicios: SERVICIOS_LILI,
@@ -208,6 +213,7 @@ async function main(): Promise<void> {
         slug: t.slug,
         nombre: t.nombre,
         activo: t.activo,
+        ...t.plan,
         usuarios: {
           create: { email: t.email, nombre: 'Administradora', passwordHash },
         },
@@ -237,7 +243,8 @@ async function main(): Promise<void> {
   }
 
   const centros = TENANTS.map(
-    (t) => `${t.slug} (${t.servicios.length} servicios)`,
+    (t) =>
+      `${t.slug} (${t.servicios.length} servicios, ${t.plan ? 'Profesional' : 'Básico'})`,
   ).join(', ');
   console.log(
     `Seed OK. Centros: ${centros}.` +

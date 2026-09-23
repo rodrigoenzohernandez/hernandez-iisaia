@@ -4,6 +4,7 @@ import {
   SetMetadata,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import type { Plan } from '@prisma/client';
 import { env } from '../env.js';
 
 export const PUBLICO = 'publico';
@@ -38,6 +39,8 @@ export type TenantRequest = {
   slug: string;
   nombre: string;
   zonaHoraria: string;
+  /** El plan que rige hoy, ya calculado: los limites se leen de PLANES[plan]. */
+  plan: Plan;
 };
 
 /** La persona autenticada, si el request trajo un Bearer valido. */

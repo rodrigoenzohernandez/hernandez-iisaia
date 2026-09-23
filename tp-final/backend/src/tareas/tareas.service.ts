@@ -6,19 +6,16 @@ import {
 } from '@nestjs/common';
 import { CobrosService } from '../cobros/cobros.service.js';
 import { CuentasMercadoPagoService } from '../cobros/cuentas-mercadopago.service.js';
+import type { TenantRequest } from '../common/decorators.js';
 import { env } from '../env.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
+import { camposDelPlan, planVigente } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { RecordatoriosService } from '../reservas/recordatorios.service.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 
-/** Lo que una tarea sabe del centro sobre el que corre. */
-export type Centro = {
-  id: string;
-  slug: string;
-  nombre: string;
-  zonaHoraria: string;
-};
+/** Lo que una tarea sabe del centro sobre el que corre: lo mismo que una request, mas el id. */
+export type Centro = TenantRequest & { id: string };
 
 /**
  * Todas las tareas periodicas de la API, en un solo lugar para ver que corre en segundo plano.
@@ -91,11 +88,19 @@ export class TareasService implements OnApplicationShutdown {
     fn: (centro: Centro) => Promise<void>,
   ): Promise<void> {
     // Tenant es la raiz y la extension no lo filtra: es lo unico que se lee sin contexto.
-    const centros = await this.db.tenant.findMany({
+    const filas = await this.db.tenant.findMany({
       where: { activo: true },
-      select: { id: true, slug: true, nombre: true, zonaHoraria: true },
+      select: {
+        id: true,
+        slug: true,
+        nombre: true,
+        zonaHoraria: true,
+        ...camposDelPlan,
+      },
     });
-    for (const centro of centros) {
+    for (const fila of filas) {
+      const { id, slug, nombre, zonaHoraria } = fila;
+      const centro = { id, slug, nombre, zonaHoraria, plan: planVigente(fila) };
       // Con runAs, cada query de fn queda sellada con el centro, como en una request. Un
       // centro que falla no frena a los demas.
       await TenantContext.runAs(centro.id, () => fn(centro)).catch(

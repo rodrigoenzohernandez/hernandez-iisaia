@@ -836,13 +836,6 @@ req 'cambiar a otra cuenta con turnos pagos por venir' 409 POST "$T/cuenta-merca
 check 'con codigo mp_account_change_blocked' mp_account_change_blocked "$(jq -r .code "$TMP/body")"
 req 'desconectarla con turnos pagos por venir' 409 DELETE "$T/cuenta-mercadopago" '' "$TOKEN"
 
-SEED_MP_ACCESS_TOKEN=APP_USR-mock-222333 SEED_MP_PUBLIC_KEY=APP_USR-pk-222333 SEED_MP_USER_ID=222333 \
-  node "$RAIZ/prisma/conectar-mp.ts" bella-piel >/dev/null
-req 'Bella Piel, conectada con credenciales de prueba y sin OAuth' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$LUNES3" 12:00 bella@example.com)"
-check 'cobra la sena como cualquier cuenta conectada' pendiente "$(jq -r .estado "$TMP/body")"
-check 'con el token de prueba de Bella Piel' true \
-  "$(llamadas_mp | jq --arg r "$(jq -r .id "$TMP/body")" 'any(.[]; .path == "/checkout/preferences" and .cuerpo.external_reference == $r and (.token | endswith("-222333")))')"
-
 REFRESH_ANTES=$(sql "select \"refreshTokenCifrado\" from \"CuentaMercadoPago\" where \"mpUserId\" = '111222'")
 sql "update \"CuentaMercadoPago\" set \"expiraAt\" = now() + interval '1 day' where \"mpUserId\" = '111222'" >/dev/null
 check 'a un dia de vencer, la tarea renueva el token' t \
@@ -858,9 +851,145 @@ req 'mientras tanto, un turno en efectivo' 201 POST "$T/reservas" "$(reserva "$S
 check 'entra sin sena, como en el MVP' 'confirmada null' "$(jq -r '"\(.estado) \(.cobro)"' "$TMP/body")"
 req 'y uno con Mercado Pago' 409 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 17:15 reconexion2@example.com | jq -c '.metodoPago = "mercadopago"')"
 
+seccion 'Planes y suscripcion'
+printf '\n> Esta seccion firma los avisos de la plataforma con el secreto de start:verify, igual que los firma Mercado Pago, y mueve con UPDATE la fecha hasta la que esta pago el plan.\n' >>"$TMP/casos.md"
+# aviso_plataforma <tema> <id> [secreto] — un aviso de la cuenta de la plataforma, firmado como
+# lo firma Mercado Pago: HMAC-SHA256 de "id:<data.id>;request-id:<x-request-id>;ts:<ts>;".
+aviso_plataforma() {
+  local ts rid firma
+  ts=$(date +%s); rid="verificacion-$N-$RANDOM"
+  firma=$(printf 'id:%s;request-id:%s;ts:%s;' "$2" "$rid" "$ts" | openssl dgst -sha256 -hmac "${3:-secreto-webhook-mock}" | sed 's/^.* //')
+  curl -s --max-time 30 -o "$TMP/body" -w '%{http_code}' -X POST "$BASE/webhooks/mercadopago?type=$1&data.id=$2" \
+    -H "x-signature: ts=$ts,v1=$firma" -H "x-request-id: $rid" -H 'Content-Type: application/json' \
+    -d "$(jq -nc --arg t "$1" --arg i "$2" '{type:$t, data:{id:$i}}')"
+}
+pago_hasta() { sql "select \"planPagoHasta\" from \"Tenant\" where slug = 'bella-piel'"; }
+
+req 'los planes, para la pagina de precios' 200 GET /planes
+check 'dos: el gratuito y el que le sigue' 'basico 0 60 1 false false|profesional 1990000 null 20 true true' \
+  "$(jq -r 'map("\(.id) \(.precioCentavos) \(.turnosPorMes) \(.capacidadMaxima) \(.recordatorios) \(.cobroOnline)") | join("|")' "$TMP/body")"
+req 'el plan de Bella Piel' 200 GET "$OTRO/suscripcion" '' "$TOKEN_OTRO"
+check 'Basico y sin suscripcion' 'basico null' "$(jq -r '"\(.plan) \(.suscripcion)"' "$TMP/body")"
+req 'el plan de Lo de Lili' 200 GET "$T/suscripcion" '' "$TOKEN"
+check 'Profesional de cortesia, sin suscripcion en Mercado Pago' 'profesional null' "$(jq -r '"\(.plan) \(.suscripcion)"' "$TMP/body")"
+req 'el plan con token de clienta' 403 GET "$T/suscripcion" '' "$TOKEN_SOFIA"
+
+req 'las franjas de Bella Piel' 200 GET "$OTRO/ventanas-atencion" '' "$TOKEN_OTRO"
+# La primera es la del lunes a la manana: la que despues se sube a capacidad 2.
+CAP2_OTRO=$(jq -c '{data} | .data[0].capacidad = 2' "$TMP/body")
+req 'Basico: capacidad 2 en una franja' 403 PUT "$OTRO/ventanas-atencion" "$CAP2_OTRO" "$TOKEN_OTRO"
+check 'con codigo plan_limit_reached' plan_limit_reached "$(jq -r .code "$TMP/body")"
+
+# El tope de 60 turnos por mes, en un mes que ninguna otra seccion toca: el que contiene el dia
+# 53 desde hoy empieza despues del ultimo dia que usan las demas. Diez horarios por dia habil,
+# que entran en la agenda de Bella Piel con cualquiera de sus tratamientos.
+HORARIOS_MES=$(node -e '
+  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const d = new Date(`${hoy}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 53); d.setUTCDate(1);
+  const horas = ["09:00", "09:45", "10:30", "11:15", "12:00", "15:00", "15:45", "16:30", "17:15", "18:00"];
+  const lista = [];
+  for (; lista.length < 62; d.setUTCDate(d.getUTCDate() + 1)) {
+    if (d.getUTCDay() >= 1 && d.getUTCDay() <= 5) for (const h of horas) lista.push(`${d.toISOString().slice(0, 10)} ${h}`);
+  }
+  console.log(lista.slice(0, 62).join("\n"));
+')
+ALTAS_MES=0
+while read -r f h; do
+  c=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' -X POST "$BASE$OTRO/reservas" \
+    -H 'Content-Type: application/json' -d "$(reserva "$S_OTRO" "$f" "$h" tope@example.com)")
+  [[ $c == 201 ]] && ALTAS_MES=$((ALTAS_MES + 1))
+done < <(head -60 <<<"$HORARIOS_MES")
+printf '\n60 altas seguidas en Bella Piel, en el mes de `%s`.\n' "$(head -1 <<<"$HORARIOS_MES" | cut -c1-7)" >>"$TMP/casos.md"
+check 'Basico: entran los 60 turnos del mes' 60 "$ALTAS_MES"
+read -r F61 H61 < <(sed -n 61p <<<"$HORARIOS_MES")
+read -r F62 H62 < <(sed -n 62p <<<"$HORARIOS_MES")
+req 'Basico: el turno 61 del mes' 409 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$F61" "$H61" tope@example.com)"
+check 'con codigo monthly_limit_reached' monthly_limit_reached "$(jq -r .code "$TMP/body")"
+UNO_DEL_MES=$(sql "select id from \"Reserva\" where \"clienteEmail\" = 'tope@example.com' limit 1")
+req 'el centro cancela uno de esos turnos' 200 PATCH "$OTRO/reservas/$UNO_DEL_MES" '{"estado":"cancelada"}' "$TOKEN_OTRO"
+req 'un turno cancelado no cuenta: ahora el 61 entra' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$F61" "$H61" tope@example.com)"
+req 'la carga del centro tambien respeta el tope' 409 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$F62" "$H62" tope@example.com)" "$TOKEN_OTRO"
+
+req 'Profesional sin la cuenta de Mercado Pago conectada' 409 PUT "$OTRO/suscripcion" '{"plan":"profesional"}' "$TOKEN_OTRO"
+check 'con codigo mercadopago_not_connected' mercadopago_not_connected "$(jq -r .code "$TMP/body")"
+SEED_MP_ACCESS_TOKEN=APP_USR-mock-222333 SEED_MP_PUBLIC_KEY=APP_USR-pk-222333 SEED_MP_USER_ID=222333 \
+  node "$RAIZ/prisma/conectar-mp.ts" bella-piel >/dev/null
+req 'Bella Piel, conectada con credenciales de prueba y sin OAuth' 200 GET "$OTRO/cuenta-mercadopago" '' "$TOKEN_OTRO"
+check 'la misma cuenta que dejaria OAuth' 'true 222333 false' "$(jq -r '"\(.conectada) \(.mpUserId) \(.liveMode)"' "$TMP/body")"
+req 'en Basico y con la cuenta conectada, un turno en efectivo' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$LUNES3" 15:45 basico@example.com)"
+check 'no cobra sena: el cobro online es del Profesional' 'confirmada null' "$(jq -r '"\(.estado) \(.cobro)"' "$TMP/body")"
+
+req 'suscribirse al Profesional' 200 PUT "$OTRO/suscripcion" '{"plan":"profesional","emailPagador":"Pagos@BellaPiel.test"}' "$TOKEN_OTRO"
+check 'queda pendiente de autorizar, y rige el Basico hasta el primer cobro' 'basico profesional pending' \
+  "$(jq -r '"\(.plan) \(.suscripcion.plan) \(.suscripcion.estado)"' "$TMP/body")"
+check 'el link para autorizar llega sin activation=true (issue #480)' true \
+  "$(jq '.suscripcion.url | test("preapproval_id=") and (test("activation") | not)' "$TMP/body")"
+SUB=$(sql "select \"suscripcionMpId\" from \"Tenant\" where slug = 'bella-piel'")
+check 'la crea la cuenta de la plataforma, atada al slug y con el email del pagador' true \
+  "$(llamadas_mp | jq '[.[] | select(.path == "/preapproval")][0] | (.token | endswith("-900")) and .cuerpo.external_reference == "bella-piel" and .cuerpo.payer_email == "pagos@bellapiel.test" and .cuerpo.auto_recurring.transaction_amount == 19900')"
+req 'pedir el Profesional otra vez' 200 PUT "$OTRO/suscripcion" '{"plan":"profesional"}' "$TOKEN_OTRO"
+check 'no crea una segunda suscripcion' 1 "$(llamadas_mp | jq '[.[] | select(.path == "/preapproval")] | length')"
+req 'desconectar Mercado Pago con la suscripcion en curso' 409 DELETE "$OTRO/cuenta-mercadopago" '' "$TOKEN_OTRO"
+check 'con codigo mp_account_change_blocked' mp_account_change_blocked "$(jq -r .code "$TMP/body")"
+
+check 'un aviso de la plataforma sin firma: 401' 401 \
+  "$(curl -s --max-time 30 -o "$TMP/body" -w '%{http_code}' -X POST "$BASE/webhooks/mercadopago?type=subscription_preapproval&data.id=$SUB" -H 'Content-Type: application/json' -d '{}')"
+check 'con codigo invalid_signature' invalid_signature "$(jq -r .code "$TMP/body")"
+check 'firmado con otro secreto: 401' 401 "$(aviso_plataforma subscription_preapproval "$SUB" otro-secreto)"
+check 'y no llega a consultar a Mercado Pago' 0 "$(llamadas_mp | jq --arg s "$SUB" '[.[] | select(.path == "/preapproval/\($s)")] | length')"
+FACTURA=$(mock /__test/facturas -X POST -d "$(jq -nc --arg s "$SUB" '{suscripcion:$s, status:"approved"}')" | jq -r .id)
+check 'Mercado Pago avisa, firmado, que la autorizaron' 200 "$(aviso_plataforma subscription_preapproval "$SUB")"
+check 'la suscripcion queda autorizada' authorized "$(sql "select \"suscripcionEstado\" from \"Tenant\" where slug = 'bella-piel'")"
+check 'y avisa el primer cobro, aprobado' 200 "$(aviso_plataforma subscription_authorized_payment "$FACTURA")"
+req 'el plan despues del cobro' 200 GET "$OTRO/suscripcion" '' "$TOKEN_OTRO"
+check 'rige el Profesional, sin link pendiente' 'profesional authorized null' "$(jq -r '"\(.plan) \(.suscripcion.estado) \(.suscripcion.url)"' "$TMP/body")"
+check 'pago por un mes desde el cobro' t "$(sql "select \"planPagoHasta\" > now() + interval '27 days' from \"Tenant\" where slug = 'bella-piel'")"
+check 'lo consulto con el token de la plataforma' true \
+  "$(llamadas_mp | jq --arg f "$FACTURA" 'any(.[]; .path == "/authorized_payments/\($f)" and (.token | endswith("-900")))')"
+HASTA=$(pago_hasta)
+check 'el mismo aviso del cobro otra vez' 200 "$(aviso_plataforma subscription_authorized_payment "$FACTURA")"
+check 'no suma otro mes: se escribe el estado, no un incremento' "$HASTA" "$(pago_hasta)"
+
+sql "update \"Tenant\" set \"planPagoHasta\" = now() - interval '3 days' where slug = 'bella-piel'" >/dev/null
+req 'un cobro que viene fallando hace 3 dias' 200 GET "$OTRO/suscripcion" '' "$TOKEN_OTRO"
+check 'sigue en Profesional: 10 dias de gracia para los reintentos de MP' profesional "$(jq -r .plan "$TMP/body")"
+sql "update \"Tenant\" set \"planPagoHasta\" = now() - interval '11 days' where slug = 'bella-piel'" >/dev/null
+req 'pasada la gracia' 200 GET "$OTRO/suscripcion" '' "$TOKEN_OTRO"
+check 'vuelve solo al Basico, sin ninguna tarea' basico "$(jq -r .plan "$TMP/body")"
+check 'reprocesar el ultimo cobro devuelve la fecha que ese cobro paga' 200 "$(aviso_plataforma subscription_authorized_payment "$FACTURA")"
+check 'la del cobro, no una nueva' "$HASTA" "$(pago_hasta)"
+
+req 'en Profesional, un turno en efectivo' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$LUNES3" 12:00 bella@example.com)"
+check 'cobra la sena como cualquier cuenta conectada' pendiente "$(jq -r .estado "$TMP/body")"
+check 'con el token de prueba de Bella Piel' true \
+  "$(llamadas_mp | jq --arg r "$(jq -r .id "$TMP/body")" 'any(.[]; .path == "/checkout/preferences" and .cuerpo.external_reference == $r and (.token | endswith("-222333")))')"
+req 'en Profesional, capacidad 2' 200 PUT "$OTRO/ventanas-atencion" "$CAP2_OTRO" "$TOKEN_OTRO"
+req 'la agenda de un lunes libre' 200 GET "$OTRO/servicios/$S_OTRO/disponibilidad?fecha=$LUNES2"
+check 'ofrece dos lugares a las 09:00' 2 "$(jq '[.data[] | select(.hora == "09:00")][0].cuposDisponibles' "$TMP/body")"
+
+req 'bajar al Basico' 200 PUT "$OTRO/suscripcion" '{"plan":"basico"}' "$TOKEN_OTRO"
+check 'cancela la suscripcion, y lo pagado sigue' 'profesional cancelled' "$(jq -r '"\(.plan) \(.suscripcion.estado)"' "$TMP/body")"
+check 'la cancela en Mercado Pago, con el token de la plataforma' true \
+  "$(llamadas_mp | jq --arg s "$SUB" 'any(.[]; .path == "/preapproval/\($s)" and .metodo == "PUT" and .cuerpo.status == "cancelled" and (.token | endswith("-900")))')"
+sql "update \"Tenant\" set \"planPagoHasta\" = now() - interval '1 day' where slug = 'bella-piel'" >/dev/null
+req 'un dia despues de lo pagado' 200 GET "$OTRO/suscripcion" '' "$TOKEN_OTRO"
+check 'Basico: una suscripcion cancelada no tiene gracia' basico "$(jq -r .plan "$TMP/body")"
+req 'la misma agenda despues de bajar de plan' 200 GET "$OTRO/servicios/$S_OTRO/disponibilidad?fecha=$LUNES2"
+check 'la franja dice 2, pero ofrece uno: no conserva el turno doble' 1 "$(jq '[.data[] | select(.hora == "09:00")][0].cuposDisponibles' "$TMP/body")"
+req 'desconectar Mercado Pago ya sin suscripcion' 200 DELETE "$OTRO/cuenta-mercadopago" '' "$TOKEN_OTRO"
+
+req 'Basico: un turno de Bella Piel' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$LUNES3" 17:15 recordatorio-basico@example.com)"
+a_doce_horas "$(jq -r .id "$TMP/body")"
+req 'y uno de Lo de Lili, de control' 201 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 17:15 recordatorio-pro@example.com)"
+a_doce_horas "$(jq -r .id "$TMP/body")"
+check 'Profesional: a 12 horas sale el recordatorio' 1 "$(esperar 15 "$N_MAILS where para = 'recordatorio-pro@example.com' and asunto like 'Recordatorio%'" 1)"
+# Una vuelta mas de la tarea, que recorre todos los centros en cada corrida.
+sleep 3
+check 'Basico: no sale, es del Profesional' 0 "$(sql "$N_MAILS where para = 'recordatorio-basico@example.com' and asunto like 'Recordatorio%'")"
+
 seccion 'Documentacion'
 req 'el OpenAPI se sirve' 200 GET /docs-json
-check 'documenta los 14 paths: el webhook no, porque no es para el front' 14 "$(jq '.paths | length' "$TMP/body")"
+check 'documenta los 16 paths: los webhooks no, porque no son para el front' 16 "$(jq '.paths | length' "$TMP/body")"
 check 'cada operacion tiene su resumen en espanol' true \
   "$(jq '[.paths | to_entries[] | .value | to_entries[] | .value.summary // ""] | all(length > 0) and any(test("centro"))' "$TMP/body")"
 check 'ningun resumen es un parrafo: el razonamiento no va al OpenAPI' true \

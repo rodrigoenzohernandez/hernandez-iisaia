@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { Plan } from '@prisma/client';
 import {
   aDate,
   aFecha,
@@ -8,6 +9,7 @@ import {
 } from '../common/horario.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
 import { recordatorio } from '../notificaciones/plantillas.js';
+import { PLANES } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 
 /** Con cuanta anticipacion sale el recordatorio. */
@@ -21,7 +23,13 @@ export class RecordatoriosService {
   ) {}
 
   /** Encola el recordatorio de cada turno confirmado del centro que empieza en menos de 24 h. */
-  async enviar(centro: { nombre: string; zonaHoraria: string }): Promise<void> {
+  async enviar(centro: {
+    nombre: string;
+    zonaHoraria: string;
+    plan: Plan;
+  }): Promise<void> {
+    // Los recordatorios son del plan Profesional.
+    if (!PLANES[centro.plan].recordatorios) return;
     const ahora = ahoraEn(centro.zonaHoraria);
     const candidatas = await this.db.reserva.findMany({
       where: {

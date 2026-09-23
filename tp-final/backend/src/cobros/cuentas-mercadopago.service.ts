@@ -159,6 +159,19 @@ export class CuentasMercadoPagoService {
   }
 
   async desconectar(): Promise<CuentaMercadoPagoDto> {
+    // Tenant es la raiz y la extension no lo filtra: el where va explicito.
+    const t = await this.db.tenant.findFirstOrThrow({
+      where: { id: TenantContext.require() },
+      select: { suscripcionMpId: true, suscripcionEstado: true },
+    });
+    // El Profesional existe para cobrar online: mientras se paga, la cuenta no se va.
+    if (t.suscripcionMpId && t.suscripcionEstado !== 'cancelled') {
+      throw new ConflictException({
+        code: 'mp_account_change_blocked',
+        message:
+          'Tu plan cobra con esta cuenta: para desconectarla, primero pasate al plan Básico.',
+      });
+    }
     await this.exigirSinPagosReembolsables();
     await this.db.cuentaMercadoPago.deleteMany();
     return this.estado();

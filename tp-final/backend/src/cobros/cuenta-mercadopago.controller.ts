@@ -70,7 +70,7 @@ export class CuentaMercadoPagoController {
   @ApiConflictResponse({
     type: ErrorDto,
     description:
-      'Hay pagos de turnos por venir que se tendrian que poder reembolsar.',
+      'Hay pagos de turnos por venir que se tendrian que poder reembolsar, o la suscripcion al plan Profesional sigue activa.',
   })
   // Un DELETE de verdad, a diferencia de la baja de un tratamiento: despues la conexion no
   // existe mas. Devuelve 200 con el estado nuevo, y no 204, como el resto de la API.

@@ -7,6 +7,7 @@ import { CobrosModule } from './cobros/cobros.module.js';
 import { env } from './env.js';
 import { DisponibilidadModule } from './disponibilidad/disponibilidad.module.js';
 import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
+import { PlanesModule } from './planes/planes.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ReservasModule } from './reservas/reservas.module.js';
 import { ServiciosModule } from './servicios/servicios.module.js';
@@ -30,6 +31,7 @@ import { VentanasAtencionModule } from './ventanas-atencion/ventanas-atencion.mo
     VentanasAtencionModule,
     DisponibilidadModule,
     ReservasModule,
+    PlanesModule,
     TareasModule,
   ],
   providers: [

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
 } from '@nestjs/common';
@@ -32,8 +33,19 @@ export class VentanasAtencionService {
     };
   }
 
-  async replaceAll(dto: ReplaceVentanasDto): Promise<VentanasAtencionDto> {
+  async replaceAll(
+    dto: ReplaceVentanasDto,
+    capacidadMaxima: number,
+  ): Promise<VentanasAtencionDto> {
     this.validar(dto.data);
+    // Avisa antes de guardar: el alta ya usa el minimo con el plan, asi que una capacidad
+    // mayor no daria mas turnos y la agenda mentiria.
+    if (dto.data.some((v) => v.capacidad > capacidadMaxima)) {
+      throw new ForbiddenException({
+        code: 'plan_limit_reached',
+        message: `Tu plan permite hasta ${capacidadMaxima} turnos a la vez por franja.`,
+      });
+    }
 
     // SERIALIZABLE tambien aca, y no solo en el alta de reservas: en READ COMMITTED dos PUT
     // concurrentes dejarian la UNION de las dos colecciones, y un alta podria reservar

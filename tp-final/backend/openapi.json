@@ -573,7 +573,7 @@
             }
           },
           "409": {
-            "description": "Hay pagos de turnos por venir que se tendrian que poder reembolsar.",
+            "description": "Hay pagos de turnos por venir que se tendrian que poder reembolsar, o la suscripcion al plan Profesional sigue activa.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1134,7 +1134,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "description": "plan_limit_reached: alguna capacidad pasa la del plan del centro. Tambien forbidden_role.\n\nEl token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1840,6 +1840,205 @@
           "MisReservas"
         ]
       }
+    },
+    "/api/v1/planes": {
+      "get": {
+        "operationId": "PlanesController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlanDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Los planes de la plataforma, para la pagina de precios.",
+        "tags": [
+          "Planes"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/suscripcion": {
+      "get": {
+        "operationId": "SuscripcionController_estado",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "El plan que rige hoy y el estado de la suscripcion.",
+        "tags": [
+          "Suscripcion"
+        ]
+      },
+      "put": {
+        "operationId": "SuscripcionController_cambiar",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSuscripcionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profesional: `suscripcion.url` es donde autorizar el cobro mensual, y el plan rige desde el primer cobro aprobado. Basico: cancela la suscripcion, y lo pagado sigue hasta `pagoHasta`. Pedir el plan que ya se pidio no cambia nada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "mercadopago_not_connected: el Profesional pide la cuenta de Mercado Pago del centro conectada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Mercado Pago no respondio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "La plataforma no tiene configurado el cobro de los planes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cambia de plan: al Profesional con el cobro mensual en Mercado Pago, o de vuelta al Basico.",
+        "tags": [
+          "Suscripcion"
+        ]
+      }
     }
   },
   "info": {
@@ -1902,7 +2101,11 @@
               "too_early_for_no_show",
               "invalid_state",
               "mp_account_change_blocked",
-              "mercadopago_not_configured"
+              "mercadopago_not_configured",
+              "monthly_limit_reached",
+              "plan_limit_reached",
+              "mercadopago_not_connected",
+              "invalid_signature"
             ],
             "type": "string",
             "example": "slot_full"
@@ -2705,6 +2908,125 @@
             "description": "Solo el centro, solo al cancelar: si se devuelve lo pagado. Obligatorio si hubo pago.\nPara la clienta lo decide la politica del servicio."
           }
         }
+      },
+      "PlanDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "example": "profesional"
+          },
+          "precioCentavos": {
+            "type": "number",
+            "example": 1990000
+          },
+          "turnosPorMes": {
+            "type": "number",
+            "nullable": true,
+            "example": 60
+          }
+        },
+        "required": [
+          "id",
+          "precioCentavos",
+          "turnosPorMes"
+        ]
+      },
+      "SuscripcionMpDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "type": "string",
+            "example": "profesional"
+          },
+          "estado": {
+            "type": "string",
+            "description": "El estado en Mercado Pago. `pending` hasta que la administradora autoriza el cobro.",
+            "enum": [
+              "pending",
+              "authorized",
+              "paused",
+              "cancelled"
+            ],
+            "example": "authorized"
+          },
+          "url": {
+            "type": "string",
+            "nullable": true,
+            "description": "Donde la administradora autoriza el cobro mensual. Solo mientras esta `pending`."
+          }
+        },
+        "required": [
+          "plan",
+          "estado",
+          "url"
+        ]
+      },
+      "SuscripcionDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "description": "El plan que rige hoy. Sus limites salen de GET /planes.",
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "type": "string",
+            "example": "basico"
+          },
+          "pagoHasta": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "Hasta cuando esta pago el plan. Con la suscripcion activa hay 10 dias de gracia despues,\nque cubren los reintentos de Mercado Pago si un cobro falla."
+          },
+          "suscripcion": {
+            "nullable": true,
+            "description": "La suscripcion en Mercado Pago. null si el centro nunca se suscribio.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SuscripcionMpDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "plan",
+          "pagoHasta",
+          "suscripcion"
+        ]
+      },
+      "UpdateSuscripcionDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "type": "string",
+            "example": "profesional"
+          },
+          "emailPagador": {
+            "type": "string",
+            "description": "El email de la cuenta de Mercado Pago que va a pagar: si no coincide, Mercado Pago\nrechaza el cobro. Default: el de la administradora.",
+            "maxLength": 254,
+            "format": "email",
+            "example": "pagos@lodelili.com"
+          }
+        },
+        "required": [
+          "plan"
+        ]
       }
     }
   }
