@@ -8,6 +8,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateServicioDto {
@@ -55,4 +56,27 @@ export class CreateServicioDto {
   @IsOptional()
   @IsBoolean()
   requiereValoracion?: boolean;
+
+  /**
+   * Hasta cuantas horas antes del turno la clienta puede reprogramar sola, sin costo. null
+   * apaga la reprogramacion por autogestion; el centro puede reprogramar siempre.
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Las horas para reprogramar son un entero.' })
+  @Min(0, { message: 'Las horas para reprogramar no pueden ser negativas.' })
+  @Max(720, { message: 'Las horas para reprogramar no pueden pasar de 720.' })
+  reprogramacionHorasAntes?: number | null;
+
+  /** Hasta cuantas horas antes la clienta cancela con reembolso total. */
+  // ValidateIf y no IsOptional: IsOptional deja pasar null, y esta columna no lo acepta.
+  @ValidateIf(
+    (o: { cancelacionHorasAntes?: unknown }) =>
+      o.cancelacionHorasAntes !== undefined,
+  )
+  @Type(() => Number)
+  @IsInt({ message: 'Las horas para cancelar son un entero.' })
+  @Min(0, { message: 'Las horas para cancelar no pueden ser negativas.' })
+  @Max(720, { message: 'Las horas para cancelar no pueden pasar de 720.' })
+  cancelacionHorasAntes?: number;
 }

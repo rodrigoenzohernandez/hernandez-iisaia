@@ -62,7 +62,8 @@ await mp.getSubscriptionCharge(idDeCobro);   // cada cobro mensual
 
 ```ts
 const oauth = MercadoPago.oauth({ clientId, clientSecret, redirectUri, platformAccessToken });
-const { url, verifier } = oauth.authorizationUrl(state);  // PKCE S256; guardar el verifier
+const verifier = oauth.newVerifier();                     // PKCE: guardarlo hasta el canje
+const url = oauth.authorizationUrl(state, verifier);      // challenge S256
 const cuenta = await oauth.connect(code, verifier);       // accessToken, refreshToken, userId...
 const renovada = await oauth.refresh(cuenta.refreshToken); // el refresh viejo deja de servir
 ```

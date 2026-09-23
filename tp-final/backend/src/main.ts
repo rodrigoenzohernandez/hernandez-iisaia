@@ -11,11 +11,16 @@ import helmet from 'helmet';
 import { construirOpenApi } from './openapi.js';
 import { AppModule } from './app.module.js';
 import { ErroresFilter } from './common/errores.filter.js';
+import { redirectMercadoPagoApi } from './lib/mercadopago/index.js';
 import { env } from './env.js';
 import { TareasService } from './tareas/tareas.service.js';
 import { TenantContext } from './tenancy/tenant-context.js';
 
 async function bootstrap(): Promise<void> {
+  // Solo en la verificacion: el SDK de Mercado Pago le habla al mock. env.ts rechaza esto en
+  // produccion.
+  if (env.mercadoPago.apiUrl) redirectMercadoPagoApi(env.mercadoPago.apiUrl);
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Headers de seguridad antes que cualquier otra cosa, para que los lleven tambien las

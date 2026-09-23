@@ -69,6 +69,30 @@ if (produccion && emailProvider !== 'resend') {
   throw new Error('En produccion EMAIL_PROVIDER tiene que ser resend');
 }
 
+/**
+ * Solo para la verificacion: redirige el SDK de Mercado Pago a un mock. En produccion haria
+ * que la plata de verdad se "cobrara" contra un servidor de prueba, asi que no se acepta.
+ */
+const mpApiUrl = process.env.MP_API_URL;
+if (produccion && mpApiUrl) {
+  throw new Error(
+    'MP_API_URL es solo para pruebas y no se acepta en produccion',
+  );
+}
+
+// Mercado Pago exige HTTPS en notification_url y en back_urls. Una URL que no lo es se omite
+// al crear el checkout; en produccion, directamente no se acepta.
+const publicApiUrl = process.env.PUBLIC_API_URL;
+const frontendUrl = process.env.FRONTEND_URL;
+if (
+  produccion &&
+  [publicApiUrl, frontendUrl].some((u) => u && !u.startsWith('https://'))
+) {
+  throw new Error(
+    'En produccion, PUBLIC_API_URL y FRONTEND_URL tienen que ser https',
+  );
+}
+
 export const env = {
   databaseUrl: requerido('DATABASE_URL'),
   jwtSecret,
@@ -89,6 +113,22 @@ export const env = {
     // la cuenta duenia de la API key.
     from: process.env.EMAIL_FROM ?? 'Turnos <onboarding@resend.dev>',
   },
+  /**
+   * Mercado Pago. Todo opcional: sin credenciales la API arranca igual y los centros quedan
+   * sin cobro online, como en el MVP.
+   */
+  mercadoPago: {
+    apiUrl: mpApiUrl,
+    // La app de la plataforma, en modo Marketplace: conecta las cuentas de los centros.
+    clientId: process.env.MP_CLIENT_ID,
+    clientSecret: process.env.MP_CLIENT_SECRET,
+    redirectUri: process.env.MP_REDIRECT_URI,
+    // La cuenta de la plataforma: cobra las suscripciones de los centros.
+    platformAccessToken: process.env.MP_PLATFORM_ACCESS_TOKEN,
+    webhookSecret: process.env.MP_WEBHOOK_SECRET,
+  },
+  publicApiUrl,
+  frontendUrl,
   // Pisa el intervalo de todas las tareas periodicas. Solo para la verificacion, que no
   // puede esperar diez minutos a un recordatorio.
   jobsIntervalMs: process.env.JOBS_INTERVAL_MS

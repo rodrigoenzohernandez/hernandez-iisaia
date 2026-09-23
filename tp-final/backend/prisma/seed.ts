@@ -9,6 +9,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { hashPassword } from '../src/common/password.ts';
+import { conectarCuentaDePrueba, credencialesDePrueba } from './conectar-mp.ts';
 
 try {
   process.loadEnvFile();
@@ -186,7 +187,10 @@ async function main(): Promise<void> {
   // Orden de FK: hijos antes que padres, y los tenants al final.
   await prisma.codigoAcceso.deleteMany();
   await prisma.notificacion.deleteMany();
+  await prisma.reembolso.deleteMany();
+  await prisma.pago.deleteMany();
   await prisma.reserva.deleteMany();
+  await prisma.cuentaMercadoPago.deleteMany();
   await prisma.cliente.deleteMany();
   await prisma.ventanaAtencion.deleteMany();
   await prisma.servicio.deleteMany();
@@ -222,10 +226,23 @@ async function main(): Promise<void> {
     });
   }
 
+  // Lo de Lili cobra con Mercado Pago si hay credenciales de prueba en el entorno: la misma
+  // fila que dejaria OAuth. Sin credenciales, queda sin cobro online, como en el MVP.
+  const credenciales = credencialesDePrueba();
+  if (credenciales) {
+    const lili = await prisma.tenant.findUniqueOrThrow({
+      where: { slug: 'lo-de-lili' },
+    });
+    await conectarCuentaDePrueba(prisma, lili.id, credenciales);
+  }
+
   const centros = TENANTS.map(
     (t) => `${t.slug} (${t.servicios.length} servicios)`,
   ).join(', ');
-  console.log(`Seed OK. Centros: ${centros}`);
+  console.log(
+    `Seed OK. Centros: ${centros}.` +
+      (credenciales ? ' Lo de Lili cobra con la cuenta de prueba de MP.' : ''),
+  );
 }
 
 await main();

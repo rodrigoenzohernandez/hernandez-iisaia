@@ -18,6 +18,7 @@ import {
   sumarDias,
 } from '../common/horario.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
+import { reservaViva } from '../reservas/cupo.js';
 import type { DisponibilidadDto, SlotDto } from './dto/slot.dto.js';
 
 @Injectable()
@@ -67,7 +68,9 @@ export class DisponibilidadService {
       // Una query para todo el dia; el conteo de solapes se hace en memoria, porque son
       // decenas de filas y no vale una query por horario.
       this.db.reserva.findMany({
-        where: { fecha: aDate(fecha), estado: { not: 'cancelada' } },
+        // La misma definicion de "ocupa cupo" que el alta: una reserva impaga que vencio ya
+        // no cuenta, aunque la tarea de vencimiento todavia no la haya cancelado.
+        where: { fecha: aDate(fecha), ...reservaViva(new Date()) },
         select: { horaInicio: true, horaFin: true },
       }),
     ]);

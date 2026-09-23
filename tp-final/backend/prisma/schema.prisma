@@ -27,6 +27,31 @@ enum EstadoReserva {
   pendiente
   confirmada
   cancelada
+  /// No vino. Lo marca el centro despues de la hora del turno; lo pagado no se devuelve.
+  ausente
+}
+
+enum CanceladaPor {
+  clienta
+  centro
+  /// Vencio sin pagarse.
+  sistema
+}
+
+enum EstadoPago {
+  pendiente
+  aprobado
+  rechazado
+  cancelado
+  reembolsado
+  contracargo
+  disputa
+}
+
+enum EstadoReembolso {
+  pendiente
+  aprobado
+  fallido
 }
 
 enum MetodoPago {
@@ -54,12 +79,13 @@ model Tenant {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  usuarios       Usuario[]
-  servicios      Servicio[]
-  ventanas       VentanaAtencion[]
-  notificaciones Notificacion[]
-  clientes       Cliente[]
-  codigosAcceso  CodigoAcceso[]
+  usuarios          Usuario[]
+  servicios         Servicio[]
+  ventanas          VentanaAtencion[]
+  notificaciones    Notificacion[]
+  clientes          Cliente[]
+  codigosAcceso     CodigoAcceso[]
+  cuentaMercadoPago CuentaMercadoPago?
 }
 
 model Usuario {
@@ -80,17 +106,24 @@ model Usuario {
 }
 
 model Servicio {
-  id                 String   @id @default(cuid())
+  id                 String  @id @default(cuid())
   tenantId           String
   nombre             String
   descripcion        String?
   duracionMinutos    Int
   precioCentavos     Int
   senaCentavos       Int
-  requiereValoracion Boolean  @default(false)
-  activo             Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  requiereValoracion Boolean @default(false)
+  activo             Boolean @default(true)
+
+  /// Hasta cuantas horas antes del turno la clienta puede reprogramar sola, sin costo.
+  /// null apaga la reprogramacion por autogestion: el centro puede siempre.
+  reprogramacionHorasAntes Int?     @default(24)
+  /// Hasta cuantas horas antes la clienta cancela con reembolso total. Despues, se pierde
+  /// todo lo pagado.
+  cancelacionHorasAntes    Int      @default(24)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id])
   reservas Reserva[]
@@ -156,7 +189,24 @@ model Reserva {
   metodoPago      MetodoPago
 
   /// Snapshot del monto al momento de reservar, como el precio en una factura.
-  senaCentavos Int
+  senaCentavos   Int
+  precioCentavos Int
+
+  /// Lo que se cobra por Mercado Pago: la sena en efectivo, el precio con Mercado Pago, o 0
+  /// si no hay nada que cobrar online.
+  montoOnlineCentavos Int
+  /// Hasta cuando el cupo espera el pago. Despues, la reserva deja de contar y vence.
+  pagoVenceAt         DateTime?
+  checkoutId          String?
+  checkoutUrl         String?
+
+  /// La politica que la clienta acepto al reservar, copiada como la sena: si el centro la
+  /// endurece despues, el turno ya tomado conserva la suya.
+  reprogramacionHorasAntes Int?
+  cancelacionHorasAntes    Int
+
+  canceladaPor CanceladaPor?
+  canceladaAt  DateTime?
 
   /// Cuando salio el recordatorio. Tambien se marca al reservar dentro de las 24 horas
   /// previas: ahi el mail de confirmacion ya hace de recordatorio.
@@ -172,7 +222,10 @@ model Reserva {
   /// servicio y de la clienta, y las dos FKs lo obligan a ser el mismo.
   servicio Servicio @relation(fields: [tenantId, servicioId], references: [tenantId, id])
   cliente  Cliente  @relation(fields: [tenantId, clienteId], references: [tenantId, id])
+  pagos    Pago[]
 
+  /// Habilita la FK compuesta de Pago.
+  @@unique([tenantId, id])
   /// Sostiene el listado paginado del admin y la query de solapes.
   @@index([tenantId, fecha, horaInicio])
 }
@@ -237,6 +290,75 @@ model Notificacion {
   updatedAt        DateTime           @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, estado, proximoIntentoAt])
+}
+
+/// La cuenta de Mercado Pago del centro: ahi cae la plata de sus clientas. La deja OAuth, o
+/// en pruebas el seed con credenciales de prueba; el resto del codigo no distingue una de
+/// otra. Los tokens van cifrados con AES-256-GCM.
+model CuentaMercadoPago {
+  id                  String    @id @default(cuid())
+  tenantId            String    @unique
+  mpUserId            String
+  accessTokenCifrado  String
+  /// null en las cuentas sembradas: no vienen de OAuth y no se renuevan.
+  refreshTokenCifrado String?
+  publicKey           String
+  scope               String
+  liveMode            Boolean
+  expiraAt            DateTime?
+  /// MP revoco el token o rechazo la renovacion: hasta reconectar, el centro no cobra online.
+  requiereReconexion  Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+/// Un pago de Mercado Pago de una reserva. Puede haber varios: un rechazo y despues una
+/// aprobacion, o dos aprobados si alguien pago dos veces.
+model Pago {
+  id                  String     @id @default(cuid())
+  tenantId            String
+  reservaId           String
+  /// El id del pago en Mercado Pago.
+  proveedorId         String
+  estado              EstadoPago
+  estadoDetalle       String?
+  montoCentavos       Int
+  reembolsadoCentavos Int        @default(0)
+  medio               String?
+  aprobadoAt          DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  reserva    Reserva     @relation(fields: [tenantId, reservaId], references: [tenantId, id])
+  reembolsos Reembolso[]
+
+  /// Un aviso repetido de MP no crea un pago dos veces.
+  @@unique([tenantId, proveedorId])
+  /// Habilita la FK compuesta de Reembolso.
+  @@unique([tenantId, id])
+}
+
+/// Un reembolso pedido. La fila se escribe en la misma transaccion que la cancelacion, y su
+/// id es la idempotency key del pedido a MP: reintentarlo nunca reembolsa dos veces.
+model Reembolso {
+  id               String          @id @default(cuid())
+  tenantId         String
+  pagoId           String
+  montoCentavos    Int
+  estado           EstadoReembolso @default(pendiente)
+  intentos         Int             @default(0)
+  proximoIntentoAt DateTime        @default(now())
+  /// El id del reembolso en Mercado Pago.
+  proveedorId      String?
+  ultimoError      String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  pago Pago @relation(fields: [tenantId, pagoId], references: [tenantId, id])
 
   @@index([tenantId, estado, proximoIntentoAt])
 }

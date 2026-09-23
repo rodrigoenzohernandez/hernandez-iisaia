@@ -4,6 +4,8 @@ import {
   Logger,
   type OnApplicationShutdown,
 } from '@nestjs/common';
+import { CobrosService } from '../cobros/cobros.service.js';
+import { CuentasMercadoPagoService } from '../cobros/cuentas-mercadopago.service.js';
 import { env } from '../env.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
@@ -34,6 +36,8 @@ export class TareasService implements OnApplicationShutdown {
     @Inject(DB) private readonly db: Db,
     private readonly notificaciones: NotificacionesService,
     private readonly recordatorios: RecordatoriosService,
+    private readonly cobros: CobrosService,
+    private readonly cuentas: CuentasMercadoPagoService,
   ) {}
 
   iniciar(): void {
@@ -43,6 +47,15 @@ export class TareasService implements OnApplicationShutdown {
       ),
       this.cadaTanto('recordatorios', 10 * 60_000, (centro) =>
         this.recordatorios.enviar(centro),
+      ),
+      this.cadaTanto('reembolsos', 60_000, () =>
+        this.cobros.procesarReembolsos(),
+      ),
+      this.cadaTanto('vencimientos', 60_000, (centro) =>
+        this.cobros.vencerImpagas(centro),
+      ),
+      this.cadaTanto('tokens de mercado pago', 12 * 3_600_000, (centro) =>
+        this.cuentas.renovarToken(centro),
       ),
     ];
   }

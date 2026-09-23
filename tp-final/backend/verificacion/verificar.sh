@@ -6,18 +6,22 @@
 # dio lo esperado, asi que falla fuerte en vez de obligar a leer setenta bloques.
 #
 #   <gestor> run db:up
-#   THROTTLE_LIMIT=1000 <gestor> run start:dev      # en otra terminal
+#   <gestor> run start:verify                       # en otra terminal
 #   <gestor> run verify                             # npm, pnpm o yarn
 #
-# El THROTTLE_LIMIT alto no es opcional: este script hace unas 25 altas seguidas y con el
-# default de 5 por minuto se limitaria a si mismo. El limite real se prueba aparte, con
-# `run verify:limite` contra la configuracion de default.
+# start:verify levanta la API con lo que este script necesita: el limite de peticiones alto
+# (hace decenas de altas seguidas), las tareas periodicas cada 2 segundos, los mails a la
+# consola y Mercado Pago apuntando al mock de verificacion/mercadopago-mock.mjs, que este
+# script levanta solo. El limite real se prueba aparte, con `run verify:limite`.
 set -euo pipefail
 
 RAIZ=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 BASE=${BASE:-http://localhost:3100/api/v1}
 SALIDA=${SALIDA:-$RAIZ/../docs/verificacion.md}
-TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+TMP=$(mktemp -d)
+MP_MOCK=${MP_MOCK:-http://localhost:3199}
+MOCK_PID=''
+trap '[[ -n $MOCK_PID ]] && kill "$MOCK_PID" 2>/dev/null; rm -rf "$TMP"' EXIT
 : >"$TMP/casos.md"; : >"$TMP/tabla.md"
 N=0; FALLAS=0
 
@@ -28,7 +32,13 @@ command -v jq >/dev/null || { echo 'Falta jq. En macOS: brew install jq'; exit 1
 [[ -f "$RAIZ/.env" ]] && { set -a; . "$RAIZ/.env"; set +a; }
 PASSWORD=${SEED_ADMIN_PASSWORD:?Falta SEED_ADMIN_PASSWORD en .env}
 
-curl -so /dev/null "$BASE$T/servicios" || { echo "La API no responde en $BASE. Levantala con: THROTTLE_LIMIT=1000 npm|pnpm run start:dev"; exit 1; }
+curl -so /dev/null "$BASE$T/servicios" || { echo "La API no responde en $BASE. Levantala con: npm|pnpm run start:verify"; exit 1; }
+
+# El mock de Mercado Pago, fresco en cada corrida: uno viejo arrastraria pagos de la anterior.
+lsof -t -nP -iTCP:3199 -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true
+node "$RAIZ/verificacion/mercadopago-mock.mjs" >"$TMP/mock.log" 2>&1 &
+MOCK_PID=$!
+for _ in $(seq 1 25); do curl -s -o /dev/null "$MP_MOCK/__test/llamadas" && break; sleep 0.2; done
 
 # Si el limite esta en su default, este script se autolimita y las fallas que reporte serian
 # del throttler y no del dominio. Mejor no arrancar que reportar ruido.
@@ -37,7 +47,7 @@ for _ in 1 2 3 4 5 6 7; do
     -H 'Content-Type: application/json' -d '{"email":"nadie@ejemplo.test","password":"x"}')
   if [[ $CODIGO == 429 ]]; then
     echo 'El limite de peticiones esta activo con su valor de default.'
-    echo 'Reinicia la API con: THROTTLE_LIMIT=1000 npm|pnpm run start:dev'
+    echo 'Reinicia la API con: npm|pnpm run start:verify'
     exit 1
   fi
 done
@@ -68,7 +78,10 @@ proximo() {
 LUNES=$(proximo 1); SABADO=$(proximo 6); DOMINGO=$(proximo 7)
 # Una semana despues del proximo lunes: los turnos de la seccion de mails van ahi para no
 # ocupar horarios que otras secciones esperan libres.
-LUNES2=$(node -e 'const d = new Date(`${process.argv[1]}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 7); console.log(d.toISOString().slice(0, 10))' "$LUNES")
+dias_despues() { node -e 'const d = new Date(`${process.argv[1]}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + Number(process.argv[2])); console.log(d.toISOString().slice(0, 10))' "$1" "$2"; }
+LUNES2=$(dias_despues "$LUNES" 7)
+# Dos semanas despues: los horarios de la seccion de cobros.
+LUNES3=$(dias_despues "$LUNES" 14); MARTES3=$(dias_despues "$LUNES" 15)
 PASADO=2020-01-06                 # un lunes, para que el unico motivo de rechazo sea la fecha
 INEXISTENTE=czzzzzzzzzzzzzzzzzzzzzzzz
 
@@ -105,7 +118,8 @@ marcar() {
 # req <titulo> <esperado> <metodo> <ruta> [body] [token] — deja el cuerpo en $TMP/body.
 req() {
   local titulo=$1 esperado=$2 metodo=$3 ruta=$4 body=${5:-} token=${6:-}
-  local args=(-sS -o "$TMP/body" -w '%{http_code}' -X "$metodo" "$BASE$ruta") h='' code
+  # Con tope de tiempo: un request colgado tiene que ser una falla, no una corrida que no termina.
+  local args=(-sS --max-time 30 -o "$TMP/body" -w '%{http_code}' -X "$metodo" "$BASE$ruta") h='' code
   [[ -n $token ]] && { args+=(-H "Authorization: Bearer $token"); h+=$'\n''Authorization: Bearer <jwt>'; }
   [[ -n $body ]] && { args+=(-H 'Content-Type: application/json' -d "$body"); h+=$'\n''Content-Type: application/json'; }
   code=$(curl "${args[@]}") || code='(sin respuesta)'
@@ -161,7 +175,7 @@ esperar() {
 }
 
 # header <curl args...> — los headers de la respuesta, en minuscula, para buscar con grep.
-header() { curl -s -o /dev/null -D - "$@" | tr -d '\r' | tr '[:upper:]' '[:lower:]'; }
+header() { curl -s --max-time 30 -o /dev/null -D - "$@" | tr -d '\r' | tr '[:upper:]' '[:lower:]'; }
 
 reserva() {
   jq -nc --arg s "$1" --arg f "$2" --arg h "$3" --arg e "${4:-ana@example.com}" \
@@ -222,9 +236,13 @@ RESERVA1=$(jq -r .id "$TMP/body")
 check 'el servidor calcula horaFin desde la duracion' '10:00' "$(jq -r .horaFin "$TMP/body")"
 check 'el servidor congela la sena del tratamiento' 1200000 "$(jq -r .senaCentavos "$TMP/body")"
 check 'con efectivo la reserva nace confirmada' confirmada "$(jq -r .estado "$TMP/body")"
-req 'mercadopago nace pendiente' 201 POST "$T/reservas" \
+# Sin cuenta de Mercado Pago conectada, el centro no cobra online: pagar con Mercado Pago no
+# se puede, y en efectivo el turno entra sin sena. Lo que pasa con la cuenta conectada esta en
+# la seccion de cobros, al final.
+req 'mercadopago en un centro sin cuenta de Mercado Pago' 409 POST "$T/reservas" \
   "$(reserva "$S30" "$LUNES" 10:30 mp@example.com | jq -c '.metodoPago = "mercadopago"')"
-check 'estado pendiente hasta que se confirme el pago' pendiente "$(jq -r .estado "$TMP/body")"
+check 'con codigo online_payment_unavailable' online_payment_unavailable "$(jq -r .code "$TMP/body")"
+req 'el mismo turno en efectivo' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES" 10:30 mp@example.com)"
 RESERVA_MP=$(jq -r .id "$TMP/body")
 req 'el mismo horario otra vez, capacidad 1' 409 POST "$T/reservas" "$(reserva "$S60" "$LUNES" 09:00 otra@example.com)"
 check 'con codigo slot_full' slot_full "$(jq -r .code "$TMP/body")"
@@ -316,8 +334,6 @@ check 'el HTML de la clienta llega escapado, no inyectado' t \
   "$(sql "select bool_and(html like '%&lt;b&gt;Ana&lt;/b&gt;%' and html not like '%<b>Ana%') from \"Notificacion\" where para = 'mails@example.com'")"
 check 'el centro recibe el aviso del turno nuevo' 1 \
   "$(sql "$N_MAILS where para = 'lili@lodelili.test' and asunto like 'Turno nuevo%' and texto like '%mails@example.com%'")"
-check 'un alta pendiente de pago no manda confirmacion' 0 \
-  "$(sql "$N_MAILS where para = 'mp@example.com'")"
 req 'la administradora cancela el turno' 200 PATCH "$T/reservas/$RESERVA_MAILS" '{"estado":"cancelada"}' "$TOKEN"
 check 'la clienta recibe el mail de cancelacion' 1 \
   "$(sql "$N_MAILS where para = 'mails@example.com' and asunto like 'Se cancel%'")"
@@ -506,8 +522,8 @@ check 'las dos de 16:30 siguen vivas' 2 \
   "$(jq '[.data[] | select(.horaInicio == "16:30" and .estado != "cancelada")] | length' "$TMP/body")"
 
 seccion 'Gestion de reservas del administrador'
-req 'confirmar la reserva de mercadopago' 200 PATCH "$T/reservas/$RESERVA_MP" '{"estado":"confirmada"}' "$TOKEN"
-check 'quedo confirmada' confirmada "$(jq -r .estado "$TMP/body")"
+req 'confirmar una reserva que ya esta confirmada' 409 PATCH "$T/reservas/$RESERVA_MP" '{"estado":"confirmada"}' "$TOKEN"
+check 'con codigo invalid_transition' invalid_transition "$(jq -r .code "$TMP/body")"
 req 'cancelarla' 200 PATCH "$T/reservas/$RESERVA_MP" '{"estado":"cancelada"}' "$TOKEN"
 req 'descancelarla: cancelada es terminal' 409 PATCH "$T/reservas/$RESERVA_MP" '{"estado":"confirmada"}' "$TOKEN"
 check 'con codigo invalid_transition' invalid_transition "$(jq -r .code "$TMP/body")"
@@ -538,12 +554,16 @@ seccion 'Concurrencia: el control de cupo bajo carga'
 # Prisma 7 no llega como P2034, asi que el reintento no se disparaba y el perdedor recibia un
 # 500 en vez de un 409.
 CUERPO=$(reserva "$S30" "$LUNES" 11:15 conc@example.com)
+# Se espera a estos ocho y no a todo: un `wait` pelado esperaria tambien al mock de Mercado
+# Pago, que corre en segundo plano y no termina nunca.
+ALTAS=()
 for i in $(seq 1 8); do
   curl -sS -o "$TMP/c$i.json" -w '%{http_code}' -X POST "$BASE$T/reservas" \
     -H 'Content-Type: application/json' \
     -d "$(jq -c --arg e "conc$i@example.com" '.clienteEmail = $e' <<<"$CUERPO")" >"$TMP/c$i.code" &
+  ALTAS+=("$!")
 done
-wait
+wait "${ALTAS[@]}"
 CODIGOS=$(for i in $(seq 1 8); do cat "$TMP/c$i.code"; echo; done | sort | uniq -c | tr -s ' ' | tr '\n' ' ')
 CREADAS=$(for i in $(seq 1 8); do cat "$TMP/c$i.code"; echo; done | grep -c '^201$' || true)
 QUINIENTOS=$(for i in $(seq 1 8); do cat "$TMP/c$i.code"; echo; done | grep -c '^500$' || true)
@@ -602,9 +622,245 @@ check 'una clienta con sesion no ve los inactivos: decide el rol, no el token' 0
   "$(jq '[.data[] | select(.activo == false)] | length' "$TMP/body")"
 req 'el detalle de un inactivo con token de clienta' 404 GET "$T/servicios/$NUEVO_ID" '' "$TOKEN_CLIENTA"
 
+seccion 'Cobros con Mercado Pago'
+printf '\n> Esta seccion adelanta el tiempo con UPDATE sobre la base: el vencimiento de un pago, un turno a doce horas de ahora, uno de ayer y el vencimiento de un token. Es lo unico que el script toca por fuera de la API.\n' >>"$TMP/casos.md"
+mock() { curl -s --max-time 30 -H 'Content-Type: application/json' "$MP_MOCK$@"; }
+llamadas_mp() { mock /__test/llamadas; }
+pref_de() { jq -r '.cobro.checkoutUrl // ""' "$TMP/body" | sed -n 's/.*pref_id=//p'; }
+# pagar <preferencia> [status] — alguien paga en Mercado Pago; devuelve el id del pago.
+pagar() { mock /__test/pagos -X POST -d "$(jq -nc --arg p "$1" --arg s "${2:-approved}" '{preferencia:$p, status:$s}')" | jq -r .id; }
+# avisar <id de pago> [ruta del centro] — Mercado Pago le avisa a la API, como en produccion.
+avisar() {
+  curl -s --max-time 30 -o /dev/null -w '%{http_code}' -X POST "$BASE${2:-$T}/webhooks/mercadopago?type=payment&data.id=$1" \
+    -H 'Content-Type: application/json' -d "$(jq -nc --arg i "$1" '{type:"payment", action:"payment.updated", data:{id:$i}}')"
+}
+# reservar_pagada <titulo> <body> [token] — reserva, paga y avisa. Deja el id en R y el pago en PAGO.
+reservar_pagada() {
+  req "$1" 201 POST "$T/reservas" "$2" "${3:-}"
+  R=$(jq -r .id "$TMP/body"); PAGO=$(pagar "$(pref_de)"); avisar "$PAGO" >/dev/null
+}
+turno() { jq -nc --arg s "$S30" --arg f "$1" --arg h "$2" '{servicioId:$s, fecha:$f, hora:$h, metodoPago:"efectivo"}'; }
+estado_de() { sql "select estado || coalesce(' ' || \"canceladaPor\", '') from \"Reserva\" where id = '$1'"; }
+reembolsos_de() { sql "select count(*) || ' ' || coalesce(sum(r.\"montoCentavos\"), 0) from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"reservaId\" = '$1' and r.estado <> 'fallido'"; }
+reembolso_estado() { sql "select r.estado from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"reservaId\" = '$1' order by r.\"createdAt\" desc limit 1"; }
+ZONA="now() at time zone 'America/Argentina/Buenos_Aires'"
+a_doce_horas() {
+  sql "update \"Reserva\" set fecha = ($ZONA + interval '12 hours')::date,
+       \"horaInicio\" = to_char($ZONA + interval '12 hours', 'HH24:MI'),
+       \"horaFin\" = to_char($ZONA + interval '12 hours 30 minutes', 'HH24:MI') where id = '$1'" >/dev/null
+}
+a_ayer() { sql "update \"Reserva\" set fecha = ($ZONA)::date - 1 where id = '$1'" >/dev/null; }
+
+req 'Bella Piel, sin Mercado Pago: turno en efectivo' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$LUNES3" 09:00 sinmp@example.com)"
+check 'entra confirmado y sin cobro online, como en el MVP' 'confirmada null' "$(jq -r '"\(.estado) \(.cobro)"' "$TMP/body")"
+req 'Bella Piel, sin Mercado Pago: pagar con Mercado Pago' 409 POST "$OTRO/reservas" \
+  "$(reserva "$S_OTRO" "$LUNES3" 10:30 sinmp2@example.com | jq -c '.metodoPago = "mercadopago"')"
+check 'con codigo online_payment_unavailable' online_payment_unavailable "$(jq -r .code "$TMP/body")"
+
+req 'la URL para conectar Mercado Pago' 200 GET "$T/cuenta-mercadopago/autorizacion" '' "$TOKEN"
+AUTH_URL=$(jq -r .url "$TMP/body")
+check 'va a Mercado Pago, con PKCE S256 y la app de la plataforma' true \
+  "$(node -e 'const u = new URL(process.argv[1]); const q = u.searchParams; console.log(u.host === "auth.mercadopago.com" && q.get("code_challenge_method") === "S256" && !!q.get("code_challenge") && q.get("client_id") === "cliente-mock")' "$AUTH_URL")"
+STATE=$(node -e 'console.log(new URL(process.argv[1]).searchParams.get("state"))' "$AUTH_URL")
+check 'el state va cifrado: no deja leer el verifier' false \
+  "$(node -e 'console.log(Buffer.from(process.argv[1].split(".")[3] ?? "", "base64url").toString().includes("verifier"))' "$STATE")"
+conectar() { jq -nc --arg c "$1" --arg s "$2" '{code:$c, state:$s}'; }
+req 'conectar con el state adulterado' 400 POST "$T/cuenta-mercadopago" "$(conectar codigo-111222 "${STATE}x")" "$TOKEN"
+check 'con codigo invalid_state' invalid_state "$(jq -r .code "$TMP/body")"
+req 'el state de Lo de Lili usado en Bella Piel' 400 POST "$OTRO/cuenta-mercadopago" "$(conectar codigo-111222 "$STATE")" "$TOKEN_OTRO"
+req 'conectar la cuenta de Mercado Pago' 201 POST "$T/cuenta-mercadopago" "$(conectar codigo-111222 "$STATE")" "$TOKEN"
+if ! llamadas_mp | jq -e 'any(.[]; .path == "/oauth/token")' >/dev/null; then
+  printf '\n\nLa API no le habla al mock de Mercado Pago. Levantala con: npm|pnpm run start:verify\n'; exit 1
+fi
+check 'queda conectada a la cuenta que autorizo' 'true 111222' "$(jq -r '"\(.conectada) \(.mpUserId)"' "$TMP/body")"
+check 'el canje llevo el verifier de PKCE' true "$(llamadas_mp | jq '[.[] | select(.path == "/oauth/token")][0].cuerpo.code_verifier | length >= 43')"
+check 'los tokens quedan cifrados en la base' 'v1.' "$(sql "select left(\"accessTokenCifrado\", 3) from \"CuentaMercadoPago\" where \"mpUserId\" = '111222'")"
+req 'el estado de la cuenta' 200 GET "$T/cuenta-mercadopago" '' "$TOKEN"
+check 'no devuelve ningun token' 0 "$(jq '[paths | .[-1] | tostring | select(test("token"; "i"))] | length' "$TMP/body")"
+req 'la cuenta de Mercado Pago con token de clienta' 403 GET "$T/cuenta-mercadopago" '' "$TOKEN_SOFIA"
+
+req 'efectivo en un centro que cobra online' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 09:00 sena@example.com)"
+R_SENA=$(jq -r .id "$TMP/body"); PREF_SENA=$(pref_de)
+check 'queda pendiente del pago de la sena' 'pendiente 450000' "$(jq -r '"\(.estado) \(.cobro.montoCentavos)"' "$TMP/body")"
+check 'con el link de pago y hasta cuando esperarlo' true "$(jq '.cobro.checkoutUrl != null and .cobro.venceAt != null' "$TMP/body")"
+check 'la preferencia se creo con el token de Lo de Lili' true \
+  "$(llamadas_mp | jq --arg r "$R_SENA" 'any(.[]; .path == "/checkout/preferences" and .cuerpo.external_reference == $r and (.token | endswith("-111222")))')"
+check 'por la sena, con binary_mode, sin Rapipago ni Pago Facil y con vencimiento' true \
+  "$(llamadas_mp | jq --arg r "$R_SENA" '[.[] | select(.path == "/checkout/preferences" and .cuerpo.external_reference == $r)][0].cuerpo | .items[0].unit_price == 4500 and .binary_mode == true and (.payment_methods.excluded_payment_types | length) == 2 and .expires == true')"
+check 'mientras espera el pago no manda confirmacion' 0 "$(sql "$N_MAILS where para = 'sena@example.com'")"
+req 'la reserva pendiente ocupa el cupo' 200 GET "$T/servicios/$S30/disponibilidad?fecha=$LUNES3"
+check 'el horario queda sin cupo mientras no vence' 0 "$(jq '[.data[] | select(.hora == "09:00")][0].cuposDisponibles' "$TMP/body")"
+ID_PAGO=$(pagar "$PREF_SENA")
+AVISO=$(jq -nc --arg i "$ID_PAGO" '{type:"payment", action:"payment.updated", data:{id:$i}}')
+req 'Mercado Pago avisa el pago aprobado' 200 POST "$T/webhooks/mercadopago?type=payment&data.id=$ID_PAGO" "$AVISO"
+req 'la reserva despues del aviso' 200 GET "$T/reservas/$R_SENA" '' "$TOKEN"
+check 'queda confirmada, con la sena pagada' 'confirmada 450000' "$(jq -r '"\(.estado) \(.cobro.pagadoCentavos)"' "$TMP/body")"
+check 'y ya no expone el link de pago' null "$(jq -r .cobro.checkoutUrl "$TMP/body")"
+check 'la clienta recibe la confirmacion con el pago' 1 \
+  "$(sql "$N_MAILS where para = 'sena@example.com' and asunto like 'Tu turno%' and texto like '%4.500,00%'")"
+req 'el mismo aviso otra vez' 200 POST "$T/webhooks/mercadopago?type=payment&data.id=$ID_PAGO" "$AVISO"
+check 'sigue habiendo un solo pago' 1 "$(sql "select count(*) from \"Pago\" where \"proveedorId\" = '$ID_PAGO'")"
+check 'y una sola confirmacion' 1 "$(sql "$N_MAILS where para = 'sena@example.com' and asunto like 'Tu turno%'")"
+req 'un aviso de un pago que esta cuenta no ve' 200 POST "$T/webhooks/mercadopago?type=payment&data.id=999999" '{"type":"payment","data":{"id":"999999"}}'
+check 'no crea nada' 0 "$(sql "select count(*) from \"Pago\" where \"proveedorId\" = '999999'")"
+req 'el estado publico, para la pagina de vuelta' 200 GET "$T/reservas/$R_SENA/estado"
+check 'dice confirmada' confirmada "$(jq -r .estado "$TMP/body")"
+ID_PAGO2=$(pagar "$PREF_SENA")
+req 'un segundo pago de la misma reserva' 200 POST "$T/webhooks/mercadopago?type=payment&data.id=$ID_PAGO2" \
+  "$(jq -nc --arg i "$ID_PAGO2" '{type:"payment", data:{id:$i}}')"
+check 'sobra y se devuelve entero' aprobado \
+  "$(esperar 10 "select r.estado from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"proveedorId\" = '$ID_PAGO2'" aprobado)"
+check 'con el token de Lo de Lili, no con el de la plataforma' true \
+  "$(llamadas_mp | jq --arg i "$ID_PAGO2" 'any(.[]; .path == "/v1/payments/\($i)/refunds" and (.token | endswith("-111222")))')"
+check 'y el primer pago sigue intacto' aprobado "$(sql "select estado from \"Pago\" where \"proveedorId\" = '$ID_PAGO'")"
+
+req 'pagar el total con Mercado Pago' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 09:45 total@example.com | jq -c '.metodoPago = "mercadopago"')"
+R_TOTAL=$(jq -r .id "$TMP/body"); PREF_TOTAL=$(pref_de)
+check 'el cobro es el precio entero' 1500000 "$(jq -r .cobro.montoCentavos "$TMP/body")"
+avisar "$(pagar "$PREF_TOTAL" rejected)" >/dev/null
+check 'un pago rechazado queda registrado' rechazado "$(sql "select estado from \"Pago\" where \"reservaId\" = '$R_TOTAL'")"
+check 'y la reserva sigue esperando el pago' pendiente "$(estado_de "$R_TOTAL")"
+avisar "$(pagar "$PREF_TOTAL")" >/dev/null
+check 'el segundo intento, aprobado, la confirma' confirmada "$(estado_de "$R_TOTAL")"
+
+req 'una reserva que nunca se paga' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 10:30 vence@example.com)"
+R_VENCE=$(jq -r .id "$TMP/body"); PREF_VENCE=$(pref_de)
+sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where id = '$R_VENCE'" >/dev/null
+check 'al vencer se cancela sola (si falla: levantar con npm run start:verify)' 'cancelada sistema' \
+  "$(esperar 15 "select estado || ' ' || \"canceladaPor\" from \"Reserva\" where id = '$R_VENCE'" 'cancelada sistema')"
+check 'y la clienta recibe el aviso' 1 "$(sql "$N_MAILS where para = 'vence@example.com' and asunto like '%venci%'")"
+req 'el horario vuelve a ofrecerse' 200 GET "$T/servicios/$S30/disponibilidad?fecha=$LUNES3"
+check 'con cupo otra vez' 1 "$(jq '[.data[] | select(.hora == "10:30")][0].cuposDisponibles' "$TMP/body")"
+avisar "$(pagar "$PREF_VENCE")" >/dev/null
+check 'un pago tardio con el horario libre la reactiva' confirmada "$(estado_de "$R_VENCE")"
+req 'otra que vence' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 11:15 vence2@example.com)"
+R_VENCE2=$(jq -r .id "$TMP/body"); PREF_VENCE2=$(pref_de)
+sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where id = '$R_VENCE2'" >/dev/null
+esperar 15 "select estado from \"Reserva\" where id = '$R_VENCE2'" cancelada >/dev/null
+req 'otra persona toma ese horario' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 11:15 ganadora@example.com)"
+avisar "$(pagar "$PREF_VENCE2")" >/dev/null
+check 'el pago tardio con el horario tomado no la reactiva' 'cancelada sistema' "$(estado_de "$R_VENCE2")"
+check 'y se devuelve entero' aprobado "$(esperar 10 "select r.estado from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"reservaId\" = '$R_VENCE2'" aprobado)"
+check 'con un mail que explica por que' 1 "$(sql "$N_MAILS where para = 'vence2@example.com' and asunto like 'Te devolvemos%'")"
+
+reservar_pagada 'Sofia reserva y paga la sena' "$(turno "$LUNES3" 12:00)" "$TOKEN_SOFIA"
+R_S1=$R
+req 'Sofia ve su reserva paga' 200 GET "$T/reservas/$R_S1" '' "$TOKEN_SOFIA"
+check 'confirmada, y puede cancelar con reembolso y reprogramar' 'confirmada true true' \
+  "$(jq -r '"\(.estado) \(.puedeCancelarConReembolso) \(.puedeReprogramar)"' "$TMP/body")"
+req 'Sofia cancela en plazo' 200 PATCH "$T/reservas/$R_S1" '{"estado":"cancelada"}' "$TOKEN_SOFIA"
+check 'cancelada por la clienta' 'cancelada clienta' "$(jq -r '"\(.estado) \(.canceladaPor)"' "$TMP/body")"
+check 'se le devuelve toda la sena' '1 450000' "$(reembolsos_de "$R_S1")"
+check 'el reembolso sale en Mercado Pago' aprobado "$(esperar 10 "select r.estado from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"reservaId\" = '$R_S1'" aprobado)"
+check 'el mail dice cuanto se devuelve' 1 "$(sql "$N_MAILS where para = 'sofia@example.com' and asunto like 'Se cancel%' and texto like '%Te devolvemos%4.500,00%'")"
+check 'y el centro recibe el aviso de la cancelacion' 1 "$(sql "$N_MAILS where para = 'lili@lodelili.test' and asunto like 'Cancelaci%' and texto like '%4.500,00%'")"
+reservar_pagada 'otra reserva paga de Sofia' "$(turno "$LUNES3" 12:45)" "$TOKEN_SOFIA"
+R_S2=$R
+req 'Sofia no elige si se reembolsa' 400 PATCH "$T/reservas/$R_S2" '{"estado":"cancelada","reembolsar":true}' "$TOKEN_SOFIA"
+a_doce_horas "$R_S2"
+req 'Sofia la ve a doce horas del turno' 200 GET "$T/reservas/$R_S2" '' "$TOKEN_SOFIA"
+check 'ya no puede cancelar con reembolso ni reprogramar' 'false false' "$(jq -r '"\(.puedeCancelarConReembolso) \(.puedeReprogramar)"' "$TMP/body")"
+req 'Sofia reprograma fuera de plazo' 409 PATCH "$T/reservas/$R_S2" "$(jq -nc --arg f "$LUNES3" '{fecha:$f, hora:"15:00"}')" "$TOKEN_SOFIA"
+check 'con codigo reschedule_not_allowed' reschedule_not_allowed "$(jq -r .code "$TMP/body")"
+req 'Sofia cancela fuera de plazo' 200 PATCH "$T/reservas/$R_S2" '{"estado":"cancelada"}' "$TOKEN_SOFIA"
+check 'se pierde todo lo pagado: ningun reembolso' '0 0' "$(reembolsos_de "$R_S2")"
+check 'y el mail lo dice' 1 "$(sql "$N_MAILS where para = 'sofia@example.com' and texto like '%no se reembolsa%'")"
+
+reservar_pagada 'una tercera de Sofia, para reprogramar' "$(turno "$LUNES3" 15:00)" "$TOKEN_SOFIA"
+R_S3=$R
+req 'Sofia reprograma en plazo' 200 PATCH "$T/reservas/$R_S3" "$(jq -nc --arg f "$MARTES3" '{fecha:$f, hora:"09:00"}')" "$TOKEN_SOFIA"
+check 'cambia de dia y de hora' "$MARTES3 09:00 09:30" "$(jq -r '"\(.fecha) \(.horaInicio) \(.horaFin)"' "$TMP/body")"
+check 'y conserva la sena pagada' 450000 "$(jq -r .cobro.pagadoCentavos "$TMP/body")"
+check 'con mail del cambio' 1 "$(sql "$N_MAILS where para = 'sofia@example.com' and asunto like '%cambi%'")"
+req 'el horario viejo queda libre' 200 GET "$T/servicios/$S30/disponibilidad?fecha=$LUNES3"
+check 'las 15:00 del lunes tienen cupo otra vez' 1 "$(jq '[.data[] | select(.hora == "15:00")][0].cuposDisponibles' "$TMP/body")"
+req 'alguien toma las 09:45 del martes' 201 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 09:45 martes@example.com)"
+req 'Sofia reprograma a un horario sin cupo' 409 PATCH "$T/reservas/$R_S3" "$(jq -nc --arg f "$MARTES3" '{fecha:$f, hora:"09:45"}')" "$TOKEN_SOFIA"
+check 'con codigo slot_full' slot_full "$(jq -r .code "$TMP/body")"
+req 'reprogramar con fecha y sin hora' 400 PATCH "$T/reservas/$R_S3" "$(jq -nc --arg f "$MARTES3" '{fecha:$f}')" "$TOKEN_SOFIA"
+req 'estado y fecha juntos' 400 PATCH "$T/reservas/$R_S3" "$(jq -nc --arg f "$MARTES3" '{estado:"cancelada", fecha:$f, hora:"10:30"}')" "$TOKEN_SOFIA"
+a_doce_horas "$R_S3"
+req 'el centro reprograma fuera de plazo' 200 PATCH "$T/reservas/$R_S3" "$(jq -nc --arg f "$MARTES3" '{fecha:$f, hora:"10:30"}')" "$TOKEN"
+check 'el centro puede siempre' "$MARTES3 10:30" "$(jq -r '"\(.fecha) \(.horaInicio)"' "$TMP/body")"
+req 'Sofia no marca ausente' 403 PATCH "$T/reservas/$R_S3" '{"estado":"ausente"}' "$TOKEN_SOFIA"
+req 'ausente antes de la hora del turno' 409 PATCH "$T/reservas/$R_S3" '{"estado":"ausente"}' "$TOKEN"
+check 'con codigo too_early_for_no_show' too_early_for_no_show "$(jq -r .code "$TMP/body")"
+a_ayer "$R_S3"
+req 'ausente despues de la hora' 200 PATCH "$T/reservas/$R_S3" '{"estado":"ausente"}' "$TOKEN"
+check 'queda ausente, sin reembolso' 'ausente 0 0' "$(jq -r '.estado' "$TMP/body") $(reembolsos_de "$R_S3")"
+req 'ausente es terminal: no se cancela' 409 PATCH "$T/reservas/$R_S3" '{"estado":"cancelada","reembolsar":true}' "$TOKEN"
+
+req 'un servicio sin reprogramacion por autogestion' 200 PATCH "$T/servicios/$S30" '{"reprogramacionHorasAntes":null}' "$TOKEN"
+reservar_pagada 'una reserva con esa politica' "$(turno "$MARTES3" 11:15)" "$TOKEN_SOFIA"
+R_S4=$R
+req 'Sofia no puede reprogramarla' 409 PATCH "$T/reservas/$R_S4" "$(jq -nc --arg f "$MARTES3" '{fecha:$f, hora:"12:00"}')" "$TOKEN_SOFIA"
+req 'el servicio vuelve a su politica' 200 PATCH "$T/servicios/$S30" '{"reprogramacionHorasAntes":24,"cancelacionHorasAntes":48}' "$TOKEN"
+req 'la reserva vieja conserva la politica que acepto' 200 GET "$T/reservas/$R_S4" '' "$TOKEN_SOFIA"
+check 'sigue sin reprogramacion y con 24 horas para cancelar' 'null 24' "$(jq -r '"\(.reprogramacionHorasAntes) \(.cancelacionHorasAntes)"' "$TMP/body")"
+req 'cancelacionHorasAntes null en el servicio' 400 PATCH "$T/servicios/$S30" '{"cancelacionHorasAntes":null}' "$TOKEN"
+
+req 'el centro cancela sin decir si reembolsa' 400 PATCH "$T/reservas/$R_S4" '{"estado":"cancelada"}' "$TOKEN"
+req 'el centro cancela sin reembolso' 200 PATCH "$T/reservas/$R_S4" '{"estado":"cancelada","reembolsar":false}' "$TOKEN"
+check 'cancelada por el centro, nada que devolver' 'cancelada centro 0 0' "$(jq -r '"\(.estado) \(.canceladaPor)"' "$TMP/body") $(reembolsos_de "$R_S4")"
+reservar_pagada 'otra paga, para cancelar con reembolso' "$(reserva "$S30" "$MARTES3" 12:00 a2@example.com)"
+R_A2=$R
+req 'el centro cancela con reembolso' 200 PATCH "$T/reservas/$R_A2" '{"estado":"cancelada","reembolsar":true}' "$TOKEN"
+check 'se devuelve todo' aprobado "$(esperar 10 "select r.estado from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"reservaId\" = '$R_A2'" aprobado)"
+
+reservar_pagada 'una paga cuyo reembolso va a fallar una vez' "$(reserva "$S30" "$MARTES3" 12:45 f1@example.com)"
+R_F1=$R
+# Dos fallas y no una: el SDK reintenta solo un 503, y lo que se quiere ver es el reintento de
+# la cola, despues de que el SDK se rinde.
+mock /__test/fallas -X POST -d "$(jq -nc --arg p "/v1/payments/$PAGO/refunds" '{metodo:"POST", prefijo:$p, status:503, veces:2}')" >/dev/null
+req 'el centro la cancela con reembolso' 200 PATCH "$T/reservas/$R_F1" '{"estado":"cancelada","reembolsar":true}' "$TOKEN"
+check 'Mercado Pago falla: el reembolso queda pendiente para reintentar' pendiente "$(esperar 10 "select estado from \"Reembolso\" r where r.intentos = 1 and r.\"pagoId\" in (select id from \"Pago\" where \"reservaId\" = '$R_F1')" pendiente)"
+sql "update \"Reembolso\" set \"proximoIntentoAt\" = now() where \"pagoId\" in (select id from \"Pago\" where \"reservaId\" = '$R_F1')" >/dev/null
+check 'la tarea lo reintenta y sale' aprobado "$(esperar 15 "select estado from \"Reembolso\" where \"pagoId\" in (select id from \"Pago\" where \"reservaId\" = '$R_F1')" aprobado)"
+check 'una sola vez: el reintento lleva la misma idempotency key' 1 \
+  "$(llamadas_mp | jq --arg p "/v1/payments/$PAGO/refunds" '[.[] | select(.path == $p) | .idempotencyKey] | unique | length')"
+reservar_pagada 'una paga cuyo reembolso MP va a rechazar' "$(reserva "$S30" "$MARTES3" 15:00 f2@example.com)"
+R_F2=$R
+mock /__test/fallas -X POST -d "$(jq -nc --arg p "/v1/payments/$PAGO/refunds" '{metodo:"POST", prefijo:$p, status:401, veces:1}')" >/dev/null
+req 'el centro la cancela con reembolso, otra vez' 200 PATCH "$T/reservas/$R_F2" '{"estado":"cancelada","reembolsar":true}' "$TOKEN"
+check 'un 401 de MP no se reintenta: queda fallido' fallido "$(esperar 10 "select estado from \"Reembolso\" where \"pagoId\" in (select id from \"Pago\" where \"reservaId\" = '$R_F2')" fallido)"
+check 'y el centro recibe el mail para hacerlo a mano' 1 "$(esperar 10 "$N_MAILS where para = 'lili@lodelili.test' and asunto like '%a mano%'" 1)"
+
+req 'una reserva pendiente de sena' 201 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 18:00 amano@example.com)"
+R_MANO=$(jq -r .id "$TMP/body")
+req 'el centro la confirma a mano, porque le pagaron de otra forma' 200 PATCH "$T/reservas/$R_MANO" '{"estado":"confirmada"}' "$TOKEN"
+check 'queda confirmada sin pago online' 'confirmada 0' "$(jq -r '"\(.estado) \(.cobro.pagadoCentavos)"' "$TMP/body")"
+
+req 'una URL nueva para conectar otra cuenta' 200 GET "$T/cuenta-mercadopago/autorizacion" '' "$TOKEN"
+STATE2=$(node -e 'console.log(new URL(process.argv[1]).searchParams.get("state"))' "$(jq -r .url "$TMP/body")")
+req 'cambiar a otra cuenta con turnos pagos por venir' 409 POST "$T/cuenta-mercadopago" "$(conectar codigo-555666 "$STATE2")" "$TOKEN"
+check 'con codigo mp_account_change_blocked' mp_account_change_blocked "$(jq -r .code "$TMP/body")"
+req 'desconectarla con turnos pagos por venir' 409 DELETE "$T/cuenta-mercadopago" '' "$TOKEN"
+
+SEED_MP_ACCESS_TOKEN=APP_USR-mock-222333 SEED_MP_PUBLIC_KEY=APP_USR-pk-222333 SEED_MP_USER_ID=222333 \
+  node "$RAIZ/prisma/conectar-mp.ts" bella-piel >/dev/null
+req 'Bella Piel, conectada con credenciales de prueba y sin OAuth' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$LUNES3" 12:00 bella@example.com)"
+check 'cobra la sena como cualquier cuenta conectada' pendiente "$(jq -r .estado "$TMP/body")"
+check 'con el token de prueba de Bella Piel' true \
+  "$(llamadas_mp | jq --arg r "$(jq -r .id "$TMP/body")" 'any(.[]; .path == "/checkout/preferences" and .cuerpo.external_reference == $r and (.token | endswith("-222333")))')"
+
+REFRESH_ANTES=$(sql "select \"refreshTokenCifrado\" from \"CuentaMercadoPago\" where \"mpUserId\" = '111222'")
+sql "update \"CuentaMercadoPago\" set \"expiraAt\" = now() + interval '1 day' where \"mpUserId\" = '111222'" >/dev/null
+check 'a un dia de vencer, la tarea renueva el token' t \
+  "$(esperar 15 "select \"refreshTokenCifrado\" <> '$REFRESH_ANTES' from \"CuentaMercadoPago\" where \"mpUserId\" = '111222'" t)"
+check 'con el refresh token, y el nuevo vence en 180 dias' t \
+  "$(sql "select \"expiraAt\" > now() + interval '170 days' from \"CuentaMercadoPago\" where \"mpUserId\" = '111222'")"
+mock /__test/fallas -X POST -d '{"metodo":"POST", "prefijo":"/oauth/token", "status":400, "veces":1}' >/dev/null
+sql "update \"CuentaMercadoPago\" set \"expiraAt\" = now() + interval '1 day' where \"mpUserId\" = '111222'" >/dev/null
+check 'si MP rechaza la renovacion, la cuenta pide reconexion' t \
+  "$(esperar 15 "select \"requiereReconexion\" from \"CuentaMercadoPago\" where \"mpUserId\" = '111222'" t)"
+check 'y el centro recibe el mail para reconectar' 1 "$(esperar 10 "$N_MAILS where para = 'lili@lodelili.test' and asunto like 'Volv%conectar%'" 1)"
+req 'mientras tanto, un turno en efectivo' 201 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 16:30 reconexion@example.com)"
+check 'entra sin sena, como en el MVP' 'confirmada null' "$(jq -r '"\(.estado) \(.cobro)"' "$TMP/body")"
+req 'y uno con Mercado Pago' 409 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 17:15 reconexion2@example.com | jq -c '.metodoPago = "mercadopago"')"
+
 seccion 'Documentacion'
 req 'el OpenAPI se sirve' 200 GET /docs-json
-check 'documenta los 12 paths' 12 "$(jq '.paths | length' "$TMP/body")"
+check 'documenta los 14 paths: el webhook no, porque no es para el front' 14 "$(jq '.paths | length' "$TMP/body")"
 check 'cada operacion tiene su resumen en espanol' true \
   "$(jq '[.paths | to_entries[] | .value | to_entries[] | .value.summary // ""] | all(length > 0) and any(test("centro"))' "$TMP/body")"
 check 'ningun resumen es un parrafo: el razonamiento no va al OpenAPI' true \

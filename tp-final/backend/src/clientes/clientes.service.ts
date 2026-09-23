@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
-import { firmar, mismaFirma } from '../common/cifrado.js';
+import { cripto } from '../common/cripto.js';
 import type { TenantRequest } from '../common/decorators.js';
 import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
 import { codigoAcceso } from '../notificaciones/plantillas.js';
@@ -34,7 +34,7 @@ const VENTANA_CODIGOS_MINUTOS = 15;
  * en otra cuenta da otra firma.
  */
 const firmaDe = (email: string, codigo: string): string =>
-  firmar(`${TenantContext.require()}:${email}:${codigo}`);
+  cripto.firmar(`${TenantContext.require()}:${email}:${codigo}`);
 
 @Injectable()
 export class ClientesService {
@@ -118,7 +118,9 @@ export class ClientesService {
       data: { intentos: { increment: 1 } },
     });
     if (count === 0) throw invalido;
-    if (!mismaFirma(ultimo.codigoHash, firmaDe(email, codigo))) throw invalido;
+    if (!cripto.mismaFirma(ultimo.codigoHash, firmaDe(email, codigo))) {
+      throw invalido;
+    }
 
     // Marcarlo usado tambien es condicional: dos ingresos simultaneos con el mismo codigo,
     // entra uno.

@@ -367,14 +367,21 @@ export class MercadoPago {
       client_secret: opciones.clientSecret,
     };
     return {
-      /** La URL a la que se manda al vendedor, y el verifier de PKCE que hay que guardar. */
-      authorizationUrl(state: string): { url: string; verifier: string } {
-        const verifier = randomBytes(32).toString('base64url');
+      /**
+       * Un verifier de PKCE nuevo. Va aparte de la URL porque hay que guardarlo hasta el
+       * canje, y lo mas comodo suele ser meterlo cifrado en el propio `state`.
+       */
+      newVerifier(): string {
+        return randomBytes(32).toString('base64url');
+      },
+
+      /** La URL a la que se manda al vendedor para que autorice, con el challenge S256. */
+      authorizationUrl(state: string, verifier: string): string {
         const challenge = createHash('sha256')
           .update(verifier)
           .digest('base64url');
         // Los tipos del SDK no tienen los campos de PKCE, pero los pasa tal cual a la URL.
-        const url = new OAuth(config()).getAuthorizationURL({
+        return new OAuth(config()).getAuthorizationURL({
           options: {
             client_id: opciones.clientId,
             redirect_uri: opciones.redirectUri,
@@ -383,7 +390,6 @@ export class MercadoPago {
             code_challenge_method: 'S256',
           } as { client_id: string; redirect_uri: string; state: string },
         });
-        return { url, verifier };
       },
 
       /** Canjea el codigo que vuelve en la redirect por las credenciales del vendedor. */

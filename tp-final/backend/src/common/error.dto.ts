@@ -35,6 +35,13 @@ export const CODIGOS_DE_ERROR = [
   'invalid_code', // el codigo de ingreso no es valido, vencio, ya se uso o se agotaron los intentos
   'too_many_codes', // se pidieron demasiados codigos para ese email; esperar unos minutos
   'cliente_not_found', // la clienta de la sesion ya no existe
+  'online_payment_unavailable', // el centro no puede cobrar online ahora: pagar en efectivo
+  'payment_provider_unavailable', // Mercado Pago fallo o no respondio; reintentar mas tarde
+  'reschedule_not_allowed', // fuera del plazo para reprogramar, o el turno no se reprograma
+  'too_early_for_no_show', // no se marca ausente antes de la hora del turno
+  'invalid_state', // el state de la conexion con Mercado Pago vencio o no es de este centro
+  'mp_account_change_blocked', // hay pagos de turnos futuros que dependen de esta cuenta
+  'mercadopago_not_configured', // la plataforma no tiene configurada la app de Mercado Pago
 ] as const;
 
 export type CodigoDeError = (typeof CODIGOS_DE_ERROR)[number];

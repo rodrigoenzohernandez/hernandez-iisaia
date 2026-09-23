@@ -354,6 +354,324 @@
         ]
       }
     },
+    "/api/v1/tenants/{tenantSlug}/cuenta-mercadopago": {
+      "get": {
+        "operationId": "CuentaMercadoPagoController_estado",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuentaMercadoPagoDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Si el centro tiene la cuenta conectada. Nunca devuelve los tokens.",
+        "tags": [
+          "CuentaMercadoPago"
+        ]
+      },
+      "post": {
+        "operationId": "CuentaMercadoPagoController_conectar",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConectarCuentaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuentaMercadoPagoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "El state vencio, es de otro centro, o Mercado Pago rechazo el codigo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Cambiar de cuenta dejaria sin reembolso pagos de turnos por venir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Conecta la cuenta con lo que devolvio Mercado Pago en la redirect: `code` y `state`.",
+        "tags": [
+          "CuentaMercadoPago"
+        ]
+      },
+      "delete": {
+        "operationId": "CuentaMercadoPagoController_desconectar",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuentaMercadoPagoDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Hay pagos de turnos por venir que se tendrian que poder reembolsar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Desconecta la cuenta. El centro deja de cobrar online.",
+        "tags": [
+          "CuentaMercadoPago"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/cuenta-mercadopago/autorizacion": {
+      "get": {
+        "operationId": "CuentaMercadoPagoController_autorizacion",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutorizacionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "La plataforma no tiene configurada la app de Mercado Pago.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "La URL de Mercado Pago para autorizar a la plataforma a cobrar en nombre del centro.",
+        "tags": [
+          "CuentaMercadoPago"
+        ]
+      }
+    },
     "/api/v1/tenants/{tenantSlug}/servicios": {
       "get": {
         "operationId": "ServiciosController_findAll",
@@ -1013,7 +1331,8 @@
               "enum": [
                 "pendiente",
                 "confirmada",
-                "cancelada"
+                "cancelada",
+                "ausente"
               ]
             }
           },
@@ -1264,7 +1583,7 @@
             }
           },
           "400": {
-            "description": "El estado pedido no existe.",
+            "description": "Estado y fecha juntos, fecha sin hora, o reembolsar fuera de lugar.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1274,7 +1593,7 @@
             }
           },
           "401": {
-            "description": "Falta el token o no es valido.",
+            "description": "Falta el token.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1284,7 +1603,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "description": "Token de otro centro, o una clienta pidiendo algo que es del centro.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1294,7 +1613,7 @@
             }
           },
           "404": {
-            "description": "La reserva no existe.",
+            "description": "La reserva no existe, o no es de la clienta de la sesion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1304,7 +1623,7 @@
             }
           },
           "409": {
-            "description": "Esa transicion de estado no es valida.",
+            "description": "Transicion invalida, fuera de plazo para reprogramar, sin cupo en el horario nuevo o ausente antes de hora.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1319,7 +1638,7 @@
             "bearer": []
           }
         ],
-        "summary": "Confirma o cancela un turno.",
+        "summary": "Cancela, reprograma, confirma o marca ausente un turno.",
         "tags": [
           "Reservas"
         ]
@@ -1389,7 +1708,8 @@
               "enum": [
                 "pendiente",
                 "confirmada",
-                "cancelada"
+                "cancelada",
+                "ausente"
               ]
             }
           },
@@ -1575,7 +1895,14 @@
               "http_error",
               "invalid_code",
               "too_many_codes",
-              "cliente_not_found"
+              "cliente_not_found",
+              "online_payment_unavailable",
+              "payment_provider_unavailable",
+              "reschedule_not_allowed",
+              "too_early_for_no_show",
+              "invalid_state",
+              "mp_account_change_blocked",
+              "mercadopago_not_configured"
             ],
             "type": "string",
             "example": "slot_full"
@@ -1756,6 +2083,74 @@
           }
         }
       },
+      "CuentaMercadoPagoDto": {
+        "type": "object",
+        "properties": {
+          "mpUserId": {
+            "type": "string",
+            "nullable": true,
+            "description": "El id de la cuenta en Mercado Pago.",
+            "example": "111222"
+          },
+          "liveMode": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "false con credenciales de prueba."
+          },
+          "conectadaAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "conectada": {
+            "type": "boolean",
+            "description": "Si el centro tiene una cuenta conectada."
+          },
+          "requiereReconexion": {
+            "type": "boolean",
+            "description": "MP revoco el acceso: hasta reconectar, el centro no cobra online."
+          }
+        },
+        "required": [
+          "mpUserId",
+          "liveMode",
+          "conectadaAt",
+          "conectada",
+          "requiereReconexion"
+        ]
+      },
+      "AutorizacionDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Adonde mandar a la administradora para que autorice. Vence a los 10 minutos.",
+            "example": "https://auth.mercadopago.com/authorization?client_id=..."
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "ConectarCuentaDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "code",
+          "state"
+        ]
+      },
       "CursorPageDto": {
         "type": "object",
         "properties": {
@@ -1790,6 +2185,17 @@
             "description": "Sena que se cobra al reservar, en centavos. Nunca mayor al precio.",
             "example": 540000
           },
+          "reprogramacionHorasAntes": {
+            "type": "number",
+            "nullable": true,
+            "description": "Hasta cuantas horas antes la clienta reprograma sola. null: no puede.",
+            "example": 24
+          },
+          "cancelacionHorasAntes": {
+            "type": "number",
+            "description": "Hasta cuantas horas antes la clienta cancela con reembolso total.",
+            "example": 24
+          },
           "id": {
             "type": "string"
           },
@@ -1817,6 +2223,8 @@
         "required": [
           "precioCentavos",
           "senaCentavos",
+          "reprogramacionHorasAntes",
+          "cancelacionHorasAntes",
           "id",
           "nombre",
           "descripcion",
@@ -1856,6 +2264,19 @@
           },
           "requiereValoracion": {
             "type": "boolean"
+          },
+          "reprogramacionHorasAntes": {
+            "type": "number",
+            "nullable": true,
+            "description": "Hasta cuantas horas antes del turno la clienta puede reprogramar sola, sin costo. null\napaga la reprogramacion por autogestion; el centro puede reprogramar siempre.",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "cancelacionHorasAntes": {
+            "type": "number",
+            "description": "Hasta cuantas horas antes la clienta cancela con reembolso total.",
+            "minimum": 0,
+            "maximum": 720
           }
         },
         "required": [
@@ -1897,8 +2318,21 @@
           "requiereValoracion": {
             "type": "boolean"
           },
+          "reprogramacionHorasAntes": {
+            "type": "number",
+            "nullable": true,
+            "description": "Hasta cuantas horas antes del turno la clienta puede reprogramar sola, sin costo. null\napaga la reprogramacion por autogestion; el centro puede reprogramar siempre.",
+            "minimum": 0,
+            "maximum": 720
+          },
           "activo": {
             "type": "boolean"
+          },
+          "cancelacionHorasAntes": {
+            "type": "number",
+            "description": "Hasta cuantas horas antes la clienta cancela con reembolso total.",
+            "minimum": 0,
+            "maximum": 720
           }
         }
       },
@@ -2069,6 +2503,44 @@
           "servicioId"
         ]
       },
+      "CobroDto": {
+        "type": "object",
+        "properties": {
+          "montoCentavos": {
+            "type": "number",
+            "description": "La sena, o el precio total si se paga con Mercado Pago, en centavos.",
+            "example": 540000
+          },
+          "pagadoCentavos": {
+            "type": "number",
+            "description": "Lo que entro por Mercado Pago, aprobado.",
+            "example": 540000
+          },
+          "reembolsadoCentavos": {
+            "type": "number",
+            "description": "Lo que se devolvio.",
+            "example": 0
+          },
+          "venceAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "Hasta cuando se puede pagar; despues la reserva vence. null si ya no esta pendiente."
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "El link de Mercado Pago al que se redirige para pagar. null si ya no esta pendiente."
+          }
+        },
+        "required": [
+          "montoCentavos",
+          "pagadoCentavos",
+          "reembolsadoCentavos",
+          "venceAt",
+          "checkoutUrl"
+        ]
+      },
       "ReservaDto": {
         "type": "object",
         "properties": {
@@ -2086,8 +2558,14 @@
           },
           "estado": {
             "type": "string",
-            "description": "`pendiente`, `confirmada` o `cancelada`.",
+            "description": "`pendiente` (esperando el pago), `confirmada`, `cancelada` o `ausente`.",
             "example": "confirmada"
+          },
+          "canceladaPor": {
+            "type": "string",
+            "nullable": true,
+            "description": "`clienta`, `centro` o `sistema` (vencio sin pagarse). null si no esta cancelada.",
+            "example": null
           },
           "metodoPago": {
             "type": "string",
@@ -2099,8 +2577,41 @@
             "description": "Sena congelada al momento de reservar, en centavos.",
             "example": 540000
           },
+          "precioCentavos": {
+            "type": "number",
+            "description": "Precio congelado al momento de reservar, en centavos.",
+            "example": 1800000
+          },
+          "cobro": {
+            "nullable": true,
+            "description": "El cobro online. null si no hay nada que pagar por Mercado Pago.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CobroDto"
+              }
+            ]
+          },
+          "reprogramacionHorasAntes": {
+            "type": "number",
+            "nullable": true,
+            "description": "La politica que la clienta acepto al reservar. null: no puede reprogramar sola.",
+            "example": 24
+          },
+          "cancelacionHorasAntes": {
+            "type": "number",
+            "example": 24
+          },
           "id": {
             "type": "string"
+          },
+          "puedeReprogramar": {
+            "type": "boolean",
+            "description": "Si la clienta puede reprogramarla sola ahora. Lo calcula el servidor con la hora del\ncentro, para que el front no tenga que hacer aritmetica de zonas horarias."
+          },
+          "puedeCancelarConReembolso": {
+            "type": "boolean",
+            "description": "Si cancelarla ahora devuelve lo pagado. Fuera de plazo se pierde todo lo pagado."
           },
           "clienteNombre": {
             "type": "string"
@@ -2132,9 +2643,16 @@
           "horaInicio",
           "horaFin",
           "estado",
+          "canceladaPor",
           "metodoPago",
           "senaCentavos",
+          "precioCentavos",
+          "cobro",
+          "reprogramacionHorasAntes",
+          "cancelacionHorasAntes",
           "id",
+          "puedeReprogramar",
+          "puedeCancelarConReembolso",
           "clienteNombre",
           "clienteEmail",
           "clienteTelefono",
@@ -2149,7 +2667,7 @@
         "properties": {
           "estado": {
             "type": "string",
-            "description": "`pendiente`, `confirmada` o `cancelada`.",
+            "description": "`pendiente`, `confirmada`, `cancelada` o `ausente`.",
             "example": "confirmada"
           }
         },
@@ -2161,18 +2679,32 @@
         "type": "object",
         "properties": {
           "estado": {
-            "description": "Nuevo estado. Transiciones validas: pendiente -> confirmada | cancelada,\nconfirmada -> cancelada. `cancelada` es terminal.",
+            "description": "Transiciones validas: pendiente -> confirmada | cancelada, confirmada -> cancelada |\nausente. `cancelada` y `ausente` son terminales.",
             "enum": [
               "confirmada",
-              "cancelada"
+              "cancelada",
+              "ausente"
             ],
             "type": "string",
             "example": "cancelada"
+          },
+          "fecha": {
+            "type": "string",
+            "description": "Fecha nueva, para reprogramar. Va con `hora`.",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "example": "2026-10-12"
+          },
+          "hora": {
+            "type": "string",
+            "description": "Hora nueva, de la grilla del centro. Va con `fecha`.",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "example": "15:00"
+          },
+          "reembolsar": {
+            "type": "boolean",
+            "description": "Solo el centro, solo al cancelar: si se devuelve lo pagado. Obligatorio si hubo pago.\nPara la clienta lo decide la politica del servicio."
           }
-        },
-        "required": [
-          "estado"
-        ]
+        }
       }
     }
   }

@@ -90,10 +90,11 @@ export class ReservasController {
     description: 'La reserva no existe, o no es de la clienta de la sesion.',
   })
   findOne(
+    @CurrentTenant() tenant: TenantRequest,
     @Param('reservaId') reservaId: string,
     @CurrentUsuario() usuario: UsuarioRequest,
   ): Promise<ReservaDto> {
-    return this.reservas.findOne(reservaId, usuario);
+    return this.reservas.findOne(tenant, reservaId, usuario);
   }
 
   /** El estado de una reserva, sin datos personales. Para la pagina de vuelta de un pago. */
@@ -112,32 +113,47 @@ export class ReservasController {
   @Get()
   @ApiCursorPage(ReservaDto)
   findAll(
+    @CurrentTenant() tenant: TenantRequest,
     @Query() query: ListReservasQueryDto,
   ): Promise<CursorPageDto<ReservaDto>> {
-    return this.reservas.findAll(query);
+    return this.reservas.findAll(tenant, query);
   }
 
-  /** Confirma o cancela un turno. */
-  @ApiSoloAdmin()
+  /** Cancela, reprograma, confirma o marca ausente un turno. */
+  @Roles('cliente', 'admin')
   @Patch(':reservaId')
+  @ApiBearerAuth()
   @ApiOkResponse({ type: ReservaDto })
   @ApiBadRequestResponse({
     type: ErrorDto,
-    description: 'El estado pedido no existe.',
+    description:
+      'Estado y fecha juntos, fecha sin hora, o reembolsar fuera de lugar.',
   })
-  @ApiNotFoundResponse({ type: ErrorDto, description: 'La reserva no existe.' })
+  @ApiUnauthorizedResponse({ type: ErrorDto, description: 'Falta el token.' })
+  @ApiForbiddenResponse({
+    type: ErrorDto,
+    description:
+      'Token de otro centro, o una clienta pidiendo algo que es del centro.',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorDto,
+    description: 'La reserva no existe, o no es de la clienta de la sesion.',
+  })
   @ApiConflictResponse({
     type: ErrorDto,
-    description: 'Esa transicion de estado no es valida.',
+    description:
+      'Transicion invalida, fuera de plazo para reprogramar, sin cupo en el horario nuevo o ausente antes de hora.',
   })
-  // Es un PATCH del estado y no un POST /cancelar: cancelar es cambiarle un campo al
-  // recurso, no crear uno nuevo. Cancelar libera el cupo; `cancelada` es terminal.
+  // Es un PATCH y no un POST /cancelar ni /reprogramar: las dos cosas le cambian campos al
+  // recurso, no crean uno nuevo. La clienta puede cancelar y reprogramar las suyas; el centro,
+  // todo. `cancelada` y `ausente` son terminales.
   update(
     @CurrentTenant() tenant: TenantRequest,
     @Param('reservaId') reservaId: string,
     @Body() dto: UpdateReservaDto,
+    @CurrentUsuario() usuario: UsuarioRequest,
   ): Promise<ReservaDto> {
-    return this.reservas.update(tenant, reservaId, dto);
+    return this.reservas.update(tenant, reservaId, dto, usuario);
   }
 }
 
@@ -152,9 +168,10 @@ export class MisReservasController {
   @Get()
   @ApiCursorPage(ReservaDto)
   findAll(
+    @CurrentTenant() tenant: TenantRequest,
     @CurrentUsuario() usuario: UsuarioRequest,
     @Query() query: ListReservasQueryDto,
   ): Promise<CursorPageDto<ReservaDto>> {
-    return this.reservas.findAll(query, usuario.id);
+    return this.reservas.findAll(tenant, query, usuario.id);
   }
 }

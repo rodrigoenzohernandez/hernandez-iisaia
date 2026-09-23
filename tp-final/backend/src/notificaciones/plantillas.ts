@@ -124,3 +124,61 @@ export const codigoAcceso = (d: {
     `Tu código es ${d.codigo}. Vence en ${d.minutos} minutos y sirve una sola vez.`,
     'Si no lo pediste, ignorá este mail: sin el código nadie puede entrar a tu cuenta.',
   ]);
+
+export const turnoReprogramado = (
+  d: DatosTurno & { fechaAnterior: string; horaAnterior: string },
+): Plantilla =>
+  armar(d.centro, `Tu turno en ${d.centro} cambió de horario`, [
+    `Hola ${d.clienteNombre}:`,
+    `Tu turno de ${d.servicio} pasó del ${fechaLarga(d.fechaAnterior)} a las ${d.horaAnterior} al ${fechaLarga(d.fecha)} a las ${d.hora}.`,
+  ]);
+
+/** A la clienta, cuando su reserva vence sin que se complete el pago. */
+export const turnoVencido = (d: DatosTurno): Plantilla =>
+  armar(d.centro, `Tu reserva en ${d.centro} venció`, [
+    `Hola ${d.clienteNombre}:`,
+    `No se completó el pago de tu reserva: ${cuando(d)}`,
+    'Liberamos el horario. Si todavía lo querés, podés reservarlo de nuevo.',
+  ]);
+
+/** A la clienta, cuando un pago llega y no hay turno al que asignarlo. */
+export const pagoDevuelto = (
+  d: DatosTurno & { montoCentavos: number },
+): Plantilla =>
+  armar(d.centro, `Te devolvemos un pago de ${d.centro}`, [
+    `Hola ${d.clienteNombre}:`,
+    `Recibimos un pago de ${pesos(d.montoCentavos)} para ${cuando(d)}`,
+    'La reserva ya no estaba vigente o ya estaba paga, así que te lo devolvemos al mismo medio con el que pagaste.',
+  ]);
+
+/** Al centro, cuando una clienta cancela. */
+export const avisoCancelacion = (
+  d: DatosTurno & { reembolsoCentavos: number },
+): Plantilla =>
+  armar(
+    d.centro,
+    `Cancelación: ${d.servicio}, ${fechaLarga(d.fecha)} ${d.hora}`,
+    [
+      `${d.clienteNombre} canceló su turno: ${cuando(d)}`,
+      d.reembolsoCentavos > 0
+        ? `Se le reembolsan ${pesos(d.reembolsoCentavos)}.`
+        : 'Canceló fuera de plazo o sin pago online: no hay reembolso.',
+    ],
+  );
+
+/** Al centro, cuando un reembolso no se pudo hacer y hay que hacerlo a mano. */
+export const reembolsoManual = (
+  d: DatosTurno & { montoCentavos: number; motivo: string },
+): Plantilla =>
+  armar(d.centro, 'Un reembolso necesita que lo hagas a mano', [
+    `No pudimos reembolsar ${pesos(d.montoCentavos)} a ${d.clienteNombre} por ${cuando(d)}`,
+    `Mercado Pago respondió: ${d.motivo}`,
+    'Hacelo desde tu cuenta de Mercado Pago, en la actividad de ese pago.',
+  ]);
+
+/** Al centro, cuando Mercado Pago revoca el acceso o rechaza la renovación. */
+export const reconectarMercadoPago = (d: { centro: string }): Plantilla =>
+  armar(d.centro, 'Volvé a conectar tu cuenta de Mercado Pago', [
+    'Mercado Pago dejó de aceptar la conexión con tu cuenta, así que por ahora no se pueden cobrar señas ni turnos online.',
+    'Entrá al panel y volvé a conectar Mercado Pago. Mientras tanto, los turnos en efectivo siguen entrando sin seña.',
+  ]);
