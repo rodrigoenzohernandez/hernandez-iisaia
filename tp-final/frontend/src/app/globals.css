@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@theme {
+  /* Verde comprometido a escala de página: campos enteros, no acentos salpicados.
+     Nunca texto blanco sobre --color-verde: no llega a 4.5:1. La tinta sí, y con holgura. */
+  --color-verde: #a8c63c;
+  --color-verde-vivo: #c3e24d;
+  --color-verde-hondo: #46591a;
+  --color-verde-humo: #dfe7c4;
+
+  --color-tinta: #16190f;
+  --color-tinta-suave: #3a4030;
+  --color-tinta-tenue: #6b7259;
+
+  --color-papel: #f6f7f2;
+  --color-papel-hueso: #e9ece0;
+
+  --font-sans: var(--fuente), ui-sans-serif, system-ui, sans-serif;
+
+  --ease-salida: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    background: var(--color-papel);
+  }
+
+  body {
+    background: var(--color-papel);
+    color: var(--color-tinta);
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
+  }
+
+  /* Las superficies que no dibujé también llevan el diseño. */
+  ::selection {
+    background: var(--color-verde);
+    color: var(--color-tinta);
+  }
+
+  :where(input, textarea) {
+    caret-color: var(--color-verde-hondo);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-verde-hondo);
+    outline-offset: 3px;
+    border-radius: 1px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-papel-hueso);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-tinta-tenue);
+    border: 3px solid var(--color-papel-hueso);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-verde-hondo);
+  }
+
+  a {
+    text-underline-offset: 0.22em;
+    text-decoration-thickness: from-font;
+  }
+
+  ::placeholder {
+    color: var(--color-tinta-tenue);
+  }
+}
+
+@layer utilities {
+  /* Los numerales son dato: tabulares para que precios y horas alineen en columna. */
+  .cifra {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* El eje de ancho de Archivo hace el trabajo expresivo que en otro sistema haría
+     una segunda familia. */
+  .ancha {
+    font-stretch: 125%;
+  }
+  .angosta {
+    font-stretch: 82%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

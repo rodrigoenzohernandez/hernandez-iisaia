@@ -1,0 +1,151 @@
+# Levanta la aplicación entera: base, API y frontend.
+#
+# No reemplaza a backend/docker-compose.yml, que levanta SOLO la base para trabajar con
+# `npm run start:dev` afuera. Son dos caminos alternativos y los dos publican el 5442, así
+# que no se pueden correr a la vez.
+#
+#   cp .env.example .env     # y completar los dos secretos
+#   docker compose up -d --build
+#
+# Eso es todo: la migración y la siembra inicial corren solas y en orden. El seed detecta si
+# la base ya tiene datos y en ese caso no la toca, así que `up` es seguro de repetir.
+# Para volver al estado inicial borrando lo cargado:
+#   docker compose --profile resembrar run --rm resembrar
+#
+# Frontend en http://localhost:3101 · API en http://localhost:3100/api/v1
+
+name: turnos
+
+x-conexion: &conexion
+  DATABASE_URL: postgresql://turnos:turnos@db:5432/turnos?schema=public
+
+# Los cuatro servicios que salen del backend comparten imagen. Sin el `image:` explícito,
+# cada uno construiría su propia copia del mismo Dockerfile: cuatro builds en vez de uno.
+x-imagen-backend: &imagen-backend
+  build: ./backend
+  image: turnos-backend:local
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: turnos
+      POSTGRES_PASSWORD: turnos
+      POSTGRES_DB: turnos
+    ports:
+      # 5442 en el host, igual que el compose del backend: 5432 y 5433 suelen estar tomados.
+      - '5442:5432'
+    volumes:
+      - turnos-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Sin esto, migrate arranca antes de que Postgres acepte conexiones y falla.
+      test: ['CMD-SHELL', 'pg_isready -U turnos -d turnos']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # Aplica las migraciones y termina. El backend espera a que salga con éxito.
+  migrate:
+    <<: *imagen-backend
+    restart: 'no'
+    environment: *conexion
+    command: ['npx', 'prisma', 'migrate', 'deploy']
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Siembra los 3 centros la PRIMERA vez y solo esa vez.
+  #
+  # prisma/seed.ts arranca con cinco deleteMany, y el primero es el de reservas: correrlo en
+  # cada `up` borraría los turnos cargados. Por eso no se ejecuta a ciegas sino detrás de una
+  # consulta: si la tabla Tenant tiene filas, no se toca nada.
+  seed:
+    <<: *imagen-backend
+    restart: 'no'
+    environment:
+      <<: *conexion
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?falta SEED_ADMIN_PASSWORD en el .env (generala con 'openssl rand -base64 18')}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        estado=$$(node -e 'const {Client}=require("pg");const c=new Client({connectionString:process.env.DATABASE_URL});c.connect().then(()=>c.query(`select count(*)::int as n from "Tenant"`)).then(r=>{console.log(r.rows[0].n===0?"vacia":"con-datos");return c.end()}).catch(e=>{console.error(e.message);process.exit(1)})')
+        if [ "$$estado" = "vacia" ]; then
+          echo "Base vacia: sembrando los tres centros."
+          node prisma/seed.ts
+        else
+          echo "La base ya tiene datos, no la toco. Para rehacerla desde cero:"
+          echo "  docker compose --profile resembrar run --rm resembrar"
+        fi
+
+  # La vía explícita para volver al estado del seed, borrando todo lo cargado.
+  # No corre nunca sola: hay que pedirla por su perfil.
+  resembrar:
+    <<: *imagen-backend
+    profiles: ['resembrar']
+    restart: 'no'
+    environment:
+      <<: *conexion
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?falta SEED_ADMIN_PASSWORD en el .env (generala con 'openssl rand -base64 18')}"
+    command: ['node', 'prisma/seed.ts']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  backend:
+    <<: *imagen-backend
+    restart: unless-stopped
+    ports:
+      - '3100:3100'
+    environment:
+      <<: *conexion
+      PORT: 3100
+      # El navegador pide desde el 3101 del host, no desde la red del compose.
+      CORS_ORIGIN: http://localhost:3101
+      JWT_SECRET: "${JWT_SECRET:?falta JWT_SECRET en el .env (generalo con 'openssl rand -base64 48')}"
+      THROTTLE_LIMIT: ${THROTTLE_LIMIT:-5}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3100/api/v1/tenants/lo-de-lili/servicios').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 8s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Se hornea en el bundle del navegador durante el build. Tiene que ser una dirección
+        # que resuelva la clienta desde su máquina, no un nombre de la red del compose.
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:3100/api/v1
+        NEXT_PUBLIC_TENANT_SLUG: lo-de-lili
+    restart: unless-stopped
+    ports:
+      - '3101:3101'
+    environment:
+      # Esta la lee el servidor de Next en tiempo de ejecución, para las páginas que traen
+      # datos del lado del servidor. Ahí `localhost` sería el propio contenedor del frontend.
+      API_BASE_URL_INTERNA: http://backend:3100/api/v1
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  turnos-pgdata:
