@@ -14,14 +14,25 @@ import { crearCripto } from '../src/common/cifrado.ts';
 
 type Credenciales = { accessToken: string; publicKey: string; userId: string };
 
-/** Las credenciales de prueba del entorno, o null si no estan las tres. */
+/**
+ * Las credenciales de prueba del entorno, o null si no hay. Token y user id van juntos: con
+ * uno solo, falla en vez de dejar al centro sin Mercado Pago en silencio. La public key es
+ * opcional porque Checkout Pro no la usa; hace falta el dia que se sume un Brick.
+ */
 export function credencialesDePrueba(): Credenciales | null {
   const accessToken = process.env.SEED_MP_ACCESS_TOKEN;
-  const publicKey = process.env.SEED_MP_PUBLIC_KEY;
   const userId = process.env.SEED_MP_USER_ID;
-  return accessToken && publicKey && userId
-    ? { accessToken, publicKey, userId }
-    : null;
+  if (!accessToken && !userId) return null;
+  if (!accessToken || !userId) {
+    throw new Error(
+      'Las credenciales de prueba van juntas: SEED_MP_ACCESS_TOKEN y SEED_MP_USER_ID',
+    );
+  }
+  return {
+    accessToken,
+    publicKey: process.env.SEED_MP_PUBLIC_KEY ?? '',
+    userId,
+  };
 }
 
 export async function conectarCuentaDePrueba(

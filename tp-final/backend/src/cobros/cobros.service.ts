@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import type { EstadoPago, Prisma } from '@prisma/client';
 import type { TenantRequest } from '../common/decorators.js';
-import { aFecha } from '../common/horario.js';
+import { aFecha, ahoraEn, minutosHasta } from '../common/horario.js';
 import {
   type MercadoPago,
   MercadoPagoError,
@@ -175,8 +175,12 @@ export class CobrosService {
 
     const anterior = await tx.pago.findFirst({
       where: { proveedorId: pago.id },
-      select: { id: true, estado: true },
+      select: { id: true, decididoAt: true },
     });
+    // Se decide una sola vez: la primera vez que llega aprobado. Un aviso repetido, o un pago
+    // que vuelve a aprobado despues de una disputa ganada, solo actualiza el estado; mirar el
+    // estado guardado no alcanza, porque cada aviso lo pisa con el de MP.
+    const decidirAhora = pago.status === 'approved' && !anterior?.decididoAt;
     const datos = {
       estado: ESTADOS[pago.status],
       estadoDetalle: pago.statusDetail,
@@ -184,6 +188,7 @@ export class CobrosService {
       reembolsadoCentavos: pago.refundedCents,
       medio: pago.method,
       aprobadoAt: pago.approvedAt,
+      ...(decidirAhora ? { decididoAt: new Date() } : {}),
     };
     const fila = anterior
       ? await tx.pago.update({
@@ -200,8 +205,7 @@ export class CobrosService {
           select: { id: true },
         });
 
-    // Se decide una sola vez: cuando el pago pasa a aprobado. Un aviso repetido no hace nada.
-    if (pago.status !== 'approved' || anterior?.estado === 'aprobado') return;
+    if (!decidirAhora) return;
 
     const turno = {
       centro: tenant.nombre,
@@ -244,6 +248,25 @@ export class CobrosService {
       );
     };
 
+    // La reserva que esperaba este pago no se confirma: se cancela, si seguia pendiente, y lo
+    // pagado se devuelve.
+    const cancelarYDevolver = async (): Promise<void> => {
+      if (reserva.estado === 'pendiente') {
+        await tx.reserva.update({
+          where: { id: reserva.id },
+          data: {
+            estado: 'cancelada',
+            canceladaPor: 'sistema',
+            canceladaAt: new Date(),
+          },
+        });
+      }
+      return devolver();
+    };
+
+    // Un centro dado de baja no toma turnos: lo que entre despues de la baja se devuelve.
+    if (!tenant.activo) return cancelarYDevolver();
+
     const vencida =
       (reserva.estado === 'cancelada' && reserva.canceladaPor === 'sistema') ||
       (reserva.estado === 'pendiente' &&
@@ -257,6 +280,11 @@ export class CobrosService {
       return confirmar();
     }
     if (vencida) {
+      // Un aviso que llega tarde, despues de la hora del turno, no reactiva nada.
+      const ahora = ahoraEn(tenant.zonaHoraria);
+      if (minutosHasta(aFecha(reserva.fecha), reserva.horaInicio, ahora) <= 0) {
+        return cancelarYDevolver();
+      }
       // Vencio sin pagarse y el pago llego igual: si el horario sigue libre se reactiva, y
       // si ya lo tomo otra persona se devuelve. Mientras estuvo vencida no contaba para el
       // cupo, asi que hay que volver a pedirlo.
@@ -271,17 +299,7 @@ export class CobrosService {
         });
       } catch (e) {
         if (!(e instanceof ConflictException)) throw e;
-        if (reserva.estado === 'pendiente') {
-          await tx.reserva.update({
-            where: { id: reserva.id },
-            data: {
-              estado: 'cancelada',
-              canceladaPor: 'sistema',
-              canceladaAt: new Date(),
-            },
-          });
-        }
-        return devolver();
+        return cancelarYDevolver();
       }
       return confirmar();
     }
@@ -377,8 +395,6 @@ export class CobrosService {
           select: {
             id: true,
             proveedorId: true,
-            montoCentavos: true,
-            reembolsadoCentavos: true,
             reserva: { select: datosDelTurno },
           },
         },
@@ -399,7 +415,18 @@ export class CobrosService {
         amountCents: r.montoCentavos,
         idempotencyKey: id,
       });
-      const reembolsado = r.pago.reembolsadoCentavos + r.montoCentavos;
+      // MP puede aceptar el pedido y rechazar el reembolso: eso no se reintenta, lo resuelve
+      // el centro.
+      if (hecho.status === 'rejected' || hecho.status === 'cancelled') {
+        throw new MercadoPagoError(
+          `Mercado Pago rechazo el reembolso (${hecho.status})`,
+          0,
+          false,
+        );
+      }
+      // Lo reembolsado se copia de MP y no se suma: si un intento anterior llego a MP y no se
+      // registro, sumar lo contaria dos veces. El aviso del pago escribe el mismo estado.
+      const actual = await mp.getPayment(r.pago.proveedorId);
       await this.db.$transaction([
         this.db.reembolso.update({
           where: { id },
@@ -413,10 +440,8 @@ export class CobrosService {
         this.db.pago.update({
           where: { id: r.pago.id },
           data: {
-            reembolsadoCentavos: reembolsado,
-            ...(reembolsado >= r.pago.montoCentavos
-              ? { estado: 'reembolsado' }
-              : {}),
+            estado: ESTADOS[actual.status],
+            reembolsadoCentavos: actual.refundedCents,
           },
         }),
       ]);

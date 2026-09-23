@@ -34,7 +34,7 @@ import {
   turnoConfirmado,
   turnoReprogramado,
 } from '../notificaciones/plantillas.js';
-import { DB, type Db } from '../prisma/prisma.module.js';
+import { DB, type Db, type Tx } from '../prisma/prisma.module.js';
 import { runSerializable } from '../prisma/run-serializable.js';
 import { exigirCupo } from './cupo.js';
 import type { CreateReservaDto } from './dto/create-reserva.dto.js';
@@ -125,6 +125,37 @@ function transicionInvalida(desde: string, hacia: string): never {
     code: 'invalid_transition',
     message: `Una reserva ${desde} no puede pasar a ${hacia}.`,
   });
+}
+
+/**
+ * El tope de turnos por mes del plan, contados por el mes del turno y sin los cancelados. Va
+ * DENTRO de la transaccion SERIALIZABLE de quien llama: dos altas simultaneas no lo pasan, y
+ * una reprogramacion hacia otro mes tambien lo respeta.
+ */
+async function exigirTopeDelMes(
+  tx: Tx,
+  fecha: string,
+  tope: number | null,
+  excluirId?: string,
+): Promise<void> {
+  if (tope === null) return;
+  const [anio, mes] = fecha.split('-').map(Number);
+  const tomados = await tx.reserva.count({
+    where: {
+      fecha: {
+        gte: new Date(Date.UTC(anio, mes - 1, 1)),
+        lt: new Date(Date.UTC(anio, mes, 1)),
+      },
+      estado: { not: 'cancelada' },
+      ...(excluirId ? { id: { not: excluirId } } : {}),
+    },
+  });
+  if (tomados >= tope) {
+    throw new ConflictException({
+      code: 'monthly_limit_reached',
+      message: 'El centro ya no toma mas turnos para ese mes.',
+    });
+  }
 }
 
 function soloElCentro(): never {
@@ -275,7 +306,6 @@ export class ReservasService {
     const ahora = ahoraEn(tenant.zonaHoraria);
     exigirHorarioReservable(dto.fecha, dto.hora, ahora, cargaDelCentro);
     const plan = PLANES[tenant.plan];
-    await this.exigirTopeDelMes(dto.fecha, plan.turnosPorMes);
 
     // Que se cobra online, y con que cuenta. Se decide antes de la transaccion: una llamada a
     // Mercado Pago no va nunca adentro. Sin el plan que lo incluye no se cobra online, aunque
@@ -312,6 +342,7 @@ export class ReservasService {
       minutosHasta(dto.fecha, dto.hora, ahora) <= RECORDATORIO_MINUTOS;
 
     const id = await runSerializable(this.db, async (tx) => {
+      await exigirTopeDelMes(tx, dto.fecha, plan.turnosPorMes);
       await exigirCupo(tx, {
         fecha: dto.fecha,
         hora: dto.hora,
@@ -393,35 +424,6 @@ export class ReservasService {
     }
     this.notificaciones.despacharAhora();
     return this.leer(tenant, id);
-  }
-
-  /**
-   * El tope de turnos por mes del plan, contados por el mes del turno.
-   *
-   * ponytail: afuera de la transaccion, asi que es un tope blando: dos altas simultaneas
-   * pueden pasarlo por una. Llevarlo adentro del SERIALIZABLE si algun centro lo aprovecha.
-   */
-  private async exigirTopeDelMes(
-    fecha: string,
-    tope: number | null,
-  ): Promise<void> {
-    if (tope === null) return;
-    const [anio, mes] = fecha.split('-').map(Number);
-    const tomados = await this.db.reserva.count({
-      where: {
-        fecha: {
-          gte: new Date(Date.UTC(anio, mes - 1, 1)),
-          lt: new Date(Date.UTC(anio, mes, 1)),
-        },
-        estado: { not: 'cancelada' },
-      },
-    });
-    if (tomados >= tope) {
-      throw new ConflictException({
-        code: 'monthly_limit_reached',
-        message: 'El centro ya no toma mas turnos para ese mes.',
-      });
-    }
   }
 
   /** El listado del centro, o el de una sola clienta si viene clienteId. */
@@ -551,19 +553,30 @@ export class ReservasService {
     tenant: TenantRequest,
     reservaId: string,
   ): Promise<void> {
-    await this.db.$transaction(async (tx) => {
-      // El estado esperado va en el WHERE y no en un if despues de leerlo: leer, validar en
-      // memoria y escribir con where solo por id es un read-modify-write, y dos PATCH
-      // simultaneos pasaban los dos. El UPDATE condicional es atomico.
-      const { count } = await tx.reserva.updateMany({
-        where: { id: reservaId, estado: 'pendiente' },
-        data: { estado: 'confirmada' },
-      });
+    // SERIALIZABLE, como el alta: leer, validar y escribir es seguro porque dos PATCH o un
+    // alta simultanea conflictuan en vez de pasar los dos.
+    await runSerializable(this.db, async (tx) => {
       const r = await tx.reserva.findFirstOrThrow({
         where: { id: reservaId },
-        select: datosDelTurno,
+        select: { ...datosDelTurno, pagoVenceAt: true },
       });
-      if (count === 0) transicionInvalida(r.estado, 'confirmada');
+      if (r.estado !== 'pendiente') transicionInvalida(r.estado, 'confirmada');
+      // Una pendiente cuyo pago vencio ya no retiene el cupo, y otra persona puede haberlo
+      // tomado: confirmarla es volver a pedirlo.
+      if (r.pagoVenceAt && r.pagoVenceAt <= new Date()) {
+        await exigirCupo(tx, {
+          fecha: aFecha(r.fecha),
+          hora: r.horaInicio,
+          horaFin: r.horaFin,
+          duracionMinutos: aMinutos(r.horaFin) - aMinutos(r.horaInicio),
+          excluirId: reservaId,
+          capacidadMaxima: PLANES[tenant.plan].capacidadMaxima,
+        });
+      }
+      await tx.reserva.update({
+        where: { id: reservaId },
+        data: { estado: 'confirmada' },
+      });
       await this.notificaciones.encolar(
         tx,
         r.clienteEmail,
@@ -695,6 +708,12 @@ export class ReservasService {
       // La duracion reservada, no la del servicio de hoy: es una copia, como la sena.
       const duracion = aMinutos(r.horaFin) - aMinutos(r.horaInicio);
       const horaFin = aHora(aMinutos(hora) + duracion);
+      await exigirTopeDelMes(
+        tx,
+        fecha,
+        PLANES[tenant.plan].turnosPorMes,
+        reservaId,
+      );
       await exigirCupo(tx, {
         fecha,
         hora,

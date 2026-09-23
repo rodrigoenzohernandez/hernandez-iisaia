@@ -27,8 +27,12 @@ if (!password) throw new Error('Falta SEED_ADMIN_PASSWORD');
 // este seed. El throttler cubre el resto.
 if (password.length < 12)
   throw new Error('SEED_ADMIN_PASSWORD necesita 12 caracteres o mas');
-const superadminEmail =
-  process.env.SEED_SUPERADMIN_EMAIL ?? 'superadmin@turnos.test';
+// En minuscula, como la normaliza el login: si no, un email con mayusculas no entraria nunca.
+const superadminEmail = (
+  process.env.SEED_SUPERADMIN_EMAIL ?? 'superadmin@turnos.test'
+)
+  .trim()
+  .toLowerCase();
 
 /**
  * Grilla verificada en el bundle del prototipo, que ofrece

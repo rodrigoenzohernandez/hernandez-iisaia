@@ -23,13 +23,20 @@ const ORDEN = [{ diaSemana: 'asc' }, { horaInicio: 'asc' }] as const;
 export class VentanasAtencionService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
-  async findAll(): Promise<VentanasAtencionDto> {
+  async findAll(capacidadMaxima: number): Promise<VentanasAtencionDto> {
     // Sin paginar: son 84 filas como maximo y es configuracion. Paginar config es ceremonia.
+    const ventanas = await this.db.ventanaAtencion.findMany({
+      orderBy: [...ORDEN],
+      select: ventanaSelect,
+    });
+    // Con el tope del plan, que es la capacidad que de verdad rige: un centro que bajo de plan
+    // conserva franjas de capacidad 3, y si el GET las devolviera asi, guardar la misma semana
+    // con un solo cambio daria plan_limit_reached.
     return {
-      data: await this.db.ventanaAtencion.findMany({
-        orderBy: [...ORDEN],
-        select: ventanaSelect,
-      }),
+      data: ventanas.map((v) => ({
+        ...v,
+        capacidad: Math.min(v.capacidad, capacidadMaxima),
+      })),
     };
   }
 

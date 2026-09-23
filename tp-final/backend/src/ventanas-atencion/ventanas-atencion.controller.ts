@@ -24,8 +24,10 @@ export class VentanasAtencionController {
   @ApiSoloAdmin()
   @Get()
   @ApiOkResponse({ type: VentanasAtencionDto })
-  findAll(): Promise<VentanasAtencionDto> {
-    return this.ventanas.findAll();
+  findAll(
+    @CurrentTenant() tenant: TenantRequest,
+  ): Promise<VentanasAtencionDto> {
+    return this.ventanas.findAll(PLANES[tenant.plan].capacidadMaxima);
   }
 
   /** Reemplaza la semana completa de franjas de atencion. */

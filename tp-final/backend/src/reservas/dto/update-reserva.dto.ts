@@ -1,5 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsEnum, IsOptional, Matches } from 'class-validator';
+import { IsBoolean, IsEnum, Matches, ValidateIf } from 'class-validator';
+
+// ValidateIf y no IsOptional: IsOptional deja pasar null, y aca un null no es "no vino". Un
+// estado null caia en confirmar, y un reembolsar null cancelaba un turno pago sin devolver.
+const siVino = ValidateIf((_: unknown, valor: unknown) => valor !== undefined);
 
 /** Los estados a los que se puede mover una reserva. */
 export enum EstadoReservaDto {
@@ -24,7 +28,7 @@ export class UpdateReservaDto {
     required: false,
     example: 'cancelada',
   })
-  @IsOptional()
+  @siVino
   @IsEnum(EstadoReservaDto, {
     message: 'El estado tiene que ser confirmada, cancelada o ausente.',
   })
@@ -34,13 +38,13 @@ export class UpdateReservaDto {
    * Solo el centro, solo al cancelar: si se devuelve lo pagado. Obligatorio si hubo pago.
    * Para la clienta lo decide la politica del servicio.
    */
-  @IsOptional()
+  @siVino
   @IsBoolean({ message: 'reembolsar es true o false.' })
   reembolsar?: boolean;
 
   /** Fecha nueva, para reprogramar. Va con `hora`. */
   @ApiProperty({ required: false, example: '2026-10-12' })
-  @IsOptional()
+  @siVino
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'fecha tiene que tener formato YYYY-MM-DD.',
   })
@@ -48,7 +52,7 @@ export class UpdateReservaDto {
 
   /** Hora nueva, de la grilla del centro. Va con `fecha`. */
   @ApiProperty({ required: false, example: '15:00' })
-  @IsOptional()
+  @siVino
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
     message: 'hora tiene que tener formato HH:mm.',
   })

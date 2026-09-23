@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { CuentasMercadoPagoService } from '../cobros/cuentas-mercadopago.service.js';
@@ -37,6 +38,8 @@ function unMesDespues(fecha: Date): Date {
  */
 @Injectable()
 export class SuscripcionesService {
+  private readonly logger = new Logger('Suscripciones');
+
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly cuentas: CuentasMercadoPagoService,
@@ -71,29 +74,19 @@ export class SuscripcionesService {
     usuario: UsuarioRequest,
     dto: UpdateSuscripcionDto,
   ): Promise<SuscripcionDto> {
+    if (dto.plan === 'basico') {
+      await this.cancelar();
+      return this.estado();
+    }
+
     const id = TenantContext.require();
     const actual = await this.db.tenant.findFirstOrThrow({
       where: { id },
       select: { suscripcionMpId: true, suscripcionEstado: true },
     });
-    const viva =
-      !!actual.suscripcionMpId && actual.suscripcionEstado !== 'cancelled';
-
-    if (dto.plan === 'basico') {
-      if (viva) {
-        const s = await this.llamar((mp) =>
-          mp.cancelSubscription(actual.suscripcionMpId!),
-        );
-        // La cuenta de MP queda conectada: los turnos ya pagados se tienen que poder reembolsar.
-        await this.db.tenant.update({
-          where: { id },
-          data: { suscripcionEstado: s.status, suscripcionUrl: null },
-        });
-      }
+    if (actual.suscripcionMpId && actual.suscripcionEstado !== 'cancelled') {
       return this.estado();
     }
-
-    if (viva) return this.estado();
     // El Profesional existe para cobrar online: sin la cuenta del centro no hay a donde.
     const cuenta = await this.cuentas.estado();
     if (!cuenta.conectada || cuenta.requiereReconexion) {
@@ -124,8 +117,11 @@ export class SuscripcionesService {
           : undefined,
       }),
     );
-    await this.db.tenant.update({
-      where: { id },
+    // Se guarda solo si nadie la cambio mientras tanto: dos pedidos a la vez (un doble click)
+    // crean dos suscripciones en MP, y la que pierde se cancela antes de que alguien la
+    // autorice. Las dos respuestas muestran la misma, la que quedo.
+    const { count } = await this.db.tenant.updateMany({
+      where: { id, suscripcionMpId: actual.suscripcionMpId },
       data: {
         suscripcionPlan: 'profesional',
         suscripcionMpId: s.id,
@@ -133,7 +129,39 @@ export class SuscripcionesService {
         suscripcionUrl: s.url,
       },
     });
+    if (count === 0) {
+      await this.llamar((mp) => mp.cancelSubscription(s.id)).catch(
+        (e: unknown) =>
+          // Una pendiente que nadie autoriza no cobra nada: alcanza con dejarlo en el log.
+          this.logger.warn(
+            `No se cancelo la suscripcion sobrante ${s.id}: ${String(e)}`,
+          ),
+      );
+    }
     return this.estado();
+  }
+
+  /**
+   * Cancela la suscripcion del centro en contexto, si hay una viva. Lo pagado sigue hasta
+   * pagoHasta, y la cuenta de MP queda conectada: los turnos ya pagados se tienen que poder
+   * reembolsar.
+   */
+  async cancelar(): Promise<void> {
+    const id = TenantContext.require();
+    const actual = await this.db.tenant.findFirstOrThrow({
+      where: { id },
+      select: { suscripcionMpId: true, suscripcionEstado: true },
+    });
+    if (!actual.suscripcionMpId || actual.suscripcionEstado === 'cancelled') {
+      return;
+    }
+    const s = await this.llamar((mp) =>
+      mp.cancelSubscription(actual.suscripcionMpId!),
+    );
+    await this.db.tenant.update({
+      where: { id },
+      data: { suscripcionEstado: s.status, suscripcionUrl: null },
+    });
   }
 
   /**

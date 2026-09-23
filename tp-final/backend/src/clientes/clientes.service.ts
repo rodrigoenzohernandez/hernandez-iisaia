@@ -28,6 +28,7 @@ const MAX_INTENTOS = 5;
 /** Tope de codigos por email en la ventana: es lo que frena usar el alta como spam de mails. */
 const MAX_CODIGOS = 3;
 const VENTANA_CODIGOS_MINUTOS = 15;
+const MAX_CODIGOS_POR_DIA = 10;
 
 /**
  * La firma lleva el centro y el email ademas del codigo: la misma combinacion de seis digitos
@@ -48,17 +49,19 @@ export class ClientesService {
     tenant: TenantRequest,
     email: string,
   ): Promise<CodigoPedidoDto> {
-    const recientes = await this.db.codigoAcceso.count({
-      where: {
-        email,
-        createdAt: {
-          gte: new Date(Date.now() - VENTANA_CODIGOS_MINUTOS * 60_000),
-        },
-      },
+    const desde = (minutos: number) => ({
+      email,
+      createdAt: { gte: new Date(Date.now() - minutos * 60_000) },
     });
+    const [recientes, delDia] = await Promise.all([
+      this.db.codigoAcceso.count({ where: desde(VENTANA_CODIGOS_MINUTOS) }),
+      this.db.codigoAcceso.count({ where: desde(24 * 60) }),
+    ]);
+    // Los intentos son por codigo, asi que el tope de codigos es el tope de adivinanzas: con
+    // el diario, un email aguanta 50 intentos por dia y no 1440.
     // ponytail: tope blando. Dos pedidos simultaneos pueden pasarlo por uno; el throttler por
     // IP queda debajo.
-    if (recientes >= MAX_CODIGOS) {
+    if (recientes >= MAX_CODIGOS || delDia >= MAX_CODIGOS_POR_DIA) {
       throw new HttpException(
         {
           code: 'too_many_codes',
@@ -71,14 +74,16 @@ export class ClientesService {
 
     // randomInt es el CSPRNG de node:crypto; Math.random se puede predecir.
     const codigo = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const expiraAt = new Date(Date.now() + CODIGO_MINUTOS * 60_000);
     await this.db.$transaction(async (tx) => {
       await tx.codigoAcceso.create({
         data: {
           email,
           codigoHash: firmaDe(email, codigo),
-          expiraAt: new Date(Date.now() + CODIGO_MINUTOS * 60_000),
+          expiraAt,
         } as Prisma.CodigoAccesoUncheckedCreateInput,
       });
+      // El mail vence con el codigo: despues se borra de la cola.
       await this.notificaciones.encolar(
         tx,
         email,
@@ -87,6 +92,7 @@ export class ClientesService {
           codigo,
           minutos: CODIGO_MINUTOS,
         }),
+        expiraAt,
       );
     });
     this.notificaciones.despacharAhora();

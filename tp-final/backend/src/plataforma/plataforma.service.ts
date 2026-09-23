@@ -13,6 +13,7 @@ import { paginate } from '../common/pagination/paginate.js';
 import { hashPassword, senuelo, verifyPassword } from '../common/password.js';
 import { SLUGS_RESERVADOS } from '../common/slug.js';
 import { camposDelPlan, PLANES, planVigente } from '../planes/planes.js';
+import { SuscripcionesService } from '../planes/suscripciones.service.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import type { CentroCreadoDto, CrearCentroDto } from './dto/alta-centro.dto.js';
@@ -82,6 +83,7 @@ export class PlataformaService {
   constructor(
     private readonly jwt: JwtService,
     @Inject(DB) private readonly db: Db,
+    private readonly suscripciones: SuscripcionesService,
   ) {}
 
   async ingresar(dto: CrearSesionPlataformaDto): Promise<SesionPlataformaDto> {
@@ -163,6 +165,19 @@ export class PlataformaService {
   }
 
   async actualizar(slug: string, dto: UpdateCentroDto): Promise<CentroDto> {
+    // Un centro dado de baja no puede entrar a cancelar su plan, asi que la baja lo cancela:
+    // si no, Mercado Pago le seguiria cobrando todos los meses.
+    if (!dto.activo) {
+      const centro = await this.db.tenant.findUnique({
+        where: { slug },
+        select: { id: true },
+      });
+      if (centro) {
+        await TenantContext.runAs(centro.id, () =>
+          this.suscripciones.cancelar(),
+        );
+      }
+    }
     try {
       const t = await this.db.tenant.update({
         where: { slug },

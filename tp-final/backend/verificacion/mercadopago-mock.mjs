@@ -7,12 +7,14 @@
 // de a api.mercadopago.com: lo que se prueba es el codigo de verdad, no un doble.
 //
 // Se parece a MP en lo que importa para la verificacion:
-//   - cada recurso es de la cuenta (el token) que lo creo, y otra cuenta recibe 404;
+//   - cada recurso es de la cuenta que lo creo (el numero al final del token), y otra cuenta
+//     recibe 404;
 //   - un reembolso con una idempotency key ya usada devuelve el reembolso original;
 //   - el canje de OAuth exige el code_verifier de PKCE.
 //
 // Rutas de control, que no existen en MP:
 //   POST /__test/pagos     {preferencia, status, monto?}  simula que alguien pago un checkout
+//   POST /__test/pagos/:id {status}                       cambia el estado de un pago (disputas)
 //   POST /__test/facturas  {suscripcion, status}          simula un cobro mensual
 //   POST /__test/fallas    {metodo, prefijo, status, veces} las proximas N llamadas fallan
 //   GET  /__test/llamadas                                 cada llamada, con el token que uso
@@ -33,6 +35,9 @@ const nuevoId = () => ++secuencia;
 
 /** La cuenta de un token. El sufijo numerico es el user_id: asi el seed y OAuth lo controlan. */
 const cuentaDe = (token) => Number(/-(\d+)$/.exec(token)?.[1] ?? 1);
+// Los recursos son de la cuenta, no del token: despues de renovar el token, la cuenta sigue
+// viendo sus pagos, como en MP.
+const deOtraCuenta = (recurso, token) => cuentaDe(recurso.token) !== cuentaDe(token);
 const tokenDe = (req) => (req.headers.authorization ?? '').replace(/^Bearer /, '');
 
 const responder = (res, status, cuerpo) => {
@@ -112,6 +117,13 @@ createServer(async (req, res) => {
     });
     return responder(res, 201, { id });
   }
+  // Cambia el estado de un pago que ya existe: una disputa, y como se resuelve.
+  if ((m = /^\/__test\/pagos\/(\d+)$/.exec(path)) && req.method === 'POST') {
+    const p = pagos.get(m[1]);
+    if (!p) return error(res, 404, 'pago inexistente');
+    p.datos.status = cuerpo.status;
+    return responder(res, 200, p.datos);
+  }
   if (path === '/__test/facturas' && req.method === 'POST') {
     const s = suscripciones.get(cuerpo.suscripcion);
     if (!s) return error(res, 404, 'suscripcion inexistente');
@@ -157,13 +169,13 @@ createServer(async (req, res) => {
   if ((m = /^\/v1\/payments\/(\d+)$/.exec(path)) && req.method === 'GET') {
     const p = pagos.get(m[1]);
     // Un pago de otra cuenta no existe para este token, como en MP.
-    if (!p || p.token !== token) return error(res, 404, 'Payment not found');
+    if (!p || deOtraCuenta(p, token)) return error(res, 404, 'Payment not found');
     return responder(res, 200, p.datos);
   }
 
   if ((m = /^\/v1\/payments\/(\d+)\/refunds$/.exec(path)) && req.method === 'POST') {
     const p = pagos.get(m[1]);
-    if (!p || p.token !== token) return error(res, 404, 'Payment not found');
+    if (!p || deOtraCuenta(p, token)) return error(res, 404, 'Payment not found');
     const clave = req.headers['x-idempotency-key'];
     if (clave && reembolsosPorClave.has(clave)) {
       return responder(res, 201, reembolsosPorClave.get(clave));
@@ -201,14 +213,14 @@ createServer(async (req, res) => {
 
   if ((m = /^\/preapproval\/([\w-]+)$/.exec(path))) {
     const s = suscripciones.get(m[1]);
-    if (!s || s.token !== token) return error(res, 404, 'preapproval not found');
+    if (!s || deOtraCuenta(s, token)) return error(res, 404, 'preapproval not found');
     if (req.method === 'PUT') Object.assign(s.datos, cuerpo);
     return responder(res, 200, s.datos);
   }
 
   if ((m = /^\/authorized_payments\/(\d+)$/.exec(path)) && req.method === 'GET') {
     const f = facturas.get(m[1]);
-    if (!f || f.token !== token) return error(res, 404, 'authorized payment not found');
+    if (!f || deOtraCuenta(f, token)) return error(res, 404, 'authorized payment not found');
     return responder(res, 200, f.datos);
   }
 

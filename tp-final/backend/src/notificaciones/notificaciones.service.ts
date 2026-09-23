@@ -26,14 +26,23 @@ export class NotificacionesService {
   /**
    * Encola un mail. Recibe el cliente de la transaccion de quien llama: la fila nace y muere
    * con el cambio que la origina, y un reintento de esa transaccion no la duplica.
+   *
+   * Con `venceAt`, despues de esa hora el mail no sale y la fila se borra: es para lo que
+   * lleva un secreto que vence, como el codigo de ingreso.
    */
-  async encolar(tx: Tx, para: string, plantilla: Plantilla): Promise<void> {
+  async encolar(
+    tx: Tx,
+    para: string,
+    plantilla: Plantilla,
+    venceAt?: Date,
+  ): Promise<void> {
     await tx.notificacion.create({
       data: {
         para,
         asunto: plantilla.asunto,
         html: plantilla.html,
         texto: plantilla.texto,
+        venceAt: venceAt ?? null,
       } as Prisma.NotificacionUncheckedCreateInput,
       select: { id: true },
     });
@@ -56,6 +65,11 @@ export class NotificacionesService {
   }
 
   async despacharPendientes(): Promise<void> {
+    // Lo vencido no se manda ni se guarda: un codigo de ingreso en claro no queda en la base
+    // mas alla de su vencimiento, igual que de CodigoAcceso solo queda la firma.
+    await this.db.notificacion.deleteMany({
+      where: { venceAt: { lte: new Date() } },
+    });
     const pendientes = await this.db.notificacion.findMany({
       where: { estado: 'pendiente', proximoIntentoAt: { lte: new Date() } },
       orderBy: { proximoIntentoAt: 'asc' },
@@ -76,6 +90,10 @@ export class NotificacionesService {
     if (count === 0) return;
 
     const n = await this.db.notificacion.findFirstOrThrow({ where: { id } });
+    if (n.venceAt && n.venceAt <= ahora) {
+      await this.db.notificacion.deleteMany({ where: { id } });
+      return;
+    }
     try {
       const { id: proveedorId } = await this.sender.send({
         to: n.para,

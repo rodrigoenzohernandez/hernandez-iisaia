@@ -9,6 +9,7 @@ import { env } from '../env.js';
 
 export const PUBLICO = 'publico';
 export const ROLES = 'roles';
+export const TAMBIEN_INACTIVO = 'tambienInactivo';
 
 /** Los roles que viajan en el JWT. */
 export type Rol = 'admin' | 'cliente' | 'superadmin';
@@ -28,6 +29,12 @@ export const Publico = () => SetMetadata(PUBLICO, true);
 export const Roles = (...roles: Rol[]) => SetMetadata(ROLES, roles);
 
 /**
+ * La ruta responde aunque el centro este dado de baja. Es para lo que salda plata ya cobrada:
+ * el aviso de un pago que la clienta hizo antes de la baja se tiene que procesar igual.
+ */
+export const TambienInactivo = () => SetMetadata(TAMBIEN_INACTIVO, true);
+
+/**
  * El limite de las escrituras publicas: login, alta de reserva y las que vengan. Un solo
  * lugar para el valor, que `THROTTLE_LIMIT` pisa en la verificacion.
  */
@@ -45,6 +52,8 @@ export type TenantRequest = {
   zonaHoraria: string;
   /** El plan que rige hoy, ya calculado: los limites se leen de PLANES[plan]. */
   plan: Plan;
+  /** false solo en las rutas @TambienInactivo: en el resto, un centro dado de baja es 404. */
+  activo: boolean;
 };
 
 /** La persona autenticada, si el request trajo un Bearer valido. */

@@ -68,6 +68,13 @@ if (emailProvider !== 'log' && emailProvider !== 'resend') {
 if (produccion && emailProvider !== 'resend') {
   throw new Error('En produccion EMAIL_PROVIDER tiene que ser resend');
 }
+// El default solo le entrega a la cuenta duenia de la API key: en produccion no le llegaria
+// ningun mail a ninguna clienta, ni los codigos para entrar.
+if (produccion && !process.env.EMAIL_FROM) {
+  throw new Error(
+    'En produccion hace falta EMAIL_FROM, con un dominio verificado en Resend',
+  );
+}
 
 /**
  * Solo para la verificacion: redirige el SDK de Mercado Pago a un mock. En produccion haria
@@ -90,6 +97,25 @@ if (
 ) {
   throw new Error(
     'En produccion, PUBLIC_API_URL y FRONTEND_URL tienen que ser https',
+  );
+}
+
+// Con Mercado Pago configurado, en produccion hacen falta las dos URLs: sin PUBLIC_API_URL el
+// checkout sale sin notification_url, el aviso del pago no llega nunca y la reserva vence con
+// la plata cobrada; sin FRONTEND_URL no hay pagina de vuelta.
+const conMercadoPago = !!(
+  process.env.MP_CLIENT_ID || process.env.MP_PLATFORM_ACCESS_TOKEN
+);
+if (produccion && conMercadoPago && (!publicApiUrl || !frontendUrl)) {
+  throw new Error(
+    'Con Mercado Pago, en produccion hacen falta PUBLIC_API_URL y FRONTEND_URL',
+  );
+}
+// La suscripcion de los centros se activa con los avisos firmados de la plataforma: con el
+// token y sin el secreto, los centros pagarian y se quedarian en el plan Basico.
+if (process.env.MP_PLATFORM_ACCESS_TOKEN && !process.env.MP_WEBHOOK_SECRET) {
+  throw new Error(
+    'Con MP_PLATFORM_ACCESS_TOKEN hace falta MP_WEBHOOK_SECRET, el secreto de los webhooks de la app',
   );
 }
 

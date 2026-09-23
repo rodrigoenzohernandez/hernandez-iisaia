@@ -38,8 +38,9 @@ export const PLANES: Record<Plan, Limites> = {
 };
 
 /**
- * Cuanto sigue vigente un plan pago despues de vencer lo pagado. Cubre la ventana en la que
- * Mercado Pago reintenta un cobro fallido: hasta 4 veces en 10 dias.
+ * Cuanto sigue vigente un plan pago despues de vencer lo pagado, mientras la suscripcion siga
+ * autorizada. Cubre la ventana en la que Mercado Pago reintenta un cobro fallido: hasta 4
+ * veces en 10 dias.
  */
 const GRACIA_MS = 10 * 86_400_000;
 
@@ -63,8 +64,10 @@ export function planVigente(
   ahora = new Date(),
 ): Plan {
   if (!t.suscripcionPlan || !t.planPagoHasta) return 'basico';
-  // La gracia es para los reintentos de un cobro fallido: una suscripcion cancelada no tiene.
-  const gracia = t.suscripcionEstado === 'cancelled' ? 0 : GRACIA_MS;
+  // La gracia es para los reintentos de un cobro fallido, y solo los tiene una suscripcion
+  // autorizada: una cancelada no, y una pendiente tampoco, porque nunca se cobro. Sin esto,
+  // volver a suscribirse despues de cancelar daba diez dias gratis.
+  const gracia = t.suscripcionEstado === 'authorized' ? GRACIA_MS : 0;
   return ahora.getTime() < t.planPagoHasta.getTime() + gracia
     ? t.suscripcionPlan
     : 'basico';

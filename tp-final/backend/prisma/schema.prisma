@@ -261,6 +261,10 @@ model Reserva {
   @@unique([tenantId, id])
   /// Sostiene el listado paginado del admin y la query de solapes.
   @@index([tenantId, fecha, horaInicio])
+  /// "Mis turnos": el listado de una clienta, en el mismo orden que el del admin.
+  @@index([tenantId, clienteId, fecha, horaInicio])
+  /// La tarea de vencimiento busca las impagas vencidas cada minuto.
+  @@index([tenantId, estado, pagoVenceAt])
 }
 
 /// Una clienta del centro. No tiene contrasena: entra con un codigo que le llega por mail, y
@@ -319,12 +323,17 @@ model Notificacion {
   proveedorId      String?
   ultimoError      String?
   enviadaAt        DateTime?
+  /// Despues de esto el mail no sirve y la fila se borra: es el caso del codigo de ingreso,
+  /// que es un secreto. De CodigoAcceso solo se guarda la firma, y aca no puede quedar el
+  /// codigo en claro mas alla de su vencimiento.
+  venceAt          DateTime?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, estado, proximoIntentoAt])
+  @@index([tenantId, venceAt])
 }
 
 /// La cuenta de Mercado Pago del centro: ahi cae la plata de sus clientas. La deja OAuth, o
@@ -363,6 +372,9 @@ model Pago {
   reembolsadoCentavos Int        @default(0)
   medio               String?
   aprobadoAt          DateTime?
+  /// Cuando la aprobacion ya se aplico a la reserva: se confirmo o se devolvio. Se decide una
+  /// sola vez: un pago que vuelve a aprobado despues de una disputa no se decide de nuevo.
+  decididoAt          DateTime?
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
@@ -373,6 +385,8 @@ model Pago {
   @@unique([tenantId, proveedorId])
   /// Habilita la FK compuesta de Reembolso.
   @@unique([tenantId, id])
+  /// Los pagos de una reserva: se leen en cada reserva que sale por la API.
+  @@index([tenantId, reservaId])
 }
 
 /// Un reembolso pedido. La fila se escribe en la misma transaccion que la cancelacion, y su
@@ -394,4 +408,5 @@ model Reembolso {
   pago Pago @relation(fields: [tenantId, pagoId], references: [tenantId, id])
 
   @@index([tenantId, estado, proximoIntentoAt])
+  @@index([tenantId, pagoId])
 }

@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEmail,
+  IsObject,
   IsString,
   Length,
   Matches,
@@ -50,6 +51,9 @@ export class CrearCentroDto {
   slug!: string;
 
   /** Quien da de alta el centro: queda como su administradora. */
+  // IsObject porque ValidateNested solo no exige nada: sin `admin`, o con un array, el body
+  // pasaba y el alta explotaba con un 500.
+  @IsObject({ message: 'Faltan los datos de la administradora.' })
   @ValidateNested()
   @Type(() => AdministradoraDto)
   admin!: AdministradoraDto;

@@ -38,17 +38,34 @@ export class CuentasMercadoPagoService {
   ) {}
 
   /**
-   * La cuenta de MP del centro en contexto, o null si hoy no puede cobrar online: sin cuenta
-   * conectada, o esperando que la reconecten.
+   * La cuenta de MP del centro en contexto para COBRAR, o null si hoy no puede cobrar online:
+   * sin cuenta conectada, o esperando que la reconecten.
    */
   async delCentro(slug: string): Promise<MercadoPago | null> {
     const cuenta = await this.db.cuentaMercadoPago.findFirst({
       select: { accessTokenCifrado: true, requiereReconexion: true },
     });
-    if (!cuenta || cuenta.requiereReconexion) return null;
+    return cuenta && !cuenta.requiereReconexion
+      ? this.cliente(cuenta.accessTokenCifrado, slug)
+      : null;
+  }
+
+  /**
+   * La cuenta del centro para SALDAR lo ya cobrado, como el aviso de un pago: tambien cuando
+   * espera reconexion, porque el token puede seguir sirviendo aunque la renovacion haya
+   * fallado. null solo si no hay cuenta.
+   */
+  async paraSaldar(slug: string): Promise<MercadoPago | null> {
+    const cuenta = await this.db.cuentaMercadoPago.findFirst({
+      select: { accessTokenCifrado: true },
+    });
+    return cuenta ? this.cliente(cuenta.accessTokenCifrado, slug) : null;
+  }
+
+  private cliente(accessTokenCifrado: string, slug: string): MercadoPago {
     return new MercadoPago({
       accessToken: cripto.descifrar(
-        cuenta.accessTokenCifrado,
+        accessTokenCifrado,
         'tokens-de-mercado-pago',
       ),
       // MP exige HTTPS: sin una URL publica, en desarrollo el aviso no llega y se usa un
@@ -180,7 +197,7 @@ export class CuentasMercadoPagoService {
   /**
    * Renueva el token del centro si le falta poco para vencer. MP invalida el refresh token al
    * usarlo, asi que el nuevo se guarda con un UPDATE condicional sobre el viejo: si dos
-   * procesos renuevan a la vez, gana uno y el otro no pisa nada.
+   * procesos renuevan a la vez, gana uno y el otro no pisa nada, ni marca la cuenta.
    */
   async renovarToken(centro: { nombre: string }): Promise<void> {
     const cuenta = await this.db.cuentaMercadoPago.findFirst({
@@ -200,9 +217,17 @@ export class CuentasMercadoPagoService {
       );
     } catch (e) {
       // Un error reintentable se reintenta en la proxima corrida. Uno definitivo es que MP
-      // revoco el acceso: el centro tiene que reconectar, y se le avisa.
+      // revoco el acceso: el centro tiene que reconectar, y se le avisa. Salvo que otro
+      // proceso la haya renovado recien: entonces el refresh token que se uso ya no existia,
+      // y la cuenta esta bien.
       if (e instanceof MercadoPagoError && !e.retryable) {
-        await this.marcarReconexion(centro);
+        const sinCambios = await this.db.cuentaMercadoPago.count({
+          where: {
+            id: cuenta.id,
+            refreshTokenCifrado: cuenta.refreshTokenCifrado,
+          },
+        });
+        if (sinCambios > 0) await this.marcarReconexion(centro);
         return;
       }
       throw e;
@@ -287,9 +312,10 @@ export class CuentasMercadoPagoService {
   }
 
   /**
-   * Un reembolso solo lo puede hacer la cuenta que cobro. Mientras haya turnos por venir con
-   * pagos aprobados, cambiar o desconectar la cuenta dejaria esos pagos sin forma de
-   * devolverse.
+   * Un pago solo lo puede leer y devolver la cuenta que lo cobro. Mientras la cuenta tenga algo
+   * en curso, cambiarla o desconectarla lo dejaria sin forma de saldarse: turnos por venir con
+   * pagos aprobados, cobros abiertos que la clienta todavia puede pagar, y reembolsos que no
+   * salieron.
    */
   private async exigirSinPagosReembolsables(): Promise<void> {
     const tenant = await this.db.tenant.findFirst({
@@ -299,20 +325,26 @@ export class CuentasMercadoPagoService {
     const hoy = ahoraEn(
       tenant?.zonaHoraria ?? 'America/Argentina/Buenos_Aires',
     ).fecha;
-    const pagos = await this.db.pago.count({
-      where: {
-        estado: 'aprobado',
-        reserva: {
-          estado: { in: ['pendiente', 'confirmada'] },
-          fecha: { gte: aDate(hoy) },
+    const [pagos, cobrosAbiertos, reembolsos] = await Promise.all([
+      this.db.pago.count({
+        where: {
+          estado: 'aprobado',
+          reserva: {
+            estado: { in: ['pendiente', 'confirmada'] },
+            fecha: { gte: aDate(hoy) },
+          },
         },
-      },
-    });
-    if (pagos > 0) {
+      }),
+      this.db.reserva.count({
+        where: { estado: 'pendiente', pagoVenceAt: { gt: new Date() } },
+      }),
+      this.db.reembolso.count({ where: { estado: 'pendiente' } }),
+    ]);
+    if (pagos + cobrosAbiertos + reembolsos > 0) {
       throw new ConflictException({
         code: 'mp_account_change_blocked',
         message:
-          'Hay turnos por venir con pagos de esta cuenta: si se cambia, no se podrian reembolsar.',
+          'Esta cuenta tiene pagos en curso o turnos pagos por venir: si se cambia, no se podrian saldar.',
       });
     }
   }

@@ -12,6 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import {
   PUBLICO,
   ROLES,
+  TAMBIEN_INACTIVO,
   type RequestConTenant,
   type Rol,
 } from '../common/decorators.js';
@@ -66,8 +67,12 @@ export class TenantAuthGuard implements CanActivate {
         },
       });
       // Un centro dado de baja responde igual que uno que no existe: no hay por que
-      // confirmar que el slug existe.
-      if (!tenant?.activo) {
+      // confirmar que el slug existe. La excepcion son las rutas que saldan plata ya cobrada.
+      const tambienInactivo = this.reflector.getAllAndOverride<boolean>(
+        TAMBIEN_INACTIVO,
+        [ctx.getHandler(), ctx.getClass()],
+      );
+      if (!tenant || (!tenant.activo && !tambienInactivo)) {
         throw new NotFoundException({
           code: 'tenant_not_found',
           message: 'No encontramos ese centro.',
@@ -81,6 +86,7 @@ export class TenantAuthGuard implements CanActivate {
         nombre: tenant.nombre,
         zonaHoraria: tenant.zonaHoraria,
         plan: planVigente(tenant),
+        activo: tenant.activo,
       };
     }
 

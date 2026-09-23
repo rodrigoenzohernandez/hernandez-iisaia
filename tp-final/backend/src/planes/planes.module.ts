@@ -13,5 +13,6 @@ import { WebhookPlataformaController } from './webhook-plataforma.controller.js'
     WebhookPlataformaController,
   ],
   providers: [SuscripcionesService],
+  exports: [SuscripcionesService],
 })
 export class PlanesModule {}

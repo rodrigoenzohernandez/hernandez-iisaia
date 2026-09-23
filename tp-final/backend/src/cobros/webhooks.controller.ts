@@ -6,17 +6,25 @@ import {
   Logger,
   Post,
   Query,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import {
   CurrentTenant,
   Publico,
+  TambienInactivo,
   type TenantRequest,
 } from '../common/decorators.js';
 import { env } from '../env.js';
 import { MercadoPagoError } from '../lib/mercadopago/index.js';
 import { CobrosService } from './cobros.service.js';
 import { CuentasMercadoPagoService } from './cuentas-mercadopago.service.js';
+
+const sinCuenta = () =>
+  new ServiceUnavailableException({
+    code: 'mercadopago_not_connected',
+    message: 'El centro no tiene una cuenta de Mercado Pago que funcione.',
+  });
 
 /**
  * Los avisos de pago de Mercado Pago. La notification_url de cada checkout lleva el slug, asi
@@ -31,9 +39,11 @@ export class WebhooksMercadoPagoController {
     private readonly cobros: CobrosService,
   ) {}
 
-  // Fuera del OpenAPI: lo llama Mercado Pago, no el front.
+  // Fuera del OpenAPI: lo llama Mercado Pago, no el front. Responde aunque el centro este dado
+  // de baja: un pago hecho antes de la baja se tiene que registrar, y devolver.
   @ApiExcludeEndpoint()
   @Publico()
+  @TambienInactivo()
   @Post()
   @HttpCode(200)
   async recibir(
@@ -42,8 +52,12 @@ export class WebhooksMercadoPagoController {
     @Query() query: Record<string, unknown>,
     @Body() body: unknown,
   ): Promise<{ ok: true }> {
-    const mp = await this.cuentas.delCentro(tenant.slug);
-    if (!mp) return { ok: true };
+    // Con la cuenta que haya, aunque espere reconexion: el token puede seguir sirviendo. Un
+    // aviso que no se pudo procesar no se contesta 200, porque MP no lo mandaria de nuevo y
+    // el pago no se registraria nunca: con el 503, MP reintenta y el aviso se procesa cuando
+    // el centro reconecte.
+    const mp = await this.cuentas.paraSaldar(tenant.slug);
+    if (!mp) throw sinCuenta();
     try {
       // Firma opcional: MP no garantiza firma verificable en los avisos por notification_url,
       // y rechazarlos perderia pagos reales. Lo que protege es que parseWebhook no usa el
@@ -60,11 +74,11 @@ export class WebhooksMercadoPagoController {
         await this.cobros.registrarPago(tenant, evento.payment);
       }
     } catch (e) {
-      // Un 401 es que MP revoco el acceso: reintentar el aviso no lo arregla, se avisa al
-      // centro y se responde 200. Cualquier otro error sale como 500 y MP reintenta.
+      // Un 401 es que MP revoco el acceso: se avisa al centro para que reconecte, y el aviso
+      // vuelve a llegar despues. Cualquier otro error sale como 500 y MP tambien reintenta.
       if (e instanceof MercadoPagoError && e.status === 401) {
         await this.cuentas.marcarReconexion(tenant);
-        return { ok: true };
+        throw sinCuenta();
       }
       throw e;
     }

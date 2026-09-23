@@ -84,7 +84,14 @@ async function llamar<T>(fn: () => Promise<T>): Promise<T> {
       throw new MercadoPagoError(e.message, 0, true);
     }
     if (e instanceof ErrorDelSdk) {
-      const reintentable = e.status === 429 || e.status >= 500;
+      // Ademas de 429 y 5xx, los dos que el SDK documenta como reintentables y no reintenta:
+      // 423 (la idempotency key esta en uso: el pedido original sigue en curso) y 424 (falla
+      // una dependencia interna de MP).
+      const reintentable =
+        e.status === 429 ||
+        e.status === 423 ||
+        e.status === 424 ||
+        e.status >= 500;
       throw new MercadoPagoError(e.message, e.status, reintentable, e.causes);
     }
     throw new MercadoPagoError(String(e), 0, true);

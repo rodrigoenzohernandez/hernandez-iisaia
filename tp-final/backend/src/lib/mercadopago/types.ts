@@ -133,7 +133,7 @@ export type WebhookEvent = { verified: boolean } & (
 
 /**
  * Un error de MP, con lo unico que hace falta para decidir que hacer: si reintentar.
- * Reintentables: 429, 5xx y errores de red. El resto no mejora reintentando.
+ * Reintentables: 423, 424, 429, 5xx y errores de red. El resto no mejora reintentando.
  */
 export class MercadoPagoError extends Error {
   constructor(

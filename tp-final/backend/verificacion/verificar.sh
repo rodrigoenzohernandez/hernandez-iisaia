@@ -439,6 +439,23 @@ req 'tercer codigo' 202 POST "$T/clientes/codigos" '{"email":"bruta@example.com"
 req 'cuarto codigo en quince minutos' 429 POST "$T/clientes/codigos" '{"email":"bruta@example.com"}'
 check 'con codigo too_many_codes' too_many_codes "$(jq -r .code "$TMP/body")"
 req 'un email que nunca reservo recibe el mismo 202' 202 POST "$T/clientes/codigos" '{"email":"nunca@example.com"}'
+# El tope del dia: con los codigos corridos veinte minutos para atras, la ventana de quince
+# minutos queda libre y lo unico que puede frenar es el total del dia.
+atrasar_codigos() { sql "update \"CodigoAcceso\" set \"createdAt\" = \"createdAt\" - interval '20 minutes' where email = '$1'" >/dev/null; }
+pedir_codigo() { curl -s -o /dev/null -X POST "$BASE$T/clientes/codigos" -H 'Content-Type: application/json' -d "{\"email\":\"$1\"}"; }
+for _ in 1 2 3; do
+  atrasar_codigos bruta@example.com
+  for _ in 1 2 3; do pedir_codigo bruta@example.com; done
+done
+atrasar_codigos bruta@example.com
+req 'con la ventana de quince minutos libre, un codigo mas' 429 POST "$T/clientes/codigos" '{"email":"bruta@example.com"}'
+check 'frena el tope diario: son diez codigos, cincuenta intentos por dia' 10 \
+  "$(sql "select count(*) from \"CodigoAcceso\" where email = 'bruta@example.com'")"
+req 'un codigo que nadie va a usar' 202 POST "$T/clientes/codigos" '{"email":"olvido@example.com"}'
+check 'el mail del codigo esta en la cola' 1 "$(sql "$N_MAILS where para = 'olvido@example.com'")"
+sql "update \"Notificacion\" set \"venceAt\" = now() where para = 'olvido@example.com'" >/dev/null
+check 'al vencer el codigo, el mail se borra: el codigo en claro no queda en la base' 0 \
+  "$(esperar 10 "$N_MAILS where para = 'olvido@example.com'" 0)"
 
 seccion 'ABM de tratamientos'
 NUEVO='{"nombre":"Masaje descontracturante","duracionMinutos":45,"precioCentavos":1200000,"senaCentavos":400000}'
@@ -722,6 +739,15 @@ check 'un pago rechazado queda registrado' rechazado "$(sql "select estado from 
 check 'y la reserva sigue esperando el pago' pendiente "$(estado_de "$R_TOTAL")"
 avisar "$(pagar "$PREF_TOTAL")" >/dev/null
 check 'el segundo intento, aprobado, la confirma' confirmada "$(estado_de "$R_TOTAL")"
+PAGO_TOTAL=$(sql "select \"proveedorId\" from \"Pago\" where \"reservaId\" = '$R_TOTAL' and estado = 'aprobado'")
+mock "/__test/pagos/$PAGO_TOTAL" -X POST -d '{"status":"in_mediation"}' >/dev/null
+avisar "$PAGO_TOTAL" >/dev/null
+check 'la clienta abre una disputa: queda registrada en el pago' disputa \
+  "$(sql "select estado from \"Pago\" where \"proveedorId\" = '$PAGO_TOTAL'")"
+mock "/__test/pagos/$PAGO_TOTAL" -X POST -d '{"status":"approved"}' >/dev/null
+check 'se resuelve a favor del centro y el pago vuelve a aprobado' 200 "$(avisar "$PAGO_TOTAL")"
+check 'no se decide de nuevo: ningun reembolso' '0 0' "$(reembolsos_de "$R_TOTAL")"
+check 'y la reserva sigue confirmada' confirmada "$(estado_de "$R_TOTAL")"
 
 req 'una reserva que nunca se paga' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 10:30 vence@example.com)"
 R_VENCE=$(jq -r .id "$TMP/body"); PREF_VENCE=$(pref_de)
@@ -742,6 +768,15 @@ avisar "$(pagar "$PREF_VENCE2")" >/dev/null
 check 'el pago tardio con el horario tomado no la reactiva' 'cancelada sistema' "$(estado_de "$R_VENCE2")"
 check 'y se devuelve entero' aprobado "$(esperar 10 "select r.estado from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"reservaId\" = '$R_VENCE2'" aprobado)"
 check 'con un mail que explica por que' 1 "$(sql "$N_MAILS where para = 'vence2@example.com' and asunto like 'Te devolvemos%'")"
+req 'una que vence y cuyo turno despues pasa' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 16:30 tarde@example.com)"
+R_TARDE=$(jq -r .id "$TMP/body"); PREF_TARDE=$(pref_de)
+sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where id = '$R_TARDE'" >/dev/null
+esperar 15 "select estado from \"Reserva\" where id = '$R_TARDE'" cancelada >/dev/null
+a_ayer "$R_TARDE"
+avisar "$(pagar "$PREF_TARDE")" >/dev/null
+check 'un pago que llega despues de la hora del turno no lo reactiva' 'cancelada sistema' "$(estado_de "$R_TARDE")"
+check 'y se devuelve' aprobado \
+  "$(esperar 10 "select r.estado from \"Reembolso\" r join \"Pago\" p on p.id = r.\"pagoId\" where p.\"reservaId\" = '$R_TARDE'" aprobado)"
 
 reservar_pagada 'Sofia reserva y paga la sena' "$(turno "$LUNES3" 12:00)" "$TOKEN_SOFIA"
 R_S1=$R
@@ -800,6 +835,7 @@ check 'sigue sin reprogramacion y con 24 horas para cancelar' 'null 24' "$(jq -r
 req 'cancelacionHorasAntes null en el servicio' 400 PATCH "$T/servicios/$S30" '{"cancelacionHorasAntes":null}' "$TOKEN"
 
 req 'el centro cancela sin decir si reembolsa' 400 PATCH "$T/reservas/$R_S4" '{"estado":"cancelada"}' "$TOKEN"
+req 'reembolsar en null tampoco es una respuesta' 400 PATCH "$T/reservas/$R_S4" '{"estado":"cancelada","reembolsar":null}' "$TOKEN"
 req 'el centro cancela sin reembolso' 200 PATCH "$T/reservas/$R_S4" '{"estado":"cancelada","reembolsar":false}' "$TOKEN"
 check 'cancelada por el centro, nada que devolver' 'cancelada centro 0 0' "$(jq -r '"\(.estado) \(.canceladaPor)"' "$TMP/body") $(reembolsos_de "$R_S4")"
 reservar_pagada 'otra paga, para cancelar con reembolso' "$(reserva "$S30" "$MARTES3" 12:00 a2@example.com)"
@@ -827,8 +863,16 @@ check 'y el centro recibe el mail para hacerlo a mano' 1 "$(esperar 10 "$N_MAILS
 
 req 'una reserva pendiente de sena' 201 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 18:00 amano@example.com)"
 R_MANO=$(jq -r .id "$TMP/body")
+req 'un estado en null no confirma nada' 400 PATCH "$T/reservas/$R_MANO" '{"estado":null}' "$TOKEN"
 req 'el centro la confirma a mano, porque le pagaron de otra forma' 200 PATCH "$T/reservas/$R_MANO" '{"estado":"confirmada"}' "$TOKEN"
 check 'queda confirmada sin pago online' 'confirmada 0' "$(jq -r '"\(.estado) \(.cobro.pagadoCentavos)"' "$TMP/body")"
+req 'una pendiente cuyo pago vence' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 17:15 vencida-mano@example.com)"
+R_VM=$(jq -r .id "$TMP/body")
+sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where id = '$R_VM'" >/dev/null
+req 'otra persona toma el horario que dejo' 201 POST "$T/reservas" "$(reserva "$S30" "$LUNES3" 17:15 toma-mano@example.com)"
+req 'el centro quiere confirmar la vencida a mano igual' 409 PATCH "$T/reservas/$R_VM" '{"estado":"confirmada"}' "$TOKEN"
+check 'no hay sobrecupo: una sola reserva viva en ese horario' 1 \
+  "$(sql "select count(*) from \"Reserva\" r join \"Tenant\" t on t.id = r.\"tenantId\" where t.slug = 'lo-de-lili' and r.fecha = '$LUNES3' and r.\"horaInicio\" = '17:15' and (r.estado = 'confirmada' or (r.estado = 'pendiente' and r.\"pagoVenceAt\" > now()))")"
 
 req 'una URL nueva para conectar otra cuenta' 200 GET "$T/cuenta-mercadopago/autorizacion" '' "$TOKEN"
 STATE2=$(node -e 'console.log(new URL(process.argv[1]).searchParams.get("state"))' "$(jq -r .url "$TMP/body")")
@@ -836,6 +880,8 @@ req 'cambiar a otra cuenta con turnos pagos por venir' 409 POST "$T/cuenta-merca
 check 'con codigo mp_account_change_blocked' mp_account_change_blocked "$(jq -r .code "$TMP/body")"
 req 'desconectarla con turnos pagos por venir' 409 DELETE "$T/cuenta-mercadopago" '' "$TOKEN"
 
+req 'un cobro abierto, antes de que falle la cuenta' 201 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 18:45 abierta@example.com)"
+R_ABIERTA=$(jq -r .id "$TMP/body"); PREF_ABIERTA=$(pref_de)
 REFRESH_ANTES=$(sql "select \"refreshTokenCifrado\" from \"CuentaMercadoPago\" where \"mpUserId\" = '111222'")
 sql "update \"CuentaMercadoPago\" set \"expiraAt\" = now() + interval '1 day' where \"mpUserId\" = '111222'" >/dev/null
 check 'a un dia de vencer, la tarea renueva el token' t \
@@ -847,6 +893,8 @@ sql "update \"CuentaMercadoPago\" set \"expiraAt\" = now() + interval '1 day' wh
 check 'si MP rechaza la renovacion, la cuenta pide reconexion' t \
   "$(esperar 15 "select \"requiereReconexion\" from \"CuentaMercadoPago\" where \"mpUserId\" = '111222'" t)"
 check 'y el centro recibe el mail para reconectar' 1 "$(esperar 10 "$N_MAILS where para = 'lili@lodelili.test' and asunto like 'Volv%conectar%'" 1)"
+check 'la clienta paga el cobro abierto: el aviso se procesa con el token guardado' 200 "$(avisar "$(pagar "$PREF_ABIERTA")")"
+check 'y la reserva queda confirmada, aunque la cuenta espere reconexion' confirmada "$(estado_de "$R_ABIERTA")"
 req 'mientras tanto, un turno en efectivo' 201 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 16:30 reconexion@example.com)"
 check 'entra sin sena, como en el MVP' 'confirmada null' "$(jq -r '"\(.estado) \(.cobro)"' "$TMP/body")"
 req 'y uno con Mercado Pago' 409 POST "$T/reservas" "$(reserva "$S30" "$MARTES3" 17:15 reconexion2@example.com | jq -c '.metodoPago = "mercadopago"')"
@@ -909,6 +957,10 @@ UNO_DEL_MES=$(sql "select id from \"Reserva\" where \"clienteEmail\" = 'tope@exa
 req 'el centro cancela uno de esos turnos' 200 PATCH "$OTRO/reservas/$UNO_DEL_MES" '{"estado":"cancelada"}' "$TOKEN_OTRO"
 req 'un turno cancelado no cuenta: ahora el 61 entra' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$F61" "$H61" tope@example.com)"
 req 'la carga del centro tambien respeta el tope' 409 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$F62" "$H62" tope@example.com)" "$TOKEN_OTRO"
+R_SINMP=$(sql "select id from \"Reserva\" where \"clienteEmail\" = 'sinmp@example.com'")
+req 'reprogramar un turno de otro mes hacia el mes lleno' 409 PATCH "$OTRO/reservas/$R_SINMP" \
+  "$(jq -nc --arg f "$F62" --arg h "$H62" '{fecha:$f, hora:$h}')" "$TOKEN_OTRO"
+check 'tambien respeta el tope' monthly_limit_reached "$(jq -r .code "$TMP/body")"
 
 req 'Profesional sin la cuenta de Mercado Pago conectada' 409 PUT "$OTRO/suscripcion" '{"plan":"profesional"}' "$TOKEN_OTRO"
 check 'con codigo mercadopago_not_connected' mercadopago_not_connected "$(jq -r .code "$TMP/body")"
@@ -976,7 +1028,17 @@ req 'un dia despues de lo pagado' 200 GET "$OTRO/suscripcion" '' "$TOKEN_OTRO"
 check 'Basico: una suscripcion cancelada no tiene gracia' basico "$(jq -r .plan "$TMP/body")"
 req 'la misma agenda despues de bajar de plan' 200 GET "$OTRO/servicios/$S_OTRO/disponibilidad?fecha=$LUNES2"
 check 'la franja dice 2, pero ofrece uno: no conserva el turno doble' 1 "$(jq '[.data[] | select(.hora == "09:00")][0].cuposDisponibles' "$TMP/body")"
-req 'desconectar Mercado Pago ya sin suscripcion' 200 DELETE "$OTRO/cuenta-mercadopago" '' "$TOKEN_OTRO"
+req 'las franjas despues de bajar de plan' 200 GET "$OTRO/ventanas-atencion" '' "$TOKEN_OTRO"
+check 'se leen con el tope del plan' 1 "$(jq '.data[0].capacidad' "$TMP/body")"
+req 'y se guardan tal como se leen' 200 PUT "$OTRO/ventanas-atencion" "$(jq -c '{data}' "$TMP/body")" "$TOKEN_OTRO"
+req 'volver a suscribirse despues de cancelar' 200 PUT "$OTRO/suscripcion" '{"plan":"profesional"}' "$TOKEN_OTRO"
+check 'queda pendiente, y sin gracia: nunca se cobro' 'basico pending' "$(jq -r '"\(.plan) \(.suscripcion.estado)"' "$TMP/body")"
+req 'y cancelarla otra vez' 200 PUT "$OTRO/suscripcion" '{"plan":"basico"}' "$TOKEN_OTRO"
+req 'desconectar Mercado Pago con un cobro abierto' 409 DELETE "$OTRO/cuenta-mercadopago" '' "$TOKEN_OTRO"
+check 'la clienta todavia puede pagar: la cuenta no se va' mp_account_change_blocked "$(jq -r .code "$TMP/body")"
+sql "update \"Reserva\" set \"pagoVenceAt\" = now() - interval '1 minute' where \"clienteEmail\" = 'bella@example.com'" >/dev/null
+req 'desconectarla con el cobro vencido' 200 DELETE "$OTRO/cuenta-mercadopago" '' "$TOKEN_OTRO"
+check 'sin cuenta, un aviso de pago no se contesta 200: Mercado Pago lo reintenta' 503 "$(avisar 999997 "$OTRO")"
 
 req 'Basico: un turno de Bella Piel' 201 POST "$OTRO/reservas" "$(reserva "$S_OTRO" "$LUNES3" 17:15 recordatorio-basico@example.com)"
 a_doce_horas "$(jq -r .id "$TMP/body")"
@@ -1001,14 +1063,16 @@ req 'la administradora nueva entra a su panel' 200 GET /tenants/estetica-luz/sus
 check 'en el plan Basico' basico "$(jq -r .plan "$TMP/body")"
 req 'el catalogo publico del centro nuevo' 200 GET /tenants/estetica-luz/servicios
 check 'existe, sin tratamientos todavia' 0 "$(jq '.data | length' "$TMP/body")"
-req 'la administradora nueva inicia sesion, con el email normalizado' 201 POST /tenants/estetica-luz/sesiones \
-  '{"email":"lucia@esteticaluz.test","password":"una-contrasena-larga"}'
+req 'la administradora nueva inicia sesion escribiendo el email como en el alta' 201 POST /tenants/estetica-luz/sesiones \
+  '{"email":"Lucia@EsteticaLuz.test","password":"una-contrasena-larga"}'
 req 'el mismo slug otra vez' 409 POST /tenants "$(centro_nuevo estetica-luz)"
 check 'con codigo slug_taken' slug_taken "$(jq -r .code "$TMP/body")"
 req 'un slug reservado' 409 POST /tenants "$(centro_nuevo plataforma)"
 req 'un slug con mayusculas' 400 POST /tenants "$(centro_nuevo Estetica-Luz)"
 req 'una contrasena de menos de 12 caracteres' 400 POST /tenants "$(centro_nuevo otro-centro corta)"
 req 'un campo de mas: el plan no se elige en el alta' 400 POST /tenants "$(centro_nuevo otro-centro | jq -c '.plan = "profesional"')"
+req 'un alta sin la administradora' 400 POST /tenants '{"nombre":"Sin Admin","slug":"sin-admin"}'
+req 'un alta con la administradora en un array' 400 POST /tenants '{"nombre":"Sin Admin","slug":"sin-admin","admin":[]}'
 req 'un token de centro no bloquea una ruta publica sin centro' 200 GET /planes '' "$TOKEN"
 
 req 'la plataforma con una contrasena equivocada' 401 POST /plataforma/sesiones \
@@ -1062,8 +1126,23 @@ check 'los activos por plan: Lo de Lili en Profesional, los otros dos en Basico'
 check 'ninguna suscripcion paga: la de Bella Piel se cancelo' 0 "$(jq -r .ingresoMensualCentavos "$TMP/body")"
 check 'lo cobrado coincide con la base' "$(sql "$COBRADO")" "$(jq -r .cobradoDelMesCentavos "$TMP/body")"
 
+SEED_MP_ACCESS_TOKEN=APP_USR-mock-333444 SEED_MP_USER_ID=333444 node "$RAIZ/prisma/conectar-mp.ts" estetica-luz >/dev/null
+CANCELADAS_ANTES=$(llamadas_mp | jq '[.[] | select(.metodo == "PUT" and (.path | startswith("/preapproval/")) and .cuerpo.status == "cancelled")] | length')
+SUSCRIPCIONES=()
+for _ in 1 2; do
+  curl -s -o /dev/null --max-time 30 -X PUT "$BASE/tenants/estetica-luz/suscripcion" -H "Authorization: Bearer $TOKEN_NUEVO" \
+    -H 'Content-Type: application/json' -d '{"plan":"profesional"}' &
+  SUSCRIPCIONES+=("$!")
+done
+wait "${SUSCRIPCIONES[@]}"
+CREADAS=$(llamadas_mp | jq '[.[] | select(.path == "/preapproval" and .cuerpo.external_reference == "estetica-luz")] | length')
+CANCELADAS=$(llamadas_mp | jq '[.[] | select(.metodo == "PUT" and (.path | startswith("/preapproval/")) and .cuerpo.status == "cancelled")] | length')
+check 'dos pedidos del Profesional a la vez dejan una sola suscripcion viva' 1 "$((CREADAS - (CANCELADAS - CANCELADAS_ANTES)))"
 req 'dar de baja el centro nuevo' 200 PATCH /plataforma/tenants/estetica-luz '{"activo":false}' "$TOKEN_PLATAFORMA"
 check 'queda inactivo' false "$(jq -r .activo "$TMP/body")"
+check 'y la baja cancela su suscripcion: Mercado Pago no le sigue cobrando' cancelled \
+  "$(sql "select \"suscripcionEstado\" from \"Tenant\" where slug = 'estetica-luz'")"
+check 'el aviso de un pago le sigue llegando: el webhook no responde 404' 200 "$(avisar 999996 /tenants/estetica-luz)"
 req 'su catalogo publico ya no existe' 404 GET /tenants/estetica-luz/servicios
 req 'y su administradora no entra' 404 GET /tenants/estetica-luz/suscripcion '' "$TOKEN_NUEVO"
 req 'reactivarlo' 200 PATCH /plataforma/tenants/estetica-luz '{"activo":true}' "$TOKEN_PLATAFORMA"

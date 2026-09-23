@@ -2437,7 +2437,7 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "Email de la persona administradora del centro.",
+            "description": "Email de la persona administradora del centro. Se normaliza como en el alta del centro:\nsi no, quien se registro como \"Lucia@...\" no podria volver a entrar escribiendolo igual.",
             "format": "email",
             "example": "admin@ejemplo.test"
           },

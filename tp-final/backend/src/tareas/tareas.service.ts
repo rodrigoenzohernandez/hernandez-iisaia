@@ -56,8 +56,13 @@ export class TareasService implements OnApplicationShutdown {
         () => this.cobros.procesarReembolsos(),
         { tambienInactivos: true },
       ),
-      this.cadaTanto('vencimientos', 60_000, (centro) =>
-        this.cobros.vencerImpagas(centro),
+      // Tambien en un centro dado de baja: sus cobros abiertos tienen que vencer, y la clienta
+      // enterarse.
+      this.cadaTanto(
+        'vencimientos',
+        60_000,
+        (centro) => this.cobros.vencerImpagas(centro),
+        { tambienInactivos: true },
       ),
       this.cadaTanto('tokens de mercado pago', 12 * 3_600_000, (centro) =>
         this.cuentas.renovarToken(centro),
@@ -105,12 +110,19 @@ export class TareasService implements OnApplicationShutdown {
         slug: true,
         nombre: true,
         zonaHoraria: true,
+        activo: true,
         ...camposDelPlan,
       },
     });
     for (const fila of filas) {
-      const { id, slug, nombre, zonaHoraria } = fila;
-      const centro = { id, slug, nombre, zonaHoraria, plan: planVigente(fila) };
+      const centro: Centro = {
+        id: fila.id,
+        slug: fila.slug,
+        nombre: fila.nombre,
+        zonaHoraria: fila.zonaHoraria,
+        activo: fila.activo,
+        plan: planVigente(fila),
+      };
       // Con runAs, cada query de fn queda sellada con el centro, como en una request. Un
       // centro que falla no frena a los demas.
       await TenantContext.runAs(centro.id, () => fn(centro)).catch(

@@ -76,6 +76,9 @@ async function bootstrap(): Promise<void> {
     useGlobalPrefix: true,
   });
 
+  // Con SIGTERM la app se cierra en orden: las tareas periodicas paran y Prisma suelta la
+  // base. Los envios que queden a medias los retoma el lease de la cola.
+  app.enableShutdownHooks();
   await app.listen(env.port);
   // Despues de listen y aca, no en un hook: el exportador del OpenAPI inicializa la app sin
   // levantar el servidor, y ahi no tiene que correr nada contra la base.
