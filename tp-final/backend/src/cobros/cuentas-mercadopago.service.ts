@@ -294,6 +294,7 @@ export class CuentasMercadoPagoService {
       clientSecret: mp.clientSecret,
       redirectUri: mp.redirectUri,
       platformAccessToken: mp.platformAccessToken,
+      testToken: mp.oauthTestToken,
     });
   }
 

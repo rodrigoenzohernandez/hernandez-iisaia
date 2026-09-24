@@ -80,7 +80,7 @@ Para correr la verificación hacen falta dos cosas, en dos corridas distintas:
 
 ```bash
 npm run start:verify     # en otra terminal
-npm run verify           # 553 casos de dominio
+npm run verify           # 555 casos de dominio
 
 npm run start:dev        # ahora con los límites de default
 npm run verify:limite    # que el límite de peticiones exista
@@ -118,7 +118,7 @@ tp-final/
     │   └── conectar-mp.ts         conecta un centro a una cuenta de prueba de MP, sin OAuth
     ├── openapi.json               el contrato, regenerado con `npm run spec`
     ├── verificacion/
-    │   ├── verificar.sh           los 553 casos de dominio
+    │   ├── verificar.sh           los 555 casos de dominio
     │   ├── verificar-limite.sh    que el límite de peticiones exista
     │   └── mercadopago-mock.mjs   la API de Mercado Pago en memoria, para verificar
     └── src/

@@ -37,9 +37,14 @@ export type CheckoutInput = {
   reference: string;
   /** Lo que ve quien paga en la pagina de MP. */
   title: string;
+  /** El detalle de lo que se cobra. MP lo usa en el antifraude: lo pide su checklist de calidad. */
+  description?: string;
   amountCents: number;
   currency?: string;
   payerEmail?: string;
+  /** Nombre y apellido de quien paga: suben la tasa de aprobacion, y los pide el checklist. */
+  payerFirstName?: string;
+  payerLastName?: string;
   /** Despues de esto MP no acepta el pago. */
   expiresAt?: Date;
   /** Adonde vuelve quien paga. MP exige HTTPS. */

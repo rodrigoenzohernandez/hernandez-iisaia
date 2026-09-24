@@ -27,8 +27,11 @@ const mp = new MercadoPago({ accessToken, notificationUrl });
 const checkout = await mp.createCheckout({
   reference: 'pedido-123',      // vuelve en cada pago y en cada aviso
   title: 'Seña',
+  description: 'Turno del lunes 5 de octubre a las 10:30',
   amountCents: 540_000,         // siempre centavos enteros
   payerEmail,
+  payerFirstName,               // nombre, apellido y descripcion suben la tasa de
+  payerLastName,                // aprobacion: los pide el checklist de calidad de MP
   expiresAt,                    // despues de esto MP no acepta el pago
   backUrls,                     // HTTPS: MP rechaza http
   onlyInstantMethods: true,     // sin Rapipago ni Pago Facil
@@ -67,6 +70,10 @@ const url = oauth.authorizationUrl(state, verifier);      // challenge S256
 const cuenta = await oauth.connect(code, verifier);       // accessToken, refreshToken, userId...
 const renovada = await oauth.refresh(cuenta.refreshToken); // el refresh viejo deja de servir
 ```
+
+Para conectar cuentas vendedoras de prueba en staging, `testToken: true` pide credenciales de
+prueba en el canje. Es el `test_token` que documenta MP, en el body: la opción `testToken` del
+SDK lo manda como header.
 
 ### 4. Webhooks
 

@@ -18,6 +18,7 @@ import { NotificacionesService } from '../notificaciones/notificaciones.service.
 import {
   avisoTurnoNuevo,
   datosDelTurno,
+  fechaLarga,
   pagoDevuelto,
   reembolsoManual,
   turnoConfirmado,
@@ -98,17 +99,27 @@ export class CobrosService {
       id: string;
       montoOnlineCentavos: number;
       pagoVenceAt: Date;
+      clienteNombre: string;
       clienteEmail: string;
       servicio: string;
+      fecha: string;
+      hora: string;
       esSena: boolean;
     },
   ): Promise<{ checkoutId: string; checkoutUrl: string }> {
+    // El checklist de calidad de MP pide nombre, apellido y descripcion: suben la tasa de
+    // aprobacion. La reserva guarda el nombre completo en un solo campo, asi que la primera
+    // palabra va de nombre y el resto de apellido; es lo que mira el antifraude.
+    const [nombre, ...apellido] = reserva.clienteNombre.trim().split(/\s+/);
     try {
       const checkout = await mp.createCheckout({
         reference: reserva.id,
         title: reserva.esSena ? `${reserva.servicio} (seña)` : reserva.servicio,
+        description: `Turno en ${tenant.nombre}: ${fechaLarga(reserva.fecha)} a las ${reserva.hora}`,
         amountCents: reserva.montoOnlineCentavos,
         payerEmail: reserva.clienteEmail,
+        payerFirstName: nombre,
+        payerLastName: apellido.join(' ') || undefined,
         expiresAt: reserva.pagoVenceAt,
         backUrls: this.cuentas.urlsDeVuelta(tenant.slug, reserva.id),
         onlyInstantMethods: true,

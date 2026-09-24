@@ -691,6 +691,7 @@ if ! llamadas_mp | jq -e 'any(.[]; .path == "/oauth/token")' >/dev/null; then
 fi
 check 'queda conectada a la cuenta que autorizo' 'true 111222' "$(jq -r '"\(.conectada) \(.mpUserId)"' "$TMP/body")"
 check 'el canje llevo el verifier de PKCE' true "$(llamadas_mp | jq '[.[] | select(.path == "/oauth/token")][0].cuerpo.code_verifier | length >= 43')"
+check 'y pidio credenciales de prueba, como en staging (test_token en el body)' true "$(llamadas_mp | jq '[.[] | select(.path == "/oauth/token")][0].cuerpo.test_token == true')"
 check 'los tokens quedan cifrados en la base' 'v1.' "$(sql "select left(\"accessTokenCifrado\", 3) from \"CuentaMercadoPago\" where \"mpUserId\" = '111222'")"
 req 'el estado de la cuenta' 200 GET "$T/cuenta-mercadopago" '' "$TOKEN"
 check 'no devuelve ningun token' 0 "$(jq '[paths | .[-1] | tostring | select(test("token"; "i"))] | length' "$TMP/body")"
@@ -704,6 +705,8 @@ check 'la preferencia se creo con el token de Lo de Lili' true \
   "$(llamadas_mp | jq --arg r "$R_SENA" 'any(.[]; .path == "/checkout/preferences" and .cuerpo.external_reference == $r and (.token | endswith("-111222")))')"
 check 'por la sena, con binary_mode, sin Rapipago ni Pago Facil y con vencimiento' true \
   "$(llamadas_mp | jq --arg r "$R_SENA" '[.[] | select(.path == "/checkout/preferences" and .cuerpo.external_reference == $r)][0].cuerpo | .items[0].unit_price == 4500 and .binary_mode == true and (.payment_methods.excluded_payment_types | length) == 2 and .expires == true')"
+check 'con nombre, apellido y descripcion del turno, que pide el checklist de calidad de MP' true \
+  "$(llamadas_mp | jq --arg r "$R_SENA" '[.[] | select(.path == "/checkout/preferences" and .cuerpo.external_reference == $r)][0].cuerpo | .payer.name == "Ana" and .payer.surname == "Perez" and (.items[0].description | startswith("Turno en Lo de Lili: "))')"
 check 'mientras espera el pago no manda confirmacion' 0 "$(sql "$N_MAILS where para = 'sena@example.com'")"
 req 'la reserva pendiente ocupa el cupo' 200 GET "$T/servicios/$S30/disponibilidad?fecha=$LUNES3"
 check 'el horario queda sin cupo mientras no vence' 0 "$(jq '[.data[] | select(.hora == "09:00")][0].cuposDisponibles' "$TMP/body")"

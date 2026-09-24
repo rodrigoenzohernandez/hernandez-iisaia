@@ -145,6 +145,7 @@ export class MercadoPago {
             {
               id: input.reference,
               title: input.title,
+              description: input.description,
               quantity: 1,
               unit_price: aMonto(input.amountCents),
               currency_id: input.currency ?? 'ARS',
@@ -155,7 +156,15 @@ export class MercadoPago {
           ...(this.opciones.notificationUrl
             ? { notification_url: this.opciones.notificationUrl }
             : {}),
-          ...(input.payerEmail ? { payer: { email: input.payerEmail } } : {}),
+          ...(input.payerEmail || input.payerFirstName
+            ? {
+                payer: {
+                  email: input.payerEmail,
+                  name: input.payerFirstName,
+                  surname: input.payerLastName,
+                },
+              }
+            : {}),
           ...(input.backUrls
             ? { back_urls: input.backUrls, auto_return: 'approved' }
             : {}),
@@ -363,12 +372,17 @@ export class MercadoPago {
    * OAuth para conectar cuentas de vendedores (modelo marketplace), con PKCE.
    * `platformAccessToken` es el token de la cuenta duenia de la app: el SDK lo manda como
    * Bearer en el canje del codigo.
+   *
+   * `testToken` pide credenciales de prueba en el canje, para conectar cuentas vendedoras de
+   * prueba. Es el `test_token` que documenta MP, en el body: la opcion `testToken` del SDK
+   * no sirve para esto, porque lo manda como header.
    */
   static oauth(opciones: {
     clientId: string;
     clientSecret: string;
     redirectUri: string;
     platformAccessToken: string;
+    testToken?: boolean;
   }) {
     const config = () => configDelSdk(opciones.platformAccessToken);
     const credenciales = {
@@ -411,6 +425,7 @@ export class MercadoPago {
                 code,
                 redirect_uri: opciones.redirectUri,
                 code_verifier: verifier,
+                ...(opciones.testToken ? { test_token: true } : {}),
               } as { client_id: string; client_secret: string; code: string },
             }),
           ),

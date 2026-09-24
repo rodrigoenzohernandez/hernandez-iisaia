@@ -347,7 +347,11 @@ export class ReservasService {
           clienteEmail: contacto.email,
           clienteTelefono: contacto.telefono,
           notas: dto.notas ?? null,
-          recordatorioEnviadoAt: recordatorioEnviadoAt(dto.fecha, dto.hora, ahora),
+          recordatorioEnviadoAt: recordatorioEnviadoAt(
+            dto.fecha,
+            dto.hora,
+            ahora,
+          ),
         } as Prisma.ReservaUncheckedCreateInput,
         select: reservaSelect,
       });
@@ -391,8 +395,11 @@ export class ReservasService {
         id: fila.id,
         montoOnlineCentavos: montoOnline,
         pagoVenceAt,
+        clienteNombre: contacto.nombre,
         clienteEmail: contacto.email,
         servicio: servicio.nombre,
+        fecha: dto.fecha,
+        hora: dto.hora,
         esSena: dto.metodoPago === MetodoPago.efectivo,
       }));
     }

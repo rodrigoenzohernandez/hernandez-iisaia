@@ -87,6 +87,18 @@ if (produccion && mpApiUrl) {
   );
 }
 
+/**
+ * Solo para staging: el canje de OAuth pide credenciales de prueba, para conectar cuentas
+ * vendedoras de prueba. En produccion conectaria centros reales con tokens de sandbox, que
+ * no cobran plata de verdad.
+ */
+const mpOAuthTestToken = process.env.MP_OAUTH_TEST_TOKEN === 'true';
+if (produccion && mpOAuthTestToken) {
+  throw new Error(
+    'MP_OAUTH_TEST_TOKEN es solo para pruebas y no se acepta en produccion',
+  );
+}
+
 // Mercado Pago exige HTTPS en notification_url y en back_urls. Una URL que no lo es se omite
 // al crear el checkout; en produccion, directamente no se acepta.
 const publicApiUrl = process.env.PUBLIC_API_URL;
@@ -152,6 +164,7 @@ export const env = {
     clientId: process.env.MP_CLIENT_ID,
     clientSecret: process.env.MP_CLIENT_SECRET,
     redirectUri: process.env.MP_REDIRECT_URI,
+    oauthTestToken: mpOAuthTestToken,
     // La cuenta de la plataforma: cobra las suscripciones de los centros.
     platformAccessToken: process.env.MP_PLATFORM_ACCESS_TOKEN,
     webhookSecret: process.env.MP_WEBHOOK_SECRET,
