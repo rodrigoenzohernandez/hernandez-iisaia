@@ -9,13 +9,12 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { recortar, SiVino } from '../../common/transforms.js';
 
 export class CreateServicioDto {
   /** Nombre del tratamiento. Unico dentro del centro. */
   @IsString()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
+  @Transform(recortar)
   @Length(2, 80, {
     message: 'El nombre tiene que tener entre 2 y 80 caracteres.',
   })
@@ -52,7 +51,26 @@ export class CreateServicioDto {
   @Min(0, { message: 'La sena no puede ser negativa.' })
   senaCentavos!: number;
 
-  @IsOptional()
+  @SiVino()
   @IsBoolean()
   requiereValoracion?: boolean;
+
+  /**
+   * Hasta cuantas horas antes del turno la clienta puede reprogramar sola, sin costo. null
+   * apaga la reprogramacion por autogestion; el centro puede reprogramar siempre.
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Las horas para reprogramar son un entero.' })
+  @Min(0, { message: 'Las horas para reprogramar no pueden ser negativas.' })
+  @Max(720, { message: 'Las horas para reprogramar no pueden pasar de 720.' })
+  reprogramacionHorasAntes?: number | null;
+
+  /** Hasta cuantas horas antes la clienta cancela con reembolso total. */
+  @SiVino()
+  @Type(() => Number)
+  @IsInt({ message: 'Las horas para cancelar son un entero.' })
+  @Min(0, { message: 'Las horas para cancelar no pueden ser negativas.' })
+  @Max(720, { message: 'Las horas para cancelar no pueden pasar de 720.' })
+  cancelacionHorasAntes?: number;
 }

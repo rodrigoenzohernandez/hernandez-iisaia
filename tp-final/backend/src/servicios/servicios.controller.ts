@@ -15,7 +15,11 @@ import {
   ApiOkResponse,
 } from '@nestjs/swagger';
 import { ApiSoloAdmin, ApiTenant } from '../common/api.decorators.js';
-import { CurrentUsuario, Publico } from '../common/decorators.js';
+import {
+  CurrentUsuario,
+  Publico,
+  type UsuarioRequest,
+} from '../common/decorators.js';
 import { ErrorDto } from '../common/error.dto.js';
 import { ApiCursorPage } from '../common/pagination/api-cursor-page.decorator.js';
 import type { CursorPageDto } from '../common/pagination/cursor-page.dto.js';
@@ -40,9 +44,10 @@ export class ServiciosController {
   @ApiCursorPage(ServicioDto)
   findAll(
     @Query() query: ListServiciosQueryDto,
-    @CurrentUsuario() usuario?: { id: string },
+    @CurrentUsuario() usuario?: UsuarioRequest,
   ): Promise<CursorPageDto<ServicioDto>> {
-    return this.servicios.findAll(query, Boolean(usuario));
+    // El rol y no la presencia del token: una clienta con sesion no administra el catalogo.
+    return this.servicios.findAll(query, usuario?.rol === 'admin');
   }
 
   /** Un tratamiento puntual. */
@@ -51,9 +56,9 @@ export class ServiciosController {
   @ApiOkResponse({ type: ServicioDto })
   findOne(
     @Param('servicioId') servicioId: string,
-    @CurrentUsuario() usuario?: { id: string },
+    @CurrentUsuario() usuario?: UsuarioRequest,
   ): Promise<ServicioDto> {
-    return this.servicios.findOne(servicioId, Boolean(usuario));
+    return this.servicios.findOne(servicioId, usuario?.rol === 'admin');
   }
 
   /** Da de alta un tratamiento. Solo la administradora del centro. */

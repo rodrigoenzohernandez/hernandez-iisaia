@@ -6,6 +6,7 @@ import {
   ApiParam,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Roles } from './decorators.js';
 import { ErrorDto } from './error.dto.js';
 
 /**
@@ -22,11 +23,25 @@ export const ApiTenant = () =>
       // El type explicito no sobra: sin el, un cliente generado del spec tipa el parametro
       // como `unknown` y obliga a castear en cada llamada.
       type: String,
-      description: 'Identificador del centro en la URL, por ejemplo `lo-de-lili`.',
+      description:
+        'Identificador del centro en la URL, por ejemplo `lo-de-lili`.',
       example: 'lo-de-lili',
     }),
-    ApiNotFoundResponse({ type: ErrorDto, description: 'El centro no existe o esta inactivo.' }),
+    ApiNotFoundResponse({
+      type: ErrorDto,
+      description: 'El centro no existe o esta inactivo.',
+    }),
   );
+
+/** Pide token y documenta sus dos rechazos; `prohibido` dice que token no alcanza. */
+const conToken = (prohibido: string) => [
+  ApiBearerAuth(),
+  ApiUnauthorizedResponse({
+    type: ErrorDto,
+    description: 'Falta el token o no es valido.',
+  }),
+  ApiForbiddenResponse({ type: ErrorDto, description: prohibido }),
+];
 
 /**
  * Marca una operacion como de administracion: pide token y documenta sus dos rechazos.
@@ -37,7 +52,24 @@ export const ApiTenant = () =>
  */
 export const ApiSoloAdmin = () =>
   applyDecorators(
-    ApiBearerAuth(),
-    ApiUnauthorizedResponse({ type: ErrorDto, description: 'Falta el token o no es valido.' }),
-    ApiForbiddenResponse({ type: ErrorDto, description: 'El token es de otro centro.' }),
+    ...conToken(
+      'El token es de otro centro, o de una cuenta que no es de administracion.',
+    ),
+  );
+
+/**
+ * Ruta de clienta: exige su rol y documenta los rechazos. El rol y la documentacion van en el
+ * mismo decorador para que no puedan desalinearse.
+ */
+export const SoloClienta = () =>
+  applyDecorators(
+    Roles('cliente'),
+    ...conToken('El token es de otro centro, o no es de una clienta.'),
+  );
+
+/** Ruta de la plataforma: exige el rol de superadmin y documenta los rechazos. */
+export const SoloSuperadmin = () =>
+  applyDecorators(
+    Roles('superadmin'),
+    ...conToken('El token no es de la plataforma.'),
   );

@@ -64,6 +64,614 @@
         ]
       }
     },
+    "/api/v1/tenants/{tenantSlug}/clientes/codigos": {
+      "post": {
+        "operationId": "ClientesController_pedirCodigo",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedirCodigoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodigoPedidoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "El email no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Demasiados codigos para ese email, o demasiadas peticiones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Manda un codigo de ingreso de seis digitos al email de la clienta.",
+        "tags": [
+          "Clientes"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/clientes/sesiones": {
+      "post": {
+        "operationId": "ClientesController_ingresar",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearSesionClienteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionClienteDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Codigo invalido, vencido, ya usado o con los intentos agotados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Entra con el codigo. Si es la primera vez, crea la cuenta.",
+        "tags": [
+          "Clientes"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/clientes/me": {
+      "get": {
+        "operationId": "ClientesController_findMe",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o no es de una clienta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "El perfil de la clienta de la sesion.",
+        "tags": [
+          "Clientes"
+        ]
+      },
+      "patch": {
+        "operationId": "ClientesController_updateMe",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClienteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos invalidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o no es de una clienta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edita nombre y telefono. El email no se cambia: es la identidad de la cuenta.",
+        "tags": [
+          "Clientes"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/cuenta-mercadopago": {
+      "get": {
+        "operationId": "CuentaMercadoPagoController_estado",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuentaMercadoPagoDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Si el centro tiene la cuenta conectada. Nunca devuelve los tokens.",
+        "tags": [
+          "CuentaMercadoPago"
+        ]
+      },
+      "post": {
+        "operationId": "CuentaMercadoPagoController_conectar",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConectarCuentaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuentaMercadoPagoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "El state vencio, es de otro centro, o Mercado Pago rechazo el codigo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "La cuenta actual tiene pagos en curso o turnos pagos por venir: si se cambia, no se podrian saldar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Conecta la cuenta con lo que devolvio Mercado Pago en la redirect: `code` y `state`.",
+        "tags": [
+          "CuentaMercadoPago"
+        ]
+      },
+      "delete": {
+        "operationId": "CuentaMercadoPagoController_desconectar",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuentaMercadoPagoDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "La cuenta tiene pagos en curso o turnos pagos por venir, o la suscripcion al plan Profesional sigue activa.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Desconecta la cuenta. El centro deja de cobrar online.",
+        "tags": [
+          "CuentaMercadoPago"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/cuenta-mercadopago/autorizacion": {
+      "get": {
+        "operationId": "CuentaMercadoPagoController_autorizacion",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutorizacionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "La plataforma no tiene configurada la app de Mercado Pago.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "La URL de Mercado Pago para autorizar a la plataforma a cobrar en nombre del centro.",
+        "tags": [
+          "CuentaMercadoPago"
+        ]
+      }
+    },
     "/api/v1/tenants/{tenantSlug}/servicios": {
       "get": {
         "operationId": "ServiciosController_findAll",
@@ -207,7 +815,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -362,7 +970,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -440,7 +1048,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -526,7 +1134,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "plan_limit_reached: alguna capacidad pasa la del plan del centro. Tambien forbidden_role.\n\nEl token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -706,7 +1314,7 @@
             }
           }
         },
-        "summary": "Reserva un turno. Publico: la clienta no tiene cuenta, deja sus datos de contacto.",
+        "summary": "Reserva un turno, con o sin cuenta. Con token de admin, el centro lo carga a nombre de una clienta.",
         "tags": [
           "Reservas"
         ]
@@ -722,8 +1330,9 @@
               "type": "string",
               "enum": [
                 "pendiente",
+                "cancelada",
                 "confirmada",
-                "cancelada"
+                "ausente"
               ]
             }
           },
@@ -824,7 +1433,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
             "content": {
               "application/json": {
                 "schema": {
@@ -856,6 +1465,80 @@
       }
     },
     "/api/v1/tenants/{tenantSlug}/reservas/{reservaId}": {
+      "get": {
+        "operationId": "ReservasController_findOne",
+        "parameters": [
+          {
+            "name": "reservaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservaDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "La reserva no existe, o no es de la clienta de la sesion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Una reserva. La ve su duenia o la administracion.",
+        "tags": [
+          "Reservas"
+        ]
+      },
       "patch": {
         "operationId": "ReservasController_update",
         "parameters": [
@@ -900,11 +1583,218 @@
             }
           },
           "400": {
-            "description": "El estado pedido no existe.",
+            "description": "Estado y fecha juntos, fecha sin hora, o reembolsar fuera de lugar.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token de otro centro, o una clienta pidiendo algo que es del centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "La reserva no existe, o no es de la clienta de la sesion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Transicion invalida, fuera de plazo para reprogramar, sin cupo en el horario nuevo o ausente antes de hora.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancela, reprograma, confirma o marca ausente un turno.",
+        "tags": [
+          "Reservas"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/reservas/{reservaId}/estado": {
+      "get": {
+        "operationId": "ReservasController_estado",
+        "parameters": [
+          {
+            "name": "reservaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadoReservaSoloDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "La reserva no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "El estado de una reserva, sin datos personales. Para la pagina de vuelta de un pago.",
+        "tags": [
+          "Reservas"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/clientes/me/reservas": {
+      "get": {
+        "operationId": "MisReservasController_findAll",
+        "parameters": [
+          {
+            "name": "estado",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pendiente",
+                "cancelada",
+                "confirmada",
+                "ausente"
+              ]
+            }
+          },
+          {
+            "name": "servicioId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 40,
+              "type": "string"
+            }
+          },
+          {
+            "name": "desde",
+            "required": false,
+            "in": "query",
+            "description": "Desde esta fecha, inclusive.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hasta",
+            "required": false,
+            "in": "query",
+            "description": "Hasta esta fecha, inclusive.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "description": "Cuantos elementos devolver como maximo en esta pagina.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "El nextCursor que devolvio la pagina anterior. Es opaco: mandalo tal cual.",
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Una pagina de resultados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CursorPageDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ReservaDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -920,7 +1810,7 @@
             }
           },
           "403": {
-            "description": "El token es de otro centro.",
+            "description": "El token es de otro centro, o no es de una clienta.",
             "content": {
               "application/json": {
                 "schema": {
@@ -930,17 +1820,7 @@
             }
           },
           "404": {
-            "description": "La reserva no existe.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Esa transicion de estado no es valida.",
+            "description": "El centro no existe o esta inactivo.",
             "content": {
               "application/json": {
                 "schema": {
@@ -955,9 +1835,518 @@
             "bearer": []
           }
         ],
-        "summary": "Confirma o cancela un turno.",
+        "summary": "Los turnos de la clienta, tambien los que reservo sin cuenta con el mismo email.",
         "tags": [
-          "Reservas"
+          "MisReservas"
+        ]
+      }
+    },
+    "/api/v1/planes": {
+      "get": {
+        "operationId": "PlanesController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlanDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Los planes de la plataforma, para la pagina de precios.",
+        "tags": [
+          "Planes"
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantSlug}/suscripcion": {
+      "get": {
+        "operationId": "SuscripcionController_estado",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "El plan que rige hoy y el estado de la suscripcion.",
+        "tags": [
+          "Suscripcion"
+        ]
+      },
+      "put": {
+        "operationId": "SuscripcionController_cambiar",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSuscripcionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profesional: `suscripcion.url` es donde autorizar el cobro mensual, y el plan rige desde el primer cobro aprobado. Basico: cancela la suscripcion, y lo pagado sigue hasta `pagoHasta`. Pedir el plan que ya se pidio no cambia nada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token es de otro centro, o de una cuenta que no es de administracion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "mercadopago_not_connected: el Profesional pide la cuenta de Mercado Pago del centro conectada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Mercado Pago no respondio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "La plataforma no tiene configurado el cobro de los planes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cambia de plan: al Profesional con el cobro mensual en Mercado Pago, o de vuelta al Basico.",
+        "tags": [
+          "Suscripcion"
+        ]
+      }
+    },
+    "/api/v1/plataforma/sesiones": {
+      "post": {
+        "operationId": "PlataformaController_ingresar",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearSesionPlataformaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionPlataformaDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales incorrectas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inicia sesion en la plataforma. No hay alta: la cuenta la crea el seed.",
+        "tags": [
+          "Plataforma"
+        ]
+      }
+    },
+    "/api/v1/plataforma/tenants": {
+      "get": {
+        "operationId": "PlataformaController_centros",
+        "parameters": [
+          {
+            "name": "activo",
+            "required": false,
+            "in": "query",
+            "description": "Solo los activos, o solo los dados de baja. Sin el filtro, todos.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "description": "Cuantos elementos devolver como maximo en esta pagina.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "El nextCursor que devolvio la pagina anterior. Es opaco: mandalo tal cual.",
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Una pagina de resultados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CursorPageDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CentroDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de la plataforma.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los centros, con su plan, su cuenta de Mercado Pago y los numeros del mes.",
+        "tags": [
+          "Plataforma"
+        ]
+      }
+    },
+    "/api/v1/plataforma/resumen": {
+      "get": {
+        "operationId": "PlataformaController_resumen",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumenDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de la plataforma.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los numeros de toda la plataforma en el mes en curso.",
+        "tags": [
+          "Plataforma"
+        ]
+      }
+    },
+    "/api/v1/plataforma/tenants/{slug}": {
+      "patch": {
+        "operationId": "PlataformaController_actualizar",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCentroDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CentroDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token o no es valido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de la plataforma.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Da de baja un centro, o lo reactiva.",
+        "tags": [
+          "Plataforma"
+        ]
+      }
+    },
+    "/api/v1/tenants": {
+      "post": {
+        "operationId": "AltaCentroController_crear",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearCentroDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CentroCreadoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Algun dato es invalido: el slug, el email o la contrasena.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "slug_taken: el slug ya esta en uso o es una palabra reservada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Da de alta un centro en el plan Basico, con quien lo crea como administradora.",
+        "tags": [
+          "AltaCentro"
         ]
       }
     }
@@ -1006,7 +2395,28 @@
               "past_date",
               "too_far_ahead",
               "invalid_transition",
-              "high_contention"
+              "high_contention",
+              "forbidden_role",
+              "not_found",
+              "payload_too_large",
+              "too_many_requests",
+              "internal_error",
+              "http_error",
+              "invalid_code",
+              "too_many_codes",
+              "cliente_not_found",
+              "online_payment_unavailable",
+              "payment_provider_unavailable",
+              "reschedule_not_allowed",
+              "too_early_for_no_show",
+              "invalid_state",
+              "mp_account_change_blocked",
+              "mercadopago_not_configured",
+              "monthly_limit_reached",
+              "plan_limit_reached",
+              "mercadopago_not_connected",
+              "invalid_signature",
+              "slug_taken"
             ],
             "type": "string",
             "example": "slot_full"
@@ -1027,7 +2437,7 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "Email de la persona administradora del centro.",
+            "description": "Email de la persona administradora del centro. Se normaliza como en el alta del centro:\nsi no, quien se registro como \"Lucia@...\" no podria volver a entrar escribiendolo igual.",
             "format": "email",
             "example": "admin@ejemplo.test"
           },
@@ -1080,6 +2490,182 @@
           "usuario"
         ]
       },
+      "PedirCodigoDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "El email de la clienta. Si no tiene cuenta en el centro, se crea al entrar.",
+            "format": "email",
+            "example": "ana@example.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "CodigoPedidoDto": {
+        "type": "object",
+        "properties": {
+          "expiraEnMinutos": {
+            "type": "number",
+            "description": "Cuanto tarda en vencer el codigo que se acaba de mandar.",
+            "example": 10
+          }
+        },
+        "required": [
+          "expiraEnMinutos"
+        ]
+      },
+      "CrearSesionClienteDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "El email de la clienta. Si no tiene cuenta en el centro, se crea al entrar.",
+            "format": "email",
+            "example": "ana@example.com"
+          },
+          "codigo": {
+            "type": "string",
+            "description": "Los seis digitos que llegaron por mail.",
+            "pattern": "^\\d{6}$",
+            "example": "482913"
+          }
+        },
+        "required": [
+          "email",
+          "codigo"
+        ]
+      },
+      "ClienteDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "La identidad de la clienta en el centro. No se cambia: es a donde llega el codigo.",
+            "example": "ana@example.com"
+          },
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string",
+            "nullable": true,
+            "description": "null hasta que lo complete, reservando o desde el perfil."
+          },
+          "telefono": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "email",
+          "id",
+          "nombre",
+          "telefono"
+        ]
+      },
+      "SesionClienteDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT para el header `Authorization: Bearer <token>`. Dura 30 dias: una clienta entra poco,\ny cada ingreso le cuesta ir al mail a buscar el codigo.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "cliente": {
+            "$ref": "#/components/schemas/ClienteDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "cliente"
+        ]
+      },
+      "UpdateClienteDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "telefono": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 30
+          }
+        }
+      },
+      "CuentaMercadoPagoDto": {
+        "type": "object",
+        "properties": {
+          "mpUserId": {
+            "type": "string",
+            "nullable": true,
+            "description": "El id de la cuenta en Mercado Pago.",
+            "example": "111222"
+          },
+          "liveMode": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "false con credenciales de prueba."
+          },
+          "conectadaAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "conectada": {
+            "type": "boolean",
+            "description": "Si el centro tiene una cuenta conectada."
+          },
+          "requiereReconexion": {
+            "type": "boolean",
+            "description": "MP revoco el acceso: hasta reconectar, el centro no cobra online."
+          }
+        },
+        "required": [
+          "mpUserId",
+          "liveMode",
+          "conectadaAt",
+          "conectada",
+          "requiereReconexion"
+        ]
+      },
+      "AutorizacionDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Adonde mandar a la administradora para que autorice. Vence a los 10 minutos.",
+            "example": "https://auth.mercadopago.com/authorization?client_id=..."
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "ConectarCuentaDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "code",
+          "state"
+        ]
+      },
       "CursorPageDto": {
         "type": "object",
         "properties": {
@@ -1114,6 +2700,17 @@
             "description": "Sena que se cobra al reservar, en centavos. Nunca mayor al precio.",
             "example": 540000
           },
+          "reprogramacionHorasAntes": {
+            "type": "number",
+            "nullable": true,
+            "description": "Hasta cuantas horas antes la clienta reprograma sola. null: no puede.",
+            "example": 24
+          },
+          "cancelacionHorasAntes": {
+            "type": "number",
+            "description": "Hasta cuantas horas antes la clienta cancela con reembolso total.",
+            "example": 24
+          },
           "id": {
             "type": "string"
           },
@@ -1141,6 +2738,8 @@
         "required": [
           "precioCentavos",
           "senaCentavos",
+          "reprogramacionHorasAntes",
+          "cancelacionHorasAntes",
           "id",
           "nombre",
           "descripcion",
@@ -1180,6 +2779,19 @@
           },
           "requiereValoracion": {
             "type": "boolean"
+          },
+          "reprogramacionHorasAntes": {
+            "type": "number",
+            "nullable": true,
+            "description": "Hasta cuantas horas antes del turno la clienta puede reprogramar sola, sin costo. null\napaga la reprogramacion por autogestion; el centro puede reprogramar siempre.",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "cancelacionHorasAntes": {
+            "type": "number",
+            "description": "Hasta cuantas horas antes la clienta cancela con reembolso total.",
+            "minimum": 0,
+            "maximum": 720
           }
         },
         "required": [
@@ -1220,6 +2832,19 @@
           },
           "requiereValoracion": {
             "type": "boolean"
+          },
+          "reprogramacionHorasAntes": {
+            "type": "number",
+            "nullable": true,
+            "description": "Hasta cuantas horas antes del turno la clienta puede reprogramar sola, sin costo. null\napaga la reprogramacion por autogestion; el centro puede reprogramar siempre.",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "cancelacionHorasAntes": {
+            "type": "number",
+            "description": "Hasta cuantas horas antes la clienta cancela con reembolso total.",
+            "minimum": 0,
+            "maximum": 720
           },
           "activo": {
             "type": "boolean"
@@ -1366,16 +2991,18 @@
           },
           "clienteNombre": {
             "type": "string",
-            "description": "Un solo campo, como el formulario del prototipo.",
+            "description": "Un solo campo, como el formulario del prototipo. Obligatorio sin sesion de clienta.",
             "minLength": 2,
             "maxLength": 120
           },
           "clienteEmail": {
             "type": "string",
+            "description": "La identidad de la clienta: la reserva queda asociada a este email aunque no tenga\ncuenta. Obligatorio sin sesion de clienta; con sesion, sale de la cuenta.",
             "format": "email"
           },
           "clienteTelefono": {
             "type": "string",
+            "description": "Obligatorio sin sesion de clienta.",
             "minLength": 6,
             "maxLength": 30
           },
@@ -1388,10 +3015,45 @@
           "fecha",
           "hora",
           "metodoPago",
-          "servicioId",
-          "clienteNombre",
-          "clienteEmail",
-          "clienteTelefono"
+          "servicioId"
+        ]
+      },
+      "CobroDto": {
+        "type": "object",
+        "properties": {
+          "montoCentavos": {
+            "type": "number",
+            "description": "La sena, o el precio total si se paga con Mercado Pago, en centavos.",
+            "example": 540000
+          },
+          "pagadoCentavos": {
+            "type": "number",
+            "description": "Lo que entro por Mercado Pago, aprobado.",
+            "example": 540000
+          },
+          "reembolsadoCentavos": {
+            "type": "number",
+            "description": "Lo que se devolvio.",
+            "example": 0
+          },
+          "venceAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "Hasta cuando se puede pagar; despues la reserva vence. null si ya no esta pendiente."
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "El link de Mercado Pago al que se redirige para pagar. null si ya no esta pendiente."
+          }
+        },
+        "required": [
+          "montoCentavos",
+          "pagadoCentavos",
+          "reembolsadoCentavos",
+          "venceAt",
+          "checkoutUrl"
         ]
       },
       "ReservaDto": {
@@ -1411,8 +3073,14 @@
           },
           "estado": {
             "type": "string",
-            "description": "`pendiente`, `confirmada` o `cancelada`.",
+            "description": "`pendiente` (esperando el pago), `confirmada`, `cancelada` o `ausente`.",
             "example": "confirmada"
+          },
+          "canceladaPor": {
+            "type": "string",
+            "nullable": true,
+            "description": "`clienta`, `centro` o `sistema` (vencio sin pagarse). null si no esta cancelada.",
+            "example": null
           },
           "metodoPago": {
             "type": "string",
@@ -1424,8 +3092,41 @@
             "description": "Sena congelada al momento de reservar, en centavos.",
             "example": 540000
           },
+          "precioCentavos": {
+            "type": "number",
+            "description": "Precio congelado al momento de reservar, en centavos.",
+            "example": 1800000
+          },
+          "cobro": {
+            "nullable": true,
+            "description": "El cobro online. null si no hay nada que pagar por Mercado Pago.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CobroDto"
+              }
+            ]
+          },
+          "reprogramacionHorasAntes": {
+            "type": "number",
+            "nullable": true,
+            "description": "La politica que la clienta acepto al reservar. null: no puede reprogramar sola.",
+            "example": 24
+          },
+          "cancelacionHorasAntes": {
+            "type": "number",
+            "example": 24
+          },
           "id": {
             "type": "string"
+          },
+          "puedeReprogramar": {
+            "type": "boolean",
+            "description": "Si la clienta puede reprogramarla sola ahora. Lo calcula el servidor con la hora del\ncentro, para que el front no tenga que hacer aritmetica de zonas horarias."
+          },
+          "puedeCancelarConReembolso": {
+            "type": "boolean",
+            "description": "Si cancelarla ahora devuelve lo pagado. Fuera de plazo se pierde todo lo pagado."
           },
           "clienteNombre": {
             "type": "string"
@@ -1443,6 +3144,10 @@
           "servicioId": {
             "type": "string"
           },
+          "clienteId": {
+            "type": "string",
+            "description": "La clienta duenia del turno. Existe aunque haya reservado sin cuenta."
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -1453,32 +3158,493 @@
           "horaInicio",
           "horaFin",
           "estado",
+          "canceladaPor",
           "metodoPago",
           "senaCentavos",
+          "precioCentavos",
+          "cobro",
+          "reprogramacionHorasAntes",
+          "cancelacionHorasAntes",
           "id",
+          "puedeReprogramar",
+          "puedeCancelarConReembolso",
           "clienteNombre",
           "clienteEmail",
           "clienteTelefono",
           "notas",
           "servicioId",
+          "clienteId",
           "createdAt"
+        ]
+      },
+      "EstadoReservaSoloDto": {
+        "type": "object",
+        "properties": {
+          "estado": {
+            "type": "string",
+            "description": "`pendiente`, `confirmada`, `cancelada` o `ausente`.",
+            "example": "confirmada"
+          }
+        },
+        "required": [
+          "estado"
         ]
       },
       "UpdateReservaDto": {
         "type": "object",
         "properties": {
           "estado": {
-            "description": "Nuevo estado. Transiciones validas: pendiente -> confirmada | cancelada,\nconfirmada -> cancelada. `cancelada` es terminal.",
+            "description": "Transiciones validas: pendiente -> confirmada | cancelada, confirmada -> cancelada |\nausente. `cancelada` y `ausente` son terminales.",
             "enum": [
               "confirmada",
-              "cancelada"
+              "cancelada",
+              "ausente"
             ],
             "type": "string",
             "example": "cancelada"
+          },
+          "fecha": {
+            "type": "string",
+            "description": "Fecha nueva, para reprogramar. Va con `hora`.",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "example": "2026-10-12"
+          },
+          "hora": {
+            "type": "string",
+            "description": "Hora nueva, de la grilla del centro. Va con `fecha`.",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "example": "15:00"
+          },
+          "reembolsar": {
+            "type": "boolean",
+            "description": "Solo el centro, solo al cancelar: si se devuelve lo pagado. Obligatorio si hubo pago.\nPara la clienta lo decide la politica del servicio."
+          }
+        }
+      },
+      "PlanDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "example": "profesional"
+          },
+          "precioCentavos": {
+            "type": "number",
+            "example": 1990000
+          },
+          "turnosPorMes": {
+            "type": "number",
+            "nullable": true,
+            "example": 60
           }
         },
         "required": [
-          "estado"
+          "id",
+          "precioCentavos",
+          "turnosPorMes"
+        ]
+      },
+      "SuscripcionMpDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "type": "string",
+            "example": "profesional"
+          },
+          "estado": {
+            "type": "string",
+            "description": "El estado en Mercado Pago. `pending` hasta que la administradora autoriza el cobro.",
+            "enum": [
+              "pending",
+              "authorized",
+              "paused",
+              "cancelled"
+            ],
+            "example": "authorized"
+          },
+          "url": {
+            "type": "string",
+            "nullable": true,
+            "description": "Donde la administradora autoriza el cobro mensual. Solo mientras esta `pending`."
+          }
+        },
+        "required": [
+          "plan",
+          "estado",
+          "url"
+        ]
+      },
+      "SuscripcionDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "description": "El plan que rige hoy. Sus limites salen de GET /planes.",
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "type": "string",
+            "example": "basico"
+          },
+          "pagoHasta": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "Hasta cuando esta pago el plan. Con la suscripcion activa hay 10 dias de gracia despues,\nque cubren los reintentos de Mercado Pago si un cobro falla."
+          },
+          "suscripcion": {
+            "nullable": true,
+            "description": "La suscripcion en Mercado Pago. null si el centro nunca se suscribio.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SuscripcionMpDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "plan",
+          "pagoHasta",
+          "suscripcion"
+        ]
+      },
+      "UpdateSuscripcionDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "type": "string",
+            "example": "profesional"
+          },
+          "emailPagador": {
+            "type": "string",
+            "description": "El email de la cuenta de Mercado Pago que va a pagar: si no coincide, Mercado Pago\nrechaza el cobro. Default: el de la administradora.",
+            "maxLength": 254,
+            "format": "email",
+            "example": "pagos@lodelili.com"
+          }
+        },
+        "required": [
+          "plan"
+        ]
+      },
+      "CrearSesionPlataformaDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email de la persona administradora del centro. Se normaliza como en el alta del centro:\nsi no, quien se registro como \"Lucia@...\" no podria volver a entrar escribiendolo igual.",
+            "format": "email",
+            "example": "admin@ejemplo.test"
+          },
+          "password": {
+            "type": "string",
+            "description": "Su contrasena.",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "SuperadminDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nombre",
+          "email"
+        ]
+      },
+      "SesionPlataformaDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT para el header `Authorization: Bearer <token>`. Vale solo en /plataforma.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "superadmin": {
+            "$ref": "#/components/schemas/SuperadminDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "superadmin"
+        ]
+      },
+      "CentroDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "example": "lo-de-lili"
+          },
+          "plan": {
+            "description": "El plan que rige hoy.",
+            "enum": [
+              "basico",
+              "profesional"
+            ],
+            "type": "string"
+          },
+          "suscripcionEstado": {
+            "type": "string",
+            "nullable": true,
+            "description": "El estado de la suscripcion en Mercado Pago. null si nunca se suscribio.",
+            "enum": [
+              "pending",
+              "authorized",
+              "paused",
+              "cancelled"
+            ]
+          },
+          "pagoHasta": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "Hasta cuando esta pago el plan."
+          },
+          "mercadoPago": {
+            "description": "Si el centro cobra con Mercado Pago.",
+            "enum": [
+              "conectada",
+              "requiere_reconexion",
+              "sin_conectar"
+            ],
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "activo": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Cuando se dio de alta."
+          },
+          "servicios": {
+            "type": "number"
+          },
+          "clientas": {
+            "type": "number"
+          },
+          "turnosDelMes": {
+            "type": "number",
+            "description": "Turnos del mes en curso, por la fecha del turno y sin los cancelados."
+          },
+          "cobradoDelMesCentavos": {
+            "type": "number",
+            "description": "Lo cobrado online en el mes en curso, sin lo que ya se devolvio de esos pagos."
+          }
+        },
+        "required": [
+          "slug",
+          "plan",
+          "suscripcionEstado",
+          "pagoHasta",
+          "mercadoPago",
+          "nombre",
+          "activo",
+          "createdAt",
+          "servicios",
+          "clientas",
+          "turnosDelMes",
+          "cobradoDelMesCentavos"
+        ]
+      },
+      "PorPlanDto": {
+        "type": "object",
+        "properties": {
+          "basico": {
+            "type": "number"
+          },
+          "profesional": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "basico",
+          "profesional"
+        ]
+      },
+      "ResumenDto": {
+        "type": "object",
+        "properties": {
+          "mes": {
+            "type": "string",
+            "description": "El mes de los numeros, en la hora de Argentina.",
+            "example": "2026-09"
+          },
+          "centros": {
+            "type": "number"
+          },
+          "centrosActivos": {
+            "type": "number"
+          },
+          "centrosNuevos": {
+            "type": "number",
+            "description": "Los que se dieron de alta en el mes."
+          },
+          "porPlan": {
+            "description": "Los centros activos, por plan vigente.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PorPlanDto"
+              }
+            ]
+          },
+          "ingresoMensualCentavos": {
+            "type": "number",
+            "description": "Suscripciones autorizadas por el precio del plan: lo que se espera cobrar por mes."
+          },
+          "turnosDelMes": {
+            "type": "number"
+          },
+          "cobradoDelMesCentavos": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mes",
+          "centros",
+          "centrosActivos",
+          "centrosNuevos",
+          "porPlan",
+          "ingresoMensualCentavos",
+          "turnosDelMes",
+          "cobradoDelMesCentavos"
+        ]
+      },
+      "UpdateCentroDto": {
+        "type": "object",
+        "properties": {
+          "activo": {
+            "type": "boolean",
+            "description": "false da de baja el centro: sus rutas responden 404 y deja de tomar turnos."
+          }
+        },
+        "required": [
+          "activo"
+        ]
+      },
+      "AdministradoraDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "example": "Lucia Gomez"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "example": "lucia@esteticaluz.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "De 12 a 128 caracteres. El tope existe para que un body gigante no ponga a trabajar a scrypt.",
+            "minLength": 12,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "nombre",
+          "email",
+          "password"
+        ]
+      },
+      "CrearCentroDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80,
+            "example": "Estetica Luz"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Va en la URL del centro: minusculas, numeros y guiones, de 3 a 40 caracteres.",
+            "example": "estetica-luz"
+          },
+          "admin": {
+            "description": "Quien da de alta el centro: queda como su administradora.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdministradoraDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "nombre",
+          "slug",
+          "admin"
+        ]
+      },
+      "CentroCreadoResumenDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "nombre"
+        ]
+      },
+      "CentroCreadoDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT para el header `Authorization: Bearer <token>`.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/UsuarioSesionDto"
+          },
+          "centro": {
+            "$ref": "#/components/schemas/CentroCreadoResumenDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "usuario",
+          "centro"
         ]
       }
     }

@@ -13,6 +13,14 @@ export const TenantContext = {
   /** Envuelve la request entera. Arranca vacio; lo llena el guard. */
   run: <T>(fn: () => T): T => storage.run({}, fn),
 
+  /**
+   * Corre fn como si fuera una request de ese centro. Es para las tareas periodicas, que no
+   * tienen request: asi la extension sigue sellando cada query y no hace falta un cliente
+   * de Prisma sin filtro.
+   */
+  runAs: <T>(tenantId: string, fn: () => Promise<T>): Promise<T> =>
+    storage.run({ tenantId }, fn),
+
   set: (tenantId: string): void => {
     const store = storage.getStore();
     if (!store) throw new Error('TenantContext.run() no envolvio esta request');

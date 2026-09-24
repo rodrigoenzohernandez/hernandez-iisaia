@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
 } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { Plan, Prisma } from '@prisma/client';
+import { capacidadDe } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
 import { runSerializable } from '../prisma/run-serializable.js';
 import type {
@@ -22,18 +24,36 @@ const ORDEN = [{ diaSemana: 'asc' }, { horaInicio: 'asc' }] as const;
 export class VentanasAtencionService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
-  async findAll(): Promise<VentanasAtencionDto> {
+  async findAll(plan: Plan): Promise<VentanasAtencionDto> {
     // Sin paginar: son 84 filas como maximo y es configuracion. Paginar config es ceremonia.
+    const ventanas = await this.db.ventanaAtencion.findMany({
+      orderBy: [...ORDEN],
+      select: ventanaSelect,
+    });
+    // Con el tope del plan, que es la capacidad que de verdad rige: un centro que bajo de plan
+    // conserva franjas de capacidad 3, y si el GET las devolviera asi, guardar la misma semana
+    // con un solo cambio daria plan_limit_reached.
     return {
-      data: await this.db.ventanaAtencion.findMany({
-        orderBy: [...ORDEN],
-        select: ventanaSelect,
-      }),
+      data: ventanas.map((v) => ({
+        ...v,
+        capacidad: capacidadDe(v.capacidad, plan),
+      })),
     };
   }
 
-  async replaceAll(dto: ReplaceVentanasDto): Promise<VentanasAtencionDto> {
+  async replaceAll(
+    dto: ReplaceVentanasDto,
+    capacidadMaxima: number,
+  ): Promise<VentanasAtencionDto> {
     this.validar(dto.data);
+    // Avisa antes de guardar: el alta ya usa el minimo con el plan, asi que una capacidad
+    // mayor no daria mas turnos y la agenda mentiria.
+    if (dto.data.some((v) => v.capacidad > capacidadMaxima)) {
+      throw new ForbiddenException({
+        code: 'plan_limit_reached',
+        message: `Tu plan permite hasta ${capacidadMaxima} turnos a la vez por franja.`,
+      });
+    }
 
     // SERIALIZABLE tambien aca, y no solo en el alta de reservas: en READ COMMITTED dos PUT
     // concurrentes dejarian la UNION de las dos colecciones, y un alta podria reservar

@@ -1,0 +1,82 @@
+import { Inject, Injectable } from '@nestjs/common';
+import type { Plan } from '@prisma/client';
+import {
+  aDate,
+  aFecha,
+  ahoraEn,
+  minutosHasta,
+  sumarDias,
+} from '../common/horario.js';
+import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
+import {
+  datosDelTurno,
+  recordatorio,
+  turnoDe,
+} from '../notificaciones/plantillas.js';
+import { PLANES } from '../planes/planes.js';
+import { DB, type Db } from '../prisma/prisma.module.js';
+
+/** Con cuanta anticipacion sale el recordatorio. */
+export const RECORDATORIO_MINUTOS = 24 * 60;
+
+/**
+ * Lo que se guarda en recordatorioEnviadoAt al reservar o reprogramar: un turno que empieza
+ * en menos de 24 horas no necesita recordatorio, porque el mail de confirmacion ya lo es.
+ */
+export const recordatorioEnviadoAt = (
+  fecha: string,
+  hora: string,
+  ahora: { fecha: string; hora: string },
+): Date | null =>
+  minutosHasta(fecha, hora, ahora) <= RECORDATORIO_MINUTOS ? new Date() : null;
+
+@Injectable()
+export class RecordatoriosService {
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly notificaciones: NotificacionesService,
+  ) {}
+
+  /** Encola el recordatorio de cada turno confirmado del centro que empieza en menos de 24 h. */
+  async enviar(centro: {
+    nombre: string;
+    zonaHoraria: string;
+    plan: Plan;
+  }): Promise<void> {
+    // Los recordatorios son del plan Profesional.
+    if (!PLANES[centro.plan].recordatorios) return;
+    const ahora = ahoraEn(centro.zonaHoraria);
+    const candidatas = await this.db.reserva.findMany({
+      where: {
+        estado: 'confirmada',
+        recordatorioEnviadoAt: null,
+        // Hoy y maniana alcanzan para cubrir 24 horas; el filtro fino es en memoria.
+        fecha: {
+          gte: aDate(ahora.fecha),
+          lte: aDate(sumarDias(ahora.fecha, 1)),
+        },
+      },
+      select: { id: true, ...datosDelTurno },
+    });
+
+    for (const r of candidatas) {
+      const faltan = minutosHasta(aFecha(r.fecha), r.horaInicio, ahora);
+      if (faltan <= 0 || faltan > RECORDATORIO_MINUTOS) continue;
+      await this.db.$transaction(async (tx) => {
+        // Marcar y encolar juntos, y marcar con un UPDATE condicional: una segunda corrida,
+        // o una segunda instancia, no encola el mismo recordatorio dos veces.
+        const { count } = await tx.reserva.updateMany({
+          where: { id: r.id, recordatorioEnviadoAt: null },
+          data: { recordatorioEnviadoAt: new Date() },
+        });
+        if (count === 0) return;
+        await this.notificaciones.encolar(
+          tx,
+          r.clienteEmail,
+          recordatorio(turnoDe(centro.nombre, r)),
+        );
+      });
+    }
+    if (candidatas.length > 0) this.notificaciones.despacharAhora();
+  }
+}

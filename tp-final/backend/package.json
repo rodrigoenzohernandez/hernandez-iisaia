@@ -14,6 +14,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
+    "start:verify": "nest build && THROTTLE_LIMIT=1000 JOBS_INTERVAL_MS=2000 EMAIL_PROVIDER=log MP_API_URL=http://localhost:3199 MP_CLIENT_ID=cliente-mock MP_CLIENT_SECRET=secreto-mock MP_REDIRECT_URI=https://front.example/mercadopago/vuelta MP_OAUTH_TEST_TOKEN=true MP_PLATFORM_ACCESS_TOKEN=APP_USR-plataforma-900 MP_WEBHOOK_SECRET=secreto-webhook-mock node dist/main.js",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.ts\"",
     "db:up": "docker compose up -d --wait",
@@ -21,12 +22,14 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
     "db:seed": "node prisma/seed.ts",
+    "mp:conectar-prueba": "node prisma/conectar-mp.ts",
     "db:studio": "prisma studio",
     "generate": "prisma generate",
     "setup": "npm run db:up && prisma migrate deploy && npm run db:seed",
     "verify": "bash verificacion/verificar.sh",
     "postinstall": "prisma generate",
-    "verify:limite": "bash verificacion/verificar-limite.sh"
+    "verify:limite": "bash verificacion/verificar-limite.sh",
+    "audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.4",
@@ -39,6 +42,8 @@
     "@prisma/client": "7.10.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "helmet": "8.3.0",
+    "mercadopago": "3.6.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
@@ -52,5 +57,9 @@
     "prisma": "7.10.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.70.1"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.2",
+    "mysql2": "3.24.4"
   }
 }

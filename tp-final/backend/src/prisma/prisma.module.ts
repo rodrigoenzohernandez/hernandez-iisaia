@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { env } from '../env.js';
 import { tenantScope } from '../tenancy/tenant-scope.js';
@@ -30,6 +30,14 @@ export class PrismaService
 }
 
 const extender = (prisma: PrismaService) => prisma.$extends(tenantScope);
+
+/** Violacion de un unique. */
+export const ES_DUPLICADO = (e: unknown): boolean =>
+  e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
+
+/** La fila del update no existe, o existe en otro centro: desde afuera es lo mismo. */
+export const NO_ENCONTRADO = (e: unknown): boolean =>
+  e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025';
 
 /**
  * El unico cliente que se inyecta en la app. El modulo NO exporta PrismaService: si el

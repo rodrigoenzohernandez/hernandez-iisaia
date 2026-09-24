@@ -24,6 +24,14 @@ export class ServicioDto {
 
   /** Un servicio inactivo no se puede reservar. La baja es logica. */
   activo!: boolean;
+
+  /** Hasta cuantas horas antes la clienta reprograma sola. null: no puede. */
+  @ApiProperty({ type: Number, nullable: true, example: 24 })
+  reprogramacionHorasAntes!: number | null;
+
+  /** Hasta cuantas horas antes la clienta cancela con reembolso total. */
+  @ApiProperty({ example: 24 })
+  cancelacionHorasAntes!: number;
 }
 
 /** Los campos que devuelve la API. Ningun endpoint devuelve un modelo de Prisma completo. */
@@ -36,4 +44,6 @@ export const servicioSelect = {
   senaCentavos: true,
   requiereValoracion: true,
   activo: true,
+  reprogramacionHorasAntes: true,
+  cancelacionHorasAntes: true,
 } as const;

@@ -8,19 +8,16 @@ import {
 import { Prisma } from '@prisma/client';
 import { paginate } from '../common/pagination/paginate.js';
 import type { CursorPageDto } from '../common/pagination/cursor-page.dto.js';
-import { DB, type Db } from '../prisma/prisma.module.js';
+import {
+  DB,
+  ES_DUPLICADO,
+  NO_ENCONTRADO,
+  type Db,
+} from '../prisma/prisma.module.js';
 import type { CreateServicioDto } from './dto/create-servicio.dto.js';
 import type { ListServiciosQueryDto } from './dto/list-servicios-query.dto.js';
 import { servicioSelect, type ServicioDto } from './dto/servicio.dto.js';
 import type { UpdateServicioDto } from './dto/update-servicio.dto.js';
-
-/** Violacion de unique. Aca solo puede ser (tenantId, nombre). */
-const ES_DUPLICADO = (e: unknown): boolean =>
-  e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
-
-/** La fila del update no existe, o existe en otro centro: desde afuera es lo mismo. */
-const NO_ENCONTRADO = (e: unknown): boolean =>
-  e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025';
 
 // Declaraciones y no arrow functions: TS solo estrecha el tipo con `never` si la funcion
 // es una declaracion.
@@ -43,18 +40,19 @@ export class ServiciosService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
   /**
-   * `autenticada` decide el DEFAULT del filtro, no el significado de `?activo=`.
+   * `admin` decide el DEFAULT del filtro, no el significado de `?activo=`.
    *
-   * Sin token se devuelven solo los activos: el catalogo publico no deberia ofrecer
-   * tratamientos que, si se reservan, dan 404. Con token el default es ver todo, porque el
-   * ABM necesita administrar los dados de baja. En los dos casos `?activo=` sigue siendo un
-   * filtro comun que se respeta tal como viene.
+   * Para el publico, y para una clienta con sesion, se devuelven solo los activos: el
+   * catalogo no deberia ofrecer tratamientos que, si se reservan, dan 404. Para la
+   * administradora el default es ver todo, porque el ABM necesita administrar los dados de
+   * baja. En los dos casos `?activo=` sigue siendo un filtro comun que se respeta tal como
+   * viene.
    */
   findAll(
     query: ListServiciosQueryDto,
-    autenticada: boolean,
+    admin: boolean,
   ): Promise<CursorPageDto<ServicioDto>> {
-    const activo = query.activo ?? (autenticada ? undefined : true);
+    const activo = query.activo ?? (admin ? undefined : true);
     return paginate(query, ['nombre', 'id'], (pagina) =>
       this.db.servicio.findMany({
         // El filtro del llamador y el del keyset se combinan; la extension suma el tenantId.
@@ -66,10 +64,10 @@ export class ServiciosService {
     );
   }
 
-  async findOne(servicioId: string, autenticada = true): Promise<ServicioDto> {
+  async findOne(servicioId: string, admin = true): Promise<ServicioDto> {
     const servicio = await this.db.servicio.findFirst({
-      // Mismo criterio que el listado: sin token, un tratamiento dado de baja no existe.
-      where: { id: servicioId, ...(autenticada ? {} : { activo: true }) },
+      // Mismo criterio que el listado: fuera del panel, un tratamiento dado de baja no existe.
+      where: { id: servicioId, ...(admin ? {} : { activo: true }) },
       select: servicioSelect,
     });
     return servicio ?? noExiste();

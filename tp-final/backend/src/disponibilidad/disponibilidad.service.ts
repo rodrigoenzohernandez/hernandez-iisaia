@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { TenantRequest } from '../common/decorators.js';
 import {
   aDate,
   aHora,
@@ -17,7 +18,9 @@ import {
   ocupacionMaxima,
   sumarDias,
 } from '../common/horario.js';
+import { capacidadDe } from '../planes/planes.js';
 import { DB, type Db } from '../prisma/prisma.module.js';
+import { reservaViva } from '../reservas/cupo.js';
 import type { DisponibilidadDto, SlotDto } from './dto/slot.dto.js';
 
 @Injectable()
@@ -25,7 +28,7 @@ export class DisponibilidadService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
   async find(
-    tenant: { zonaHoraria: string },
+    tenant: TenantRequest,
     servicioId: string,
     fecha: string,
   ): Promise<DisponibilidadDto> {
@@ -67,7 +70,9 @@ export class DisponibilidadService {
       // Una query para todo el dia; el conteo de solapes se hace en memoria, porque son
       // decenas de filas y no vale una query por horario.
       this.db.reserva.findMany({
-        where: { fecha: aDate(fecha), estado: { not: 'cancelada' } },
+        // La misma definicion de "ocupa cupo" que el alta: una reserva impaga que vencio ya
+        // no cuenta, aunque la tarea de vencimiento todavia no la haya cancelado.
+        where: { fecha: aDate(fecha), ...reservaViva(new Date()) },
         select: { horaInicio: true, horaFin: true },
       }),
     ]);
@@ -83,8 +88,12 @@ export class DisponibilidadService {
           return {
             hora,
             // Piso en 0: si la capacidad bajo con reservas ya tomadas, el sobrecupo no se
-            // reporta como un numero negativo.
-            cuposDisponibles: Math.max(0, ventana.capacidad - ocupados),
+            // reporta como un numero negativo. La capacidad es la que rige, con el tope del
+            // plan, igual que en el alta: un centro que bajo de plan no conserva el doble turno.
+            cuposDisponibles: Math.max(
+              0,
+              capacidadDe(ventana.capacidad, tenant.plan) - ocupados,
+            ),
           };
         }),
       )

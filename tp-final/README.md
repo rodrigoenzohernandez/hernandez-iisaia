@@ -1,8 +1,15 @@
 # Trabajo Práctico Final — Plataforma de turnos multi-tenant
 
-Una plataforma fullstack que gestiona turnos de centros de estética: catálogo de tratamientos, franjas de atención configurables con cupo, y reserva pública sin cuenta. Es multi-tenant desde el
-esquema: "Lo de Lili" es el primer cliente y no el único. NestJS sobre Node 24, Prisma 7 y
-Postgres 17 en Docker. El frontend en Next.js lo hace un compañero consumiendo esta API.
+Una plataforma que gestiona turnos de centros de estética: catálogo de tratamientos, franjas de
+atención con cupo, reserva con o sin cuenta, cobro de señas y turnos con Mercado Pago en la
+cuenta de cada centro, mails, planes con suscripción mensual y un panel para la plataforma. Es
+multi-tenant desde el esquema: "Lo de Lili" es el primer cliente y no el único. NestJS sobre
+Node 24, Prisma 7 y Postgres 17 en Docker. El frontend en Next.js lo hace un compañero
+consumiendo esta API.
+
+Se hizo en dos etapas, cada una con su plan: el MVP ([plan](docs/1.backend-mvp-plan.md)) y el
+post MVP ([plan](docs/3.backend-post-mvp-plan.md)). Este informe cubre las dos; donde algo del MVP
+cambió después, está dicho.
 
 ## Cómo se ejecuta
 
@@ -11,9 +18,9 @@ Hace falta Node 24, Docker y `jq` (solo para el script de verificación).
 ```bash
 cd tp-final/backend
 nvm use                 # lee .nvmrc
-cp .env.example .env    # completar JWT_SECRET y SEED_ADMIN_PASSWORD
+cp .env.example .env    # completar JWT_SECRET, ENCRYPTION_KEY y SEED_ADMIN_PASSWORD
 npm install
-npm run setup           # levanta Postgres, aplica la migración y siembra
+npm run setup           # levanta Postgres, aplica las migraciones y siembra
 npm run start:dev
 ```
 
@@ -25,21 +32,35 @@ El contrato también está versionado en [backend/openapi.json](backend/openapi.
 debería exigir Docker, Postgres y el seed. Con la API corriendo, el mismo documento se sirve
 en `/api/v1/docs-json`.
 
-Para integrar el frontend está [docs/2.frontend-mvp-integracion.md](docs/2.frontend-mvp-integracion.md),
-que cubre lo que un OpenAPI no puede decir: el orden de las llamadas, qué hacer con cada
-código de error, y las reglas del contrato que no se ven en los tipos.
+Para integrar el frontend hay dos guías que cubren lo que un OpenAPI no puede decir: el orden de
+las llamadas, qué hacer con cada código de error y las reglas del contrato que no se ven en los
+tipos. [La del MVP](docs/2.frontend-mvp-integracion.md) sigue valiendo, y
+[la del post MVP](docs/4.frontend-post-mvp-integracion.md) suma cobros, cuentas de clientas,
+planes y el panel de la plataforma.
 
-Las dos variables sin default hay que generarlas, porque el proceso no arranca sin ellas:
+Las tres variables sin default hay que generarlas, porque el proceso no arranca sin ellas:
 
 ```bash
 openssl rand -base64 48   # JWT_SECRET
+openssl rand -base64 32   # ENCRYPTION_KEY: cifra los tokens de Mercado Pago y firma los códigos
 openssl rand -base64 18   # SEED_ADMIN_PASSWORD
 ```
 
-El seed crea tres centros: `lo-de-lili` con los 8 tratamientos del prototipo, `bella-piel`
-con otros dos, y `centro-cerrado` desactivado. Los tres comparten la contraseña de
-`SEED_ADMIN_PASSWORD`, con los usuarios `lili@lodelili.test`, `admin@bellapiel.test` y
-`admin@cerrado.test`.
+El seed crea tres centros, cada uno con una clienta de prueba, y la cuenta de la plataforma:
+
+- `lo-de-lili`, con los 8 tratamientos del prototipo, en el plan Profesional de cortesía;
+- `bella-piel`, con otros dos, en el plan Básico;
+- `centro-cerrado`, desactivado;
+- `superadmin@turnos.test`, la plataforma.
+
+Todos entran con la contraseña de `SEED_ADMIN_PASSWORD`: `lili@lodelili.test`,
+`admin@bellapiel.test`, `admin@cerrado.test` y `superadmin@turnos.test`. Las clientas
+(`clienta@<centro>.test`) entran con un código que la API imprime en su consola.
+
+Mercado Pago es opcional. Sin credenciales, la API arranca igual y ningún centro cobra online.
+Para probar contra el sandbox sin pasar por OAuth, alcanza con las credenciales de prueba en
+`SEED_MP_ACCESS_TOKEN` y `SEED_MP_USER_ID`; el resto está en el
+[README de la librería](backend/src/lib/mercadopago/README.md).
 
 Si algo no arranca:
 
@@ -49,6 +70,8 @@ Si algo no arranca:
 | `bind: 0.0.0.0:5442 failed` | Otro Postgres tiene el puerto | Cambiar el puerto del `docker-compose.yml` **y** el del `DATABASE_URL`: van de a dos |
 | `Can't reach database server` | La base no terminó de arrancar | `npm run db:up`, que espera el healthcheck |
 | `Falta la variable de entorno X` | El `.env` está incompleto | Es a propósito: no hay defaults para los secretos |
+| `ENCRYPTION_KEY tiene que ser 32 bytes` | La clave no es de 32 bytes en base64 | `openssl rand -base64 32` |
+| La migración `clientas` falla con `contains null values` | La base tiene reservas del MVP | `npm run db:reset`: las columnas nuevas son obligatorias |
 | `EBADENGINE` | Node distinto de 24 | `nvm use` |
 
 Para dejar la base como recién instalada: `npm run db:reset`.
@@ -56,102 +79,135 @@ Para dejar la base como recién instalada: `npm run db:reset`.
 Para correr la verificación hacen falta dos cosas, en dos corridas distintas:
 
 ```bash
-THROTTLE_LIMIT=1000 npm run start:dev   # en otra terminal
-npm run verify                          # 173 casos de dominio
+npm run start:verify     # en otra terminal
+npm run verify           # 555 casos de dominio
 
-npm run start:dev                       # ahora con el límite de default
-npm run verify:limite                   # que el límite de peticiones exista
+npm run start:dev        # ahora con los límites de default
+npm run verify:limite    # que el límite de peticiones exista
 ```
 
-El `THROTTLE_LIMIT` alto no es un atajo: el script hace unas veinticinco altas seguidas y con
-el default de cinco por minuto se limitaría a sí mismo, así que las fallas que reportara
-serían del limitador y no del dominio. El límite real se prueba en la segunda corrida, que es
-la que necesita el valor de default.
+`start:verify` levanta la API como la necesita el script: el límite de peticiones alto (hace
+decenas de altas seguidas y con el default se limitaría a sí mismo), las tareas periódicas cada
+dos segundos, los mails a la consola, y Mercado Pago apuntando a un mock que el script levanta
+solo. El límite real se prueba en la segunda corrida, que es la que necesita los defaults.
 
 La corrida imprime el resultado por sección y deja el detalle —el request y el response de
-cada caso— en `docs/verificacion.md`. Ese archivo **no se commitea**: son 140 KB que cambian
-enteros en cada corrida, porque los identificadores y las fechas se recalculan. La tabla de
-resultados de la última corrida está en el pull request.
+cada caso— en `docs/verificacion.md`. Ese archivo **no se commitea**: cambia entero en cada
+corrida, porque los identificadores y las fechas se recalculan. La tabla de resultados de la
+última corrida está en el pull request.
 
 ## Arquitectura
 
-Un solo proceso sirve la API bajo `/api/v1`. La base corre en Docker; la aplicación, afuera.
+Un solo proceso sirve la API bajo `/api/v1` y corre las tareas periódicas. La base corre en
+Docker; la aplicación, afuera.
 
 ```
 tp-final/
 ├── docs/
-│   ├── 1.backend-mvp-plan.md      el plan con el que arranqué, sin editar
-│   ├── 2.frontend-mvp-integracion.md  la guía para integrar el front
-│   └── verificacion.md            lo genera verificar.sh; no se commitea, ver abajo
+│   ├── 1.backend-mvp-plan.md          el plan del MVP, sin editar
+│   ├── 2.frontend-mvp-integracion.md  la guía del MVP para integrar el front
+│   ├── 3.backend-post-mvp-plan.md     el plan del post MVP, sin editar
+│   ├── 4.frontend-post-mvp-integracion.md  la guía del post MVP
+│   └── verificacion.md                lo genera verificar.sh; no se commitea
 └── backend/
     ├── docker-compose.yml         solo Postgres 17, con healthcheck, en el puerto 5442
     ├── prisma/
-    │   ├── schema.prisma          las 5 tablas
-    │   ├── migrations/            la migración inicial, generada por Prisma
-    │   └── seed.ts                3 centros, idempotente, con PrismaClient crudo
+    │   ├── schema.prisma          las 12 tablas
+    │   ├── migrations/            8 migraciones, todas generadas por Prisma
+    │   ├── seed.ts                3 centros y la plataforma, con PrismaClient crudo
+    │   └── conectar-mp.ts         conecta un centro a una cuenta de prueba de MP, sin OAuth
     ├── openapi.json               el contrato, regenerado con `npm run spec`
     ├── verificacion/
-    │   ├── verificar.sh        los 173 casos de dominio
-    │   └── verificar-limite.sh que el límite de peticiones exista
+    │   ├── verificar.sh           los 555 casos de dominio
+    │   ├── verificar-limite.sh    que el límite de peticiones exista
+    │   └── mercadopago-mock.mjs   la API de Mercado Pago en memoria, para verificar
     └── src/
-        ├── main.ts                prefijo, CORS, el middleware del contexto, Swagger
-        ├── app.module.ts          el guard global y los módulos de feature
+        ├── main.ts                helmet, CORS, tope de body, Swagger, las tareas
+        ├── app.module.ts          los dos guards globales y los módulos
         ├── env.ts                 carga y valida el entorno al importarse
         ├── common/
         │   ├── horario.ts         la aritmética de la grilla, en funciones puras
-        │   ├── password.ts        scrypt de node:crypto
-        │   ├── decorators.ts      @Publico, @CurrentTenant, @CurrentUsuario
+        │   ├── cifrado.ts         AES-256-GCM y HMAC con subclaves derivadas
+        │   ├── errores.filter.ts  todos los errores con la forma { code, message }
+        │   ├── password.ts        scrypt de node:crypto y el hash señuelo
         │   └── pagination/        el cursor keyset reutilizable
-        ├── prisma/
-        │   ├── prisma.module.ts   el cliente extendido; no expone el crudo
-        │   └── run-serializable.ts la transacción con reintento
-        ├── tenancy/
-        │   ├── tenant-context.ts  el AsyncLocalStorage del tenant
-        │   ├── tenant-scope.ts    la extensión que sella tenantId, y el chequeo de arranque
-        │   └── tenant-auth.guard.ts resuelve el centro, verifica el token y cruza los dos
-        ├── auth/                  POST /sesiones
-        ├── servicios/             ABM de tratamientos
-        ├── ventanas-atencion/     GET y PUT de las franjas
+        ├── prisma/                el cliente extendido y la transacción con reintento
+        ├── tenancy/               el contexto del tenant, la extensión y el guard
+        ├── lib/mercadopago/       la librería sobre el SDK oficial, sin Nest ni Prisma
+        ├── auth/                  el login de las administradoras
+        ├── clientes/              el ingreso con código, el perfil
+        ├── servicios/             el ABM de tratamientos, con su política
+        ├── ventanas-atencion/     las franjas
         ├── disponibilidad/        los horarios de un día
-        └── reservas/              el alta pública y la gestión del administrador
+        ├── reservas/              el alta, la gestión, el cupo y los recordatorios
+        ├── cobros/                la cuenta de MP del centro, el webhook y los reembolsos
+        ├── notificaciones/        la cola de mails, las plantillas y el proveedor
+        ├── planes/                los dos planes, la suscripción y el webhook de la plataforma
+        ├── plataforma/            el superadmin y el alta de centros
+        └── tareas/                todo lo que corre cada tanto
 ```
 
 ### Endpoints
 
 Todos bajo `/api/v1`. El cuerpo de error es siempre `{ code, message }`: el `code` es un
 identificador en inglés para el front, el `message` está en español porque lo lee una persona.
+`{slug}` es el centro.
 
-| Método | Ruta | Quién | Respuestas |
+| Método | Ruta | Quién | Respuestas destacadas |
 | --- | --- | --- | --- |
-| `POST` | `/tenants/{slug}/sesiones` | público | `201` token · `400` · `401` `invalid_credentials` · `404` `tenant_not_found` |
-| `GET` | `/tenants/{slug}/servicios` | público | `200` página · `400` `invalid_cursor` · `404` |
+| `POST` | `/tenants/{slug}/sesiones` | público | `201` token · `401` `invalid_credentials` |
+| `POST` | `/tenants/{slug}/clientes/codigos` | público | `202` · `429` `too_many_codes` |
+| `POST` | `/tenants/{slug}/clientes/sesiones` | público | `201` token · `401` `invalid_code` |
+| `GET` · `PATCH` | `/tenants/{slug}/clientes/me` | clienta | `200` · `404` `cliente_not_found` |
+| `GET` | `/tenants/{slug}/clientes/me/reservas` | clienta | `200` página |
+| `GET` | `/tenants/{slug}/servicios` | público | `200` página · `400` `invalid_cursor` |
 | `GET` | `/tenants/{slug}/servicios/{id}` | público | `200` · `404` `servicio_not_found` |
-| `POST` | `/tenants/{slug}/servicios` | admin | `201` · `400` · `401` · `403` · `409` `servicio_name_taken` |
-| `PATCH` | `/tenants/{slug}/servicios/{id}` | admin | `200` · `400` · `401` · `403` · `404` · `409` |
+| `POST` · `PATCH` | `/tenants/{slug}/servicios[/{id}]` | admin | `201`/`200` · `409` `servicio_name_taken` |
 | `GET` | `/tenants/{slug}/servicios/{id}/disponibilidad?fecha=` | público | `200` · `400` · `404` |
-| `GET` | `/tenants/{slug}/ventanas-atencion` | admin | `200` · `401` · `403` · `404` |
-| `PUT` | `/tenants/{slug}/ventanas-atencion` | admin | `200` · `400` · `401` · `403` · `409` `ventanas_superpuestas` |
-| `POST` | `/tenants/{slug}/reservas` | público | `201` · `400` `too_far_ahead` · `404` · `409` `slot_full` / `outside_business_hours` / `past_date` / `high_contention` |
-| `GET` | `/tenants/{slug}/reservas` | admin | `200` página · `400` · `401` · `403` |
-| `PATCH` | `/tenants/{slug}/reservas/{id}` | admin | `200` · `400` · `401` · `403` · `404` · `409` `invalid_transition` |
+| `GET` · `PUT` | `/tenants/{slug}/ventanas-atencion` | admin | `200` · `403` `plan_limit_reached` · `409` `ventanas_superpuestas` |
+| `POST` | `/tenants/{slug}/reservas` | público, clienta o admin | `201` · `409` `slot_full` / `monthly_limit_reached` / `online_payment_unavailable` · `502` |
+| `GET` | `/tenants/{slug}/reservas` | admin | `200` página |
+| `GET` | `/tenants/{slug}/reservas/{id}` | dueña o admin | `200` · `404` |
+| `GET` | `/tenants/{slug}/reservas/{id}/estado` | público | `200`, solo el estado |
+| `PATCH` | `/tenants/{slug}/reservas/{id}` | dueña o admin | `200` · `409` `invalid_transition` / `reschedule_not_allowed` / `too_early_for_no_show` |
+| `GET` · `POST` · `DELETE` | `/tenants/{slug}/cuenta-mercadopago` | admin | `200` · `400` `invalid_state` · `409` `mp_account_change_blocked` |
+| `GET` | `/tenants/{slug}/cuenta-mercadopago/autorizacion` | admin | `200` · `503` `mercadopago_not_configured` |
+| `GET` · `PUT` | `/tenants/{slug}/suscripcion` | admin | `200` · `409` `mercadopago_not_connected` |
+| `POST` | `/tenants/{slug}/webhooks/mercadopago` | Mercado Pago | fuera del OpenAPI |
+| `GET` | `/planes` | público | `200` |
+| `POST` | `/tenants` | público | `201` centro y sesión · `409` `slug_taken` |
+| `POST` | `/webhooks/mercadopago` | Mercado Pago, firmado | fuera del OpenAPI · `401` `invalid_signature` |
+| `POST` | `/plataforma/sesiones` | público | `201` token · `401` |
+| `GET` | `/plataforma/tenants` · `/plataforma/resumen` | superadmin | `200` |
+| `PATCH` | `/plataforma/tenants/{slug}` | superadmin | `200` · `404` |
 
-Once endpoints, ningún `DELETE` y ningún verbo en la URI. Los dos públicos que escriben
-—crear sesión y crear reserva— tienen un límite de 5 por minuto.
+Treinta operaciones en el contrato y dos webhooks fuera de él. El único `DELETE` es el de la
+conexión con Mercado Pago, que después de la llamada no existe más. Toda escritura pública tiene
+límite de peticiones: 5 por minuto en logins, códigos y altas de reserva, y 3 por hora en el
+alta de centros.
 
 ### Datos
 
-Cinco tablas. `Tenant` es la raíz y la única sin `tenantId`. `Usuario` guarda el
-`passwordHash` y es único por `(tenantId, email)`. `Servicio` lleva duración, precio y seña en
-centavos, y es único por `(tenantId, nombre)`. `VentanaAtencion` es una franja recurrente con
-`diaSemana`, `horaInicio`, `horaFin`, `intervaloMinutos` y `capacidad`. `Reserva` guarda
-`fecha` como `DATE`, `horaInicio` y `horaFin` como `"HH:mm"`, los datos de contacto de la
-clienta como texto, y una copia de la seña.
+Doce tablas. `Tenant` y `Superadmin` son las únicas globales; todas las demás llevan `tenantId`.
 
-La única regla que cruza filas y que vive en la base es la clave foránea compuesta
-`Reserva(tenantId, servicioId) → Servicio(tenantId, id)`, que la genera Prisma sola: impide
-que una reserva de un centro apunte a un tratamiento de otro incluso si la aplicación se
-equivoca. Todo el resto de la integridad está en los DTO y en los services, porque esta
-entrega no escribe una línea de SQL a mano.
+- **El MVP:** `Usuario`, `Servicio`, `VentanaAtencion` y `Reserva`. La reserva guarda `fecha` como
+  `DATE`, `horaInicio` y `horaFin` como `"HH:mm"`, los datos de contacto como texto, y una copia
+  de la seña, del precio y de la política que aceptó la clienta.
+- **Las clientas:** `Cliente`, única por `(tenantId, email)`, y `CodigoAcceso`, que guarda el HMAC
+  del código, nunca el código.
+- **Los cobros:** `CuentaMercadoPago`, con los tokens del centro cifrados; `Pago`, único por el id
+  de Mercado Pago; y `Reembolso`, que es una cola: la fila nace con la cancelación y su id es la
+  idempotency key del pedido a Mercado Pago.
+- **Los mails:** `Notificacion`, otra cola, que se escribe en la misma transacción que el cambio
+  que la origina.
+- **Los planes:** la suscripción vive en columnas de `Tenant` y el plan vigente no se guarda: se
+  calcula.
+
+Las reglas que cruzan filas y viven en la base son claves foráneas compuestas:
+`Reserva → Servicio`, `Reserva → Cliente`, `Pago → Reserva` y `Reembolso → Pago`, todas por
+`(tenantId, id)`. Impiden que una fila de un centro apunte a una de otro, aunque la aplicación
+se equivoque. Todas las migraciones las generó Prisma: esta entrega no tiene una línea de SQL
+escrita a mano.
 
 ### Contrato entre la interfaz y el servidor
 
@@ -181,7 +237,19 @@ contrato es simétrico, no hay que armar un instante ni elegir una zona. `horaFi
 
 Las páginas son `{ data, nextCursor }`. El cursor es opaco: se devuelve tal cual vino.
 
+Después del MVP, la reserva trae además:
+
+- `cobro`: qué se paga online, cuánto entró, cuánto se devolvió y el link de Mercado Pago
+  mientras está pendiente;
+- dos banderas, `puedeReprogramar` y `puedeCancelarConReembolso`, calculadas por el servidor
+  con la hora del centro.
+
+En un centro que cobra online, un turno en efectivo nace `pendiente`, con la seña a pagar. El
+detalle está en la [guía del post MVP](docs/4.frontend-post-mvp-integracion.md).
+
 ## Qué decidí yo
+
+### En el MVP
 
 **El tenant va en el path, también en las rutas de administración, y el token es la
 autoridad.** Mi primera idea era lo contrario: sacar el tenant del JWT y dejar las URLs
@@ -247,7 +315,7 @@ dos columnas y evitan una discusión.
 **La clienta no tiene cuenta.** El paso "Tus datos" del prototipo pide nombre, teléfono,
 email y notas, y ninguna contraseña: eso es un dato del producto, no una simplificación mía.
 Sus datos van como texto en la reserva, no como una fila de `Usuario`. El costo está escrito
-abajo.
+abajo. *Después del MVP la cuenta existe, pero sigue siendo opcional: ver abajo.*
 
 **La paginación es keyset y el `where` del cursor va adentro del `where` del llamador.**
 Prisma tiene su propio `cursor`, y no lo uso: ese parámetro no pasa por la extensión de
@@ -259,8 +327,9 @@ filas, y una reserva salteada es una clienta que llega y no está anotada.
 
 **El catálogo público solo muestra lo que se puede reservar.** `?activo=` es un filtro común
 y significa lo mismo para todos, pero el *default* depende de quién pregunta: sin token se
-devuelven solo los activos, con token se devuelve todo, porque el ABM necesita administrar los
-dados de baja. Mi primera versión no distinguía, y el catálogo público ofrecía tratamientos que
+devuelven solo los activos, con token de administradora se devuelve todo, porque el ABM
+necesita administrar los dados de baja. Con cuentas de clientas, lo decide el rol del token y
+no su presencia. Mi primera versión no distinguía, y el catálogo público ofrecía tratamientos que
 al reservarse daban `404`. Lo que sigue sin pasar es que un parámetro cambie el nivel de
 acceso: cambia el valor por omisión, no el significado.
 
@@ -271,7 +340,7 @@ reservado". Era más amable y era un oráculo: cualquiera, sin token, podía ave
 dado tiene turno a una hora dada. Ahora los dos casos devuelven `slot_full`. Perdí un mensaje
 útil para no publicar la agenda de una persona.
 
-**No hay `DELETE` en ninguna parte.** La baja de un tratamiento es lógica, porque el
+**No hay `DELETE` en el dominio.** La baja de un tratamiento es lógica, porque el
 historial de reservas lo referencia, y un `DELETE` tras el cual el recurso sigue existiendo
 es un contrato mentiroso. Es un `PATCH {"activo": false}`. Cancelar un turno también es un
 `PATCH` del estado y no un `POST /cancelar`: es cambiarle un campo al recurso, no crear uno
@@ -286,7 +355,7 @@ cada llamada y la segunda respuesta no sería igual a la primera.
 real de pagos en esta entrega. Dejar que la reserva de Mercado Pago naciera confirmada haría
 que el método de pago no signifique nada, así que queda pendiente y la administradora la
 confirma. La costura para cuando entre el SDK son tres cambios que sólo agregan: dos columnas,
-una llamada después del insert y un endpoint de webhook.
+una llamada después del insert y un endpoint de webhook. *Así entró, después del MVP.*
 
 **Lo que dejé afuera a propósito, y qué implica.** Sin cuentas de cliente, la clienta no puede
 cancelar ni reprogramar su turno: no hay con qué autenticarla, y la versión barata no es una
@@ -294,9 +363,123 @@ cuenta sino un token firmado en el mail de confirmación, que todavía no existe
 expiración de las reservas pendientes, una abandonada retiene el cupo hasta que la
 administradora la cancele. Sin notificaciones, nadie avisa nada. Y como el alta es pública y
 anónima, cualquiera con `curl` puede llenar la agenda; el límite de 5 por minuto lo hace
-molesto pero no imposible, y es lo único que hay.
+molesto pero no imposible, y es lo único que hay. *Todo esto, salvo el llenado de la agenda,
+se resolvió después del MVP; un turno impago ahora libera el cupo a los veinte minutos.*
+
+### Después del MVP
+
+**Checkout Pro, y no Bricks.** Yo había propuesto Checkout Bricks porque pensaba que era lo más
+simple. Al analizarlo resultó al revés: con Bricks el front embebe el formulario y el backend
+tiene que crear el cobro, interpretar los rechazos y resolver el 3DS, y el Payment Brick
+documenta el cobro con tarjeta contra la Payments API, que Mercado Pago dejó de evolucionar.
+Con Checkout Pro el backend crea una preferencia, Mercado Pago resuelve el resto en su página y
+el resultado llega por webhook. Las tarjetas nunca pasan por nuestro sitio, y si algún día se
+quiere tarjeta embebida, el Brick reusa la misma preferencia.
+
+**La plata cae en la cuenta de cada centro, conectada por OAuth.** La plataforma nunca toca el
+dinero de las clientas: cada centro autoriza con "Conectar con Mercado Pago" y los cobros salen
+con su token. Los tokens se guardan cifrados con AES-256-GCM. El `state` de OAuth viaja cifrado
+con el centro, el verifier de PKCE y un vencimiento: no hace falta una tabla, y un state robado
+no sirve en otro centro. En local y en pruebas no hace falta OAuth: un script escribe la misma
+fila con credenciales de prueba.
+
+**La integración con Mercado Pago es una librería sobre el SDK oficial.** La quería extraíble,
+como librería de la empresa. Mi primer impulso fue un cliente propio con `fetch`, y lo descarté
+para no reinventar el SDK. Quedó un envoltorio con cuatro capacidades —cobros, suscripciones,
+cuentas conectadas y webhooks—, sin Nest, sin Prisma y sin estado, con una regla de ESLint que
+le impide importar algo de la app. Lo que agrega arriba del SDK es lo que evita las trampas
+conocidas:
+
+- la plata en centavos;
+- una configuración nueva por operación, porque el SDK deja pegada la idempotency key de una
+  escritura en las siguientes;
+- los errores con una sola decisión de reintento;
+- el parche del link de suscripción, roto en Argentina.
+
+**Mails y reembolsos son colas en la base.** El mail de un turno confirmado se escribe en la
+misma transacción que la confirmación: nunca queda un turno sin su mail, y un reintento de la
+transacción no lo manda dos veces. Los reembolsos igual:
+
+- la fila nace con la cancelación, y su id es la idempotency key del pedido a Mercado Pago;
+- una tarea reintenta con backoff;
+- si Mercado Pago lo rechaza para siempre, el centro recibe un mail para hacerlo a mano.
+
+Ningún reembolso se pierde en silencio.
+
+**La clienta entra con un código de seis dígitos, y la cuenta es opcional.** Reservar sigue sin
+pedir cuenta: la reserva queda asociada al email, y cuando la clienta quiere gestionar sus
+turnos pide un código a ese email y entra. No hay contraseña ni paso de registro. Por qué
+aguanta la fuerza bruta:
+
+- el código se guarda como HMAC;
+- vence a los diez minutos y se usa una vez;
+- acepta cinco intentos, y hay tope de códigos por email;
+- cualquier falla devuelve el mismo `401`.
+
+Los datos de una reserva sin cuenta nunca pisan un perfil existente: si no, cualquiera podría
+cambiarle el nombre a otra persona reservando con su email.
+
+**Fuera de plazo se pierde todo lo pagado.** Así lo pidió el negocio:
+
+- en plazo, reprogramar es gratis y cancelar devuelve el 100%;
+- fuera de plazo, la clienta no reprograma sola y cancelar no devuelve nada;
+- el centro puede cancelar con o sin reembolso —elige, y tiene que decirlo si hubo pago— y
+  reprogramar cuando quiera.
+
+La política se copia a la reserva, como la seña: si el centro la endurece después, el turno ya
+tomado conserva la que aceptó.
+
+**El pago se decide en una transacción `SERIALIZABLE`, y una sola vez.** Un pago que se aprueba
+mientras la clienta cancela no puede quedar sin decidir: o lo ve la cancelación y lo reembolsa,
+o lo ve el webhook con la reserva cancelada y lo devuelve. Un pago que llega después del
+vencimiento reactiva la reserva si el horario sigue libre, y si no se devuelve. Cada pago se
+decide la primera vez que llega aprobado y nunca más: un aviso repetido, o un pago que vuelve de
+una disputa, solo actualizan su estado.
+
+**Un cobro pendiente ocupa el cupo solo mientras no venció.** La definición de "reserva viva" es
+una sola, compartida por el alta, la reprogramación, la reactivación y la disponibilidad. La
+tarea que cancela las vencidas es higiene: si se cae, los cupos se liberan igual.
+
+**El plan vigente se calcula, no se guarda.** Es Profesional si lo pagado alcanza, con diez días
+de gracia mientras la suscripción siga autorizada, que cubren los reintentos de Mercado Pago.
+No hay una tarea de vencimiento, y un plan no puede quedar activo porque un aviso no llegó. Los
+límites del plan viven junto al control de cupo: la capacidad y el tope de turnos del mes se
+aplican en un solo lugar, y los usan el alta, la reprogramación y la reactivación.
+
+**Dos planes, y el pago depende de la cuenta conectada.** Básico gratis y Profesional pago: las
+funciones que justificarían un tercero no existen todavía. El Profesional existe para cobrar
+online, así que suscribirse exige la cuenta de Mercado Pago conectada. La suscripción es una
+preapproval sin plan asociado, atada al slug del centro y cobrada por la cuenta de la
+plataforma.
+
+**Dos webhooks, con dos niveles de confianza.**
+
+- El de la plataforma exige la firma: son los webhooks de la app, que Mercado Pago firma.
+- El de cada centro la verifica pero no la exige, porque Mercado Pago no la garantiza en los
+  avisos por `notification_url`. Lo protege que nunca usa el body: trae el pago de Mercado Pago
+  con el token del centro, así que un aviso falso solo puede hacer que se consulte un pago real.
+- Un aviso que no se pudo procesar no se contesta `200`: con un error, Mercado Pago lo vuelve a
+  mandar.
+
+**El superadmin no tiene alta; los centros sí.** La cuenta de la plataforma la crea el seed y es
+la única. Los centros se registran solos, en Básico, con quien los da de alta como
+administradora. Un token de la plataforma no sirve en las rutas de un centro, ni al revés.
+
+**La seguridad base fue lo primero.** Todo lo que venía sumaba rutas públicas —el ingreso de
+clientas, los cobros, los webhooks, el alta de centros—, así que antes entraron:
+
+- helmet y CORS con lista explícita y sin credenciales;
+- un tope de 100 kb en el body y `trust proxy` explícito;
+- límite de peticiones en toda escritura pública;
+- chequeos de entorno al arrancar;
+- roles en el guard.
+
+Lo último cerraba un agujero real: hasta el MVP, cualquier token del centro pasaba las rutas de
+administración, y con cuentas de clientas eso les habría abierto la agenda completa.
 
 ## Cómo gestioné el contexto
+
+### En el MVP
 
 Arranqué en modo plan, y el plan quedó en [docs/1.backend-mvp-plan.md](docs/1.backend-mvp-plan.md) sin editar. No salió de
 una sola pasada: hubo tres rondas de preguntas antes de escribir una línea, y la segunda
@@ -345,7 +528,54 @@ puerto 5433 y 3000, y los dos estaban ocupados en mi máquina; no sabía del dri
 del `prisma.config.ts`. Dejé el plan como estaba y las diferencias quedan explicadas acá y en
 la sección que sigue.
 
+### Después del MVP
+
+**El plan se escribió comentándolo.** Otra vez en modo plan, pero con el plan abierto para
+comentarlo en el lugar. Fueron tres rondas de comentarios, y cambiaron cosas de fondo:
+
+- de Bricks a Checkout Pro;
+- de un cliente propio a un envoltorio del SDK oficial;
+- una librería que cubriera también los webhooks y las suscripciones, no solo los cobros;
+- de tres planes a dos;
+- un superadmin sembrado, sin alta, y centros que sí se dan de alta solos;
+- la seguridad base antes que cualquier ruta pública nueva;
+- credenciales de prueba sin OAuth;
+- la reserva sin cuenta;
+- la cancelación del centro con o sin reembolso.
+
+El plan quedó en [docs/3.backend-post-mvp-plan.md](docs/3.backend-post-mvp-plan.md) antes de la
+primera línea de código.
+
+**Un commit por fase, sin frenar entre fases.** Fueron ocho fases, cada una terminada con el
+lint, el build y su sección de la verificación en verde, y commiteada sola. Revisé el conjunto
+al final, en el pull request.
+
+**El contexto se terminó a mitad de la fase de planes.** La conversación se resumió sola y siguió
+desde el resumen. Retomar costó poco porque lo que importaba vivía en disco, no en la memoria de
+la conversación:
+
+- el plan, en `docs/`;
+- un commit por fase, así que el estado del código era el último commit más un diff chico;
+- el script de verificación, que es la especificación ejecutable.
+
+Un resumen puede perder un matiz; un caso de `verificar.sh` que falla no.
+
+**Las revisiones fueron al final y en paralelo.**
+
+- **`/code-review`:** nueve ángulos de búsqueda independientes (línea por línea, lo que se
+  borró, los llamadores de cada cambio, las trampas del lenguaje, los envoltorios, reuso,
+  simplificación, eficiencia y profundidad). Salieron 69 candidatos crudos, unos cuarenta
+  distintos. Cada uno pasó por un verificador que intentaba refutarlo leyendo el código, y un
+  barrido final buscó solo lo que faltaba. Los quince más graves están arreglados, con un caso
+  de verificación cada uno, y varios más de los que quedaron abajo del corte también.
+- **`/security-review`:** un solo candidato, descartado con confianza 2 sobre 10.
+- **`/simplify`:** cuatro ángulos más de limpieza sobre el código ya corregido. Encontró, entre
+  otras cosas, un error que yo había metido en el arreglo de un hallazgo; está en la sección
+  que sigue.
+
 ## Qué salió mal
+
+### En el MVP
 
 **El reintento de la transacción era código muerto y no lo detectaba nada.** El control de
 cupo depende de que, cuando Postgres aborta una transacción por conflicto de serialización, la
@@ -415,3 +645,72 @@ al insert. Ese rechazo lo genera NestJS con su propio texto, `"property tenantId
 exist"`, y mi fábrica de excepciones lo pasaba tal cual. Quedaba un solo mensaje en inglés en
 una API cuyos mensajes son todos en español, y lo encontré leyendo la respuesta de un `curl`,
 no fallando ninguna prueba.
+
+### Después del MVP
+
+**El webhook de un centro podía perder un pago en silencio.** Si la cuenta de Mercado Pago del
+centro quedaba esperando reconexión —por ejemplo, porque falló la renovación del token mientras
+el token todavía servía—, el aviso de un pago se contestaba `200` sin procesarlo. Mercado Pago
+no reintenta un `200`, así que una clienta que pagaba un cobro abierto en ese momento se quedaba
+sin turno y sin su plata: no había fila de pago, la reserva vencía y nada la devolvía.
+
+Mi verificación tenía el caso de la reconexión, pero miraba que no se cobrara nada nuevo, no qué
+pasaba con un pago que llegaba justo ahí. Lo encontraron cinco de los nueve ángulos de la
+revisión, cada uno por su lado. Ahora el aviso se procesa con el token guardado, y si no se
+puede, se contesta con un error para que Mercado Pago lo vuelva a mandar. Hay un caso nuevo:
+un cobro abierto antes de que la cuenta falle, pagado después.
+
+**Un pago que volvía de una disputa se reembolsaba entero.** La guarda de "decidir una sola vez"
+miraba el estado guardado del pago, y cada aviso lo pisa con el de Mercado Pago. Un pago
+aprobado, disputado y resuelto a favor del centro volvía a "aprobado", se decidía de nuevo, y
+como la reserva ya estaba confirmada, caía en "este pago sobra": se devolvía la plata de una
+disputa ganada. Ahora la decisión deja su propia marca, que ningún aviso pisa.
+
+**Lo reembolsado se sumaba en un lado y se copiaba en otro.** La tarea de reembolsos sumaba el
+monto a un valor que había leído antes de llamar a Mercado Pago, y el aviso del pago escribía el
+total que decía Mercado Pago. Si un reintento llegaba después del aviso, el reembolso contaba
+doble. Ahora hay un solo criterio: el estado se copia de Mercado Pago, nunca se suma.
+
+**El arreglo de un hallazgo trajo otro.** Al corregir lo anterior, puse la lectura del pago en
+Mercado Pago dentro del mismo bloque que el reembolso. Si esa lectura fallaba, un reembolso que
+ya había salido quedaba como fallido, y el centro recibía el mail para hacerlo a mano: podía
+devolver dos veces. Lo encontró `/simplify`, revisando el código ya corregido. Ahora el
+reembolso se marca hecho en cuanto Mercado Pago lo acepta, y el estado del pago se copia
+después, sin poder voltearlo. La lección es que un arreglo en el camino de la plata necesita la
+misma revisión que el código original.
+
+**`IsOptional` deja pasar `null`, y lo arreglé dos veces por separado.** En la fase de cobros lo
+parché en un campo del `PATCH` de tratamientos, donde un `null` llegaba a la base y daba `500`.
+En la revisión apareció el mismo agujero en el `PATCH` de reservas, con otra consecuencia:
+`reembolsar: null` cancelaba un turno pago sin devolver nada. El arreglo de fondo es uno solo,
+un decorador que valida si el campo vino (sea el valor que sea, también `null`). Se aplica
+también en el `PartialType` de los tratamientos.
+
+**La verificación se colgó diez minutos.** Un `wait` sin argumentos esperaba también al mock de
+Mercado Pago, que corre de fondo y no termina nunca. Ahora el script espera a los procesos de
+`curl` que lanzó, y cada `curl` tiene un tope de tiempo.
+
+**El SDK reintentaba solo y me escondía el reintento de la cola.** Para probar que un reembolso
+fallido se reintenta, el mock fallaba una vez. El SDK reintenta por su cuenta un `503`, así que
+el segundo intento salía bien antes de llegar a la cola, y la prueba pasaba sin probar lo que
+decía. Ahora el mock falla dos veces.
+
+**El mock separaba los recursos por token, y Mercado Pago los separa por cuenta.** Después de
+renovar un token, un pago creado con el anterior se volvía invisible en el mock. Era más
+estricto que Mercado Pago de una forma que habría escondido un flujo real, y apareció recién al
+escribir el caso de un pago que llega después de una reconexión.
+
+**El razonamiento se me volvió a escapar al OpenAPI, y esta vez lo atrapó una prueba.** El
+resumen del `PUT` de suscripción salió de tres líneas, el mismo error del MVP. Esta vez no hizo
+falta leer la documentación para verlo: falló un caso de la verificación que agregué entonces,
+"ningún resumen es un párrafo". La lección del MVP ya era una prueba.
+
+**`npm audit` marcaba cuatro vulnerabilidades altas que no eran mías.** Venían de dependencias
+del CLI de Prisma (mysql2 y deepmerge-ts), y la única salida que ofrecía npm era bajar a Prisma
+6. Las resolví con `overrides` a las versiones corregidas y verifiqué que `validate`,
+`generate`, las migraciones y el seed siguieran andando. `npm run audit` quedó en cero.
+
+**Prisma no genera migraciones sin una terminal interactiva.** `prisma migrate dev` se niega a
+correr sin TTY cuando hay advertencias. Las migraciones las siguió generando Prisma, con
+`migrate diff` contra el esquema y `migrate deploy`: ninguna tiene SQL escrito a mano.
+

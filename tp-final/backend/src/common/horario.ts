@@ -20,6 +20,15 @@ export const aDate = (fecha: string): Date =>
 /** Date de un @db.Date -> "2026-10-05". */
 export const aFecha = (valor: Date): string => valor.toISOString().slice(0, 10);
 
+/** El mes de una fecha, como rango de @db.Date: del dia 1 al dia 1 siguiente, sin incluirlo. */
+export const mesDe = (fecha: string): { gte: Date; lt: Date } => {
+  const [anio, mes] = fecha.split('-').map(Number);
+  return {
+    gte: new Date(Date.UTC(anio, mes - 1, 1)),
+    lt: new Date(Date.UTC(anio, mes, 1)),
+  };
+};
+
 /**
  * true si la fecha existe de verdad en el calendario.
  *
@@ -125,23 +134,29 @@ export const ventanaDe = <T extends Ventana>(
   ) ?? null;
 
 /**
- * true si ese instante de pared ya paso o esta demasiado cerca.
+ * Minutos que faltan desde `ahora` hasta ese instante de pared; negativo si ya paso.
  *
- * Compara minutos absolutos y no rama por dia: ramificar dejaba la anticipacion aplicandose
+ * Cuenta minutos absolutos y no rama por dia: ramificar dejaba la anticipacion aplicandose
  * solo dentro del dia de hoy, asi que a las 23:40 un turno de maniana a las 00:30 pasaba
  * aunque faltaran 50 minutos.
  */
+export const minutosHasta = (
+  fecha: string,
+  hora: string,
+  ahora: { fecha: string; hora: string },
+): number => {
+  const dias = Math.round(
+    (aDate(fecha).getTime() - aDate(ahora.fecha).getTime()) / 86_400_000,
+  );
+  return dias * 24 * 60 + aMinutos(hora) - aMinutos(ahora.hora);
+};
+
+/** true si ese instante de pared ya paso o esta demasiado cerca para reservarlo. */
 export const demasiadoTarde = (
   fecha: string,
   hora: string,
   ahora: { fecha: string; hora: string },
-): boolean => {
-  const dias = Math.round(
-    (aDate(fecha).getTime() - aDate(ahora.fecha).getTime()) / 86_400_000,
-  );
-  const minutosDelTurno = dias * 24 * 60 + aMinutos(hora);
-  return minutosDelTurno < aMinutos(ahora.hora) + ANTICIPACION_MINUTOS;
-};
+): boolean => minutosHasta(fecha, hora, ahora) < ANTICIPACION_MINUTOS;
 
 /**
  * Ocupacion simultanea maxima en el rango [inicio, fin) si se suma un turno mas.

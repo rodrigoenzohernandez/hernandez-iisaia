@@ -9,11 +9,18 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { hashPassword } from '../src/common/password.ts';
+import { SLUG } from '../src/common/slug.ts';
+import { conectarCuentaDePrueba, credencialesDePrueba } from './conectar-mp.ts';
 
 try {
   process.loadEnvFile();
 } catch {
   // Sin .env: las variables ya vienen del entorno.
+}
+
+// Borra toda la base antes de sembrar: en produccion no corre nunca.
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('El seed borra toda la base: no corre en produccion.');
 }
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -25,11 +32,12 @@ if (!password) throw new Error('Falta SEED_ADMIN_PASSWORD');
 // este seed. El throttler cubre el resto.
 if (password.length < 12)
   throw new Error('SEED_ADMIN_PASSWORD necesita 12 caracteres o mas');
-
-// El unique de Postgres es byte-exacto: "Lo-De-Lili" y "lo-de-lili" convivirian como dos
-// centros distintos, y con homoglifos Unicode se arma un slug que una persona lee igual que
-// el de la victima. El seed es el unico creador de tenants, asi que la regla es una regex.
-const SLUG = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+// En minuscula, como la normaliza el login: si no, un email con mayusculas no entraria nunca.
+const superadminEmail = (
+  process.env.SEED_SUPERADMIN_EMAIL ?? 'superadmin@turnos.test'
+)
+  .trim()
+  .toLowerCase();
 
 /**
  * Grilla verificada en el bundle del prototipo, que ofrece
@@ -152,7 +160,13 @@ const TENANTS = [
     slug: 'lo-de-lili',
     nombre: 'Lo de Lili',
     activo: true,
+    // Cliente fundadora: el Profesional de cortesia, sin suscripcion en Mercado Pago.
+    plan: {
+      suscripcionPlan: 'profesional' as const,
+      planPagoHasta: new Date('2099-12-31'),
+    },
     email: 'lili@lodelili.test',
+    clienta: 'clienta@lodelili.test',
     servicios: SERVICIOS_LILI,
     ventanas: ventanasLili,
   },
@@ -161,6 +175,7 @@ const TENANTS = [
     nombre: 'Bella Piel',
     activo: true,
     email: 'admin@bellapiel.test',
+    clienta: 'clienta@bellapiel.test',
     servicios: SERVICIOS_BELLA,
     ventanas: ventanasLili,
   },
@@ -170,6 +185,7 @@ const TENANTS = [
     nombre: 'Centro Cerrado',
     activo: false,
     email: 'admin@cerrado.test',
+    clienta: 'clienta@cerrado.test',
     servicios: [],
     ventanas: [],
   },
@@ -180,15 +196,22 @@ const prisma = new PrismaClient({
 });
 
 async function main(): Promise<void> {
-  // Orden de FK: reservas -> ventanas/servicios -> usuarios -> tenants.
+  // Orden de FK: hijos antes que padres, y los tenants al final.
+  await prisma.codigoAcceso.deleteMany();
+  await prisma.notificacion.deleteMany();
+  await prisma.reembolso.deleteMany();
+  await prisma.pago.deleteMany();
   await prisma.reserva.deleteMany();
+  await prisma.cuentaMercadoPago.deleteMany();
+  await prisma.cliente.deleteMany();
   await prisma.ventanaAtencion.deleteMany();
   await prisma.servicio.deleteMany();
   await prisma.usuario.deleteMany();
   await prisma.tenant.deleteMany();
+  await prisma.superadmin.deleteMany();
 
-  // Un solo hash para los tres administradores: es un seed de desarrollo y la contrasena
-  // sale del entorno, nunca de un literal. Nunca se loguea.
+  // Un solo hash para las tres administradoras y la plataforma: es un seed de desarrollo y
+  // la contrasena sale del entorno, nunca de un literal. Nunca se loguea.
   const passwordHash = await hashPassword(password!);
 
   for (const t of TENANTS) {
@@ -198,8 +221,18 @@ async function main(): Promise<void> {
         slug: t.slug,
         nombre: t.nombre,
         activo: t.activo,
+        ...t.plan,
         usuarios: {
           create: { email: t.email, nombre: 'Administradora', passwordHash },
+        },
+        // Una clienta con el perfil completo, para probar "mis turnos" sin reservar antes. Entra
+        // con el codigo que le llega por mail: no tiene contrasena.
+        clientes: {
+          create: {
+            email: t.clienta,
+            nombre: 'Clienta de Prueba',
+            telefono: '1155500000',
+          },
         },
         servicios: { create: t.servicios },
         ventanas: { create: t.ventanas },
@@ -207,10 +240,29 @@ async function main(): Promise<void> {
     });
   }
 
+  // La cuenta de la plataforma: la unica que existe, porque no hay alta por la API.
+  await prisma.superadmin.create({
+    data: { email: superadminEmail, nombre: 'Plataforma', passwordHash },
+  });
+
+  // Lo de Lili cobra con Mercado Pago si hay credenciales de prueba en el entorno: la misma
+  // fila que dejaria OAuth. Sin credenciales, queda sin cobro online, como en el MVP.
+  const credenciales = credencialesDePrueba();
+  if (credenciales) {
+    const lili = await prisma.tenant.findUniqueOrThrow({
+      where: { slug: 'lo-de-lili' },
+    });
+    await conectarCuentaDePrueba(prisma, lili.id, credenciales);
+  }
+
   const centros = TENANTS.map(
-    (t) => `${t.slug} (${t.servicios.length} servicios)`,
+    (t) =>
+      `${t.slug} (${t.servicios.length} servicios, ${t.plan ? 'Profesional' : 'Básico'})`,
   ).join(', ');
-  console.log(`Seed OK. Centros: ${centros}`);
+  console.log(
+    `Seed OK. Centros: ${centros}. Plataforma: ${superadminEmail}.` +
+      (credenciales ? ' Lo de Lili cobra con la cuenta de prueba de MP.' : ''),
+  );
 }
 
 await main();

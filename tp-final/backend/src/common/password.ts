@@ -53,3 +53,11 @@ export async function verifyPassword(
     esperado.length === obtenido.length && timingSafeEqual(esperado, obtenido)
   );
 }
+
+/**
+ * Hash señuelo contra el que se verifica cuando la cuenta no existe: con un short-circuit, el
+ * 401 de "ese email no existe" vuelve en una fraccion del tiempo del de "contrasena
+ * incorrecta", y esa diferencia enumera cuentas con curl. Se calcula una vez, al importar el
+ * modulo, sobre un valor aleatorio que nadie conoce.
+ */
+export const senuelo = await hashPassword(randomBytes(32).toString('hex'));
