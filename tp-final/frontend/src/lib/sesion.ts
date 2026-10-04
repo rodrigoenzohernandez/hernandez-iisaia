@@ -59,3 +59,27 @@ export function sesionVencida(codigo: CodigoError): boolean {
     codigo === 'forbidden_role'
   );
 }
+
+/**
+ * La vuelta de OAuth de Mercado Pago cae en una URL fija para todos los centros, así que la
+ * página de vuelta tiene que saber a qué centro volvió. Se guarda el slug antes de redirigir
+ * y se lee al volver. `sessionStorage` y no `localStorage`: muere al cerrar la pestaña, que es
+ * justo lo que dura una conexión.
+ */
+const CLAVE_SLUG_MP = 'turnos:mp:slug-conectando';
+
+export function recordarSlugMp(slug: string): void {
+  try {
+    window.sessionStorage.setItem(CLAVE_SLUG_MP, slug);
+  } catch {
+    // Sin sessionStorage la vuelta usa el slug del propio frontend, que acá es uno solo.
+  }
+}
+
+export function leerSlugMp(): string | null {
+  try {
+    return window.sessionStorage.getItem(CLAVE_SLUG_MP);
+  } catch {
+    return null;
+  }
+}
