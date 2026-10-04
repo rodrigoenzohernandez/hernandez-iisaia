@@ -15,12 +15,22 @@ export function Encabezado({ sobreFoto = false }: { sobreFoto?: boolean }) {
         <Link href="/" aria-label={`${CENTRO.nombre} — inicio`}>
           <Marca />
         </Link>
-        <Link
-          href="/reservar"
-          className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] underline decoration-verde decoration-2 transition-colors duration-200 hover:text-verde"
-        >
-          Reservar turno
-        </Link>
+        {/* Dos enlaces, una sola jerarquía: el subrayado verde es de la acción primaria y
+            no se reparte. "Mis turnos" va sin él, que es la diferencia que se ve. */}
+        <nav className="flex items-center gap-7 sm:gap-9">
+          <Link
+            href="/mis-turnos"
+            className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] opacity-70 transition-opacity duration-200 hover:opacity-100"
+          >
+            Mis turnos
+          </Link>
+          <Link
+            href="/reservar"
+            className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] underline decoration-verde decoration-2 transition-colors duration-200 hover:text-verde"
+          >
+            Reservar turno
+          </Link>
+        </nav>
       </div>
     </header>
   );

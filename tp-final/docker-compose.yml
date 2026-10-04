@@ -16,8 +16,15 @@
 
 name: turnos
 
-x-conexion: &conexion
+# Lo que comparten los cuatro servicios que salen de la imagen del backend.
+#
+# NODE_ENV en `development` es deliberado. La imagen la fija en `production`, que es lo
+# correcto para un despliegue real, pero ahí la API exige CORS sobre https y Resend con un
+# dominio verificado, y el seed se niega a borrar la base. Este stack vive en
+# http://localhost y manda los mails por la consola: `development` es el valor honesto.
+x-entorno: &entorno
   DATABASE_URL: postgresql://turnos:turnos@db:5432/turnos?schema=public
+  NODE_ENV: development
 
 # Los cuatro servicios que salen del backend comparten imagen. Sin el `image:` explícito,
 # cada uno construiría su propia copia del mismo Dockerfile: cuatro builds en vez de uno.
@@ -50,7 +57,7 @@ services:
   migrate:
     <<: *imagen-backend
     restart: 'no'
-    environment: *conexion
+    environment: *entorno
     command: ['npx', 'prisma', 'migrate', 'deploy']
     depends_on:
       db:
@@ -65,8 +72,12 @@ services:
     <<: *imagen-backend
     restart: 'no'
     environment:
-      <<: *conexion
+      <<: *entorno
       SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?falta SEED_ADMIN_PASSWORD en el .env (generala con 'openssl rand -base64 18')}"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?falta ENCRYPTION_KEY en el .env (generala con 'openssl rand -base64 32')}"
+      # Credenciales de sandbox de Mercado Pago. Sin ellas ningun centro cobra online.
+      SEED_MP_ACCESS_TOKEN: ${SEED_MP_ACCESS_TOKEN:-}
+      SEED_MP_USER_ID: ${SEED_MP_USER_ID:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -91,8 +102,12 @@ services:
     profiles: ['resembrar']
     restart: 'no'
     environment:
-      <<: *conexion
+      <<: *entorno
       SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?falta SEED_ADMIN_PASSWORD en el .env (generala con 'openssl rand -base64 18')}"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?falta ENCRYPTION_KEY en el .env (generala con 'openssl rand -base64 32')}"
+      # Credenciales de sandbox de Mercado Pago. Sin ellas ningun centro cobra online.
+      SEED_MP_ACCESS_TOKEN: ${SEED_MP_ACCESS_TOKEN:-}
+      SEED_MP_USER_ID: ${SEED_MP_USER_ID:-}
     command: ['node', 'prisma/seed.ts']
     depends_on:
       migrate:
@@ -104,11 +119,15 @@ services:
     ports:
       - '3100:3100'
     environment:
-      <<: *conexion
+      <<: *entorno
       PORT: 3100
       # El navegador pide desde el 3101 del host, no desde la red del compose.
       CORS_ORIGIN: http://localhost:3101
       JWT_SECRET: "${JWT_SECRET:?falta JWT_SECRET en el .env (generalo con 'openssl rand -base64 48')}"
+      # Cifra los tokens de Mercado Pago que guarda cada centro. Sin ella la API no arranca.
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?falta ENCRYPTION_KEY en el .env (generala con 'openssl rand -base64 32')}"
+      # Con `log` los mails salen por la consola de la API, incluido el codigo de la clienta.
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-log}
       THROTTLE_LIMIT: ${THROTTLE_LIMIT:-5}
     depends_on:
       db:

@@ -4,13 +4,28 @@ export type Servicio = components['schemas']['ServicioDto'];
 export type Slot = components['schemas']['SlotDto'];
 export type Disponibilidad = components['schemas']['DisponibilidadDto'];
 export type Reserva = components['schemas']['ReservaDto'];
+export type Cobro = components['schemas']['CobroDto'];
+
+/**
+ * `GET /planes` devuelve más de lo que declara el OpenAPI: el `PlanDto` del contrato no
+ * trae `nombre`, `capacidadMaxima`, `recordatorios` ni `cobroOnline`, pero el endpoint sí.
+ * Los agregamos acá porque la pantalla de horarios necesita `capacidadMaxima` para no
+ * ofrecer una capacidad que el plan va a rechazar.
+ */
+export type Plan = components['schemas']['PlanDto'] & {
+  nombre: string;
+  capacidadMaxima: number;
+  recordatorios: boolean;
+  cobroOnline: boolean;
+};
 export type MetodoPago = components['schemas']['CreateReservaDto']['metodoPago'];
+export type EstadoReserva = 'pendiente' | 'confirmada' | 'cancelada' | 'ausente';
+
 type CodigoApi = components['schemas']['ErrorDto']['code'];
 
-// El throttler de Nest no usa el contrato de error de la API: devuelve { statusCode, message }
-// sin `code`. Y un backend caído no devuelve nada. Los dos casos entran acá con nombre propio
-// para que el `switch` de la UI siga siendo exhaustivo.
-export type CodigoError = CodigoApi | 'demasiados_intentos' | 'sin_conexion';
+// El backend ya devuelve `{code, message}` en todo, incluidos el 404, el 413 y el 429. Lo
+// único que queda fuera del contrato es no poder hablar con él.
+export type CodigoError = CodigoApi | 'sin_conexion';
 
 export class ErrorApi extends Error {
   readonly codigo: CodigoError;
@@ -31,52 +46,79 @@ const BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   'http://localhost:3100/api/v1';
 
-const SLUG = process.env.NEXT_PUBLIC_TENANT_SLUG ?? 'lo-de-lili';
+export const SLUG = process.env.NEXT_PUBLIC_TENANT_SLUG ?? 'lo-de-lili';
 
-function raiz(): string {
-  return `${BASE}/tenants/${SLUG}`;
+/** Prefijo de las rutas del centro. Las de plataforma y `/planes` no lo llevan. */
+export function enCentro(ruta: string): string {
+  return `/tenants/${SLUG}${ruta}`;
 }
 
-async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
+export type Opciones = Omit<RequestInit, 'body'> & { token?: string; body?: unknown };
+
+export async function pedir<T>(ruta: string, opciones: Opciones = {}): Promise<T> {
+  const { token, body, headers, ...resto } = opciones;
+
   let respuesta: Response;
   try {
-    respuesta = await fetch(`${raiz()}${ruta}`, {
-      ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+    respuesta = await fetch(`${BASE}${ruta}`, {
+      ...resto,
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   } catch {
     throw new ErrorApi('sin_conexion', 'No pudimos contactar al servidor. Revisá tu conexión.');
   }
 
-  if (respuesta.ok) return respuesta.json() as Promise<T>;
+  if (respuesta.status === 204) return undefined as T;
+  if (respuesta.ok) return (await respuesta.json()) as T;
 
-  if (respuesta.status === 429) {
-    throw new ErrorApi(
-      'demasiados_intentos',
-      'Hiciste varios intentos seguidos. Esperá un minuto y probá de nuevo.',
-    );
-  }
+  const cuerpo = (await respuesta.json().catch(() => null)) as {
+    code?: CodigoApi;
+    message?: string;
+  } | null;
 
-  const cuerpo: unknown = await respuesta.json().catch(() => null);
-  const error = cuerpo as { code?: CodigoApi; message?: string } | null;
-  if (error?.code) throw new ErrorApi(error.code, error.message ?? 'Algo salió mal.');
-
+  if (cuerpo?.code) throw new ErrorApi(cuerpo.code, cuerpo.message ?? 'Algo salió mal.');
   throw new ErrorApi('sin_conexion', 'El servidor respondió de una forma que no esperábamos.');
 }
 
-type Pagina<T> = { data: T[]; nextCursor: string | null };
+export type Pagina<T> = { data: T[]; nextCursor: string | null };
 
-export async function listarServicios(): Promise<Servicio[]> {
-  // El catálogo entero entra en una página; la paginación por cursor importa en el panel.
-  const pagina = await pedir<Pagina<Servicio>>('/servicios?limit=100', { cache: 'no-store' });
+/* ------------------------------------------------------------------ público */
+
+export async function listarServicios(token?: string): Promise<Servicio[]> {
+  // Sin token devuelve solo los activos; con token de administradora, también los dados de baja.
+  const pagina = await pedir<Pagina<Servicio>>(enCentro('/servicios?limit=100'), { token });
   return pagina.data;
 }
 
+export function obtenerServicio(servicioId: string, token?: string): Promise<Servicio> {
+  return pedir<Servicio>(enCentro(`/servicios/${servicioId}`), { token });
+}
+
 export function obtenerDisponibilidad(servicioId: string, fecha: string): Promise<Disponibilidad> {
-  return pedir<Disponibilidad>(
-    `/servicios/${servicioId}/disponibilidad?fecha=${fecha}`,
-    { cache: 'no-store' },
-  );
+  return pedir<Disponibilidad>(enCentro(`/servicios/${servicioId}/disponibilidad?fecha=${fecha}`));
+}
+
+/** `/planes` es un array pelado, no `{ data }`, y no lleva el prefijo del centro. */
+export function listarPlanes(): Promise<Plan[]> {
+  return pedir<Plan[]>('/planes');
+}
+
+/**
+ * El estado real de una reserva, sin token y sin datos personales. Es lo que hay que creerle
+ * a la vuelta de Mercado Pago: los parámetros que vienen en la query los escribe cualquiera.
+ */
+export function estadoReserva(reservaId: string): Promise<{ estado: EstadoReserva }> {
+  return pedir<{ estado: EstadoReserva }>(enCentro(`/reservas/${reservaId}/estado`));
+}
+
+export function obtenerReserva(reservaId: string, token: string): Promise<Reserva> {
+  return pedir<Reserva>(enCentro(`/reservas/${reservaId}`), { token });
 }
 
 export type DatosReserva = {
@@ -84,35 +126,36 @@ export type DatosReserva = {
   fecha: string;
   hora: string;
   metodoPago: MetodoPago;
-  clienteNombre: string;
-  clienteEmail: string;
-  clienteTelefono: string;
+  clienteNombre?: string;
+  clienteEmail?: string;
+  clienteTelefono?: string;
   notas?: string;
 };
 
-export async function crearReserva(datos: DatosReserva): Promise<Reserva> {
+/**
+ * El alta pública, la de una clienta con sesión y la que carga la administradora son el mismo
+ * endpoint: cambia el token. Con sesión de clienta, los datos de contacto salen del perfil y
+ * pueden omitirse.
+ */
+export async function crearReserva(datos: DatosReserva, token?: string): Promise<Reserva> {
   // Campo por campo y no un spread: el backend rechaza con 400 cualquier propiedad de más,
-  // y `horaFin` y `senaCentavos` los calcula él.
-  const cuerpo: components['schemas']['CreateReservaDto'] = {
+  // y `horaFin`, `senaCentavos` y `precioCentavos` los calcula él.
+  const cuerpo: Record<string, unknown> = {
     servicioId: datos.servicioId,
     fecha: datos.fecha,
     hora: datos.hora,
     metodoPago: datos.metodoPago,
-    clienteNombre: datos.clienteNombre,
-    clienteEmail: datos.clienteEmail,
-    clienteTelefono: datos.clienteTelefono,
-    ...(datos.notas ? { notas: datos.notas } : {}),
   };
+  if (datos.clienteNombre) cuerpo.clienteNombre = datos.clienteNombre;
+  if (datos.clienteEmail) cuerpo.clienteEmail = datos.clienteEmail;
+  if (datos.clienteTelefono) cuerpo.clienteTelefono = datos.clienteTelefono;
+  if (datos.notas?.trim()) cuerpo.notas = datos.notas.trim();
 
   // `high_contention` es el único error que se resuelve solo: Postgres abortó la transacción
   // perdedora de un empate y reintentar entra limpio.
   for (let intento = 0; ; intento++) {
     try {
-      return await pedir<Reserva>('/reservas', {
-        method: 'POST',
-        body: JSON.stringify(cuerpo),
-        cache: 'no-store',
-      });
+      return await pedir<Reserva>(enCentro('/reservas'), { method: 'POST', body: cuerpo, token });
     } catch (error) {
       const reintentable = error instanceof ErrorApi && error.codigo === 'high_contention';
       if (!reintentable || intento >= 2) throw error;

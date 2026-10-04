@@ -21,6 +21,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{tenantSlug}/clientes/codigos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manda un codigo de ingreso de seis digitos al email de la clienta. */
+        post: operations["ClientesController_pedirCodigo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenantSlug}/clientes/sesiones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Entra con el codigo. Si es la primera vez, crea la cuenta. */
+        post: operations["ClientesController_ingresar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenantSlug}/clientes/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** El perfil de la clienta de la sesion. */
+        get: operations["ClientesController_findMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edita nombre y telefono. El email no se cambia: es la identidad de la cuenta. */
+        patch: operations["ClientesController_updateMe"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenantSlug}/cuenta-mercadopago": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Si el centro tiene la cuenta conectada. Nunca devuelve los tokens. */
+        get: operations["CuentaMercadoPagoController_estado"];
+        put?: never;
+        /** Conecta la cuenta con lo que devolvio Mercado Pago en la redirect: `code` y `state`. */
+        post: operations["CuentaMercadoPagoController_conectar"];
+        /** Desconecta la cuenta. El centro deja de cobrar online. */
+        delete: operations["CuentaMercadoPagoController_desconectar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenantSlug}/cuenta-mercadopago/autorizacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** La URL de Mercado Pago para autorizar a la plataforma a cobrar en nombre del centro. */
+        get: operations["CuentaMercadoPagoController_autorizacion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{tenantSlug}/servicios": {
         parameters: {
             query?: never;
@@ -102,7 +190,7 @@ export interface paths {
         /** La agenda del centro, paginada por cursor. Solo la administradora. */
         get: operations["ReservasController_findAll"];
         put?: never;
-        /** Reserva un turno. Publico: la clienta no tiene cuenta, deja sus datos de contacto. */
+        /** Reserva un turno, con o sin cuenta. Con token de admin, el centro lo carga a nombre de una clienta. */
         post: operations["ReservasController_create"];
         delete?: never;
         options?: never;
@@ -117,14 +205,169 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Una reserva. La ve su duenia o la administracion. */
+        get: operations["ReservasController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Cancela, reprograma, confirma o marca ausente un turno. */
+        patch: operations["ReservasController_update"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenantSlug}/reservas/{reservaId}/estado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** El estado de una reserva, sin datos personales. Para la pagina de vuelta de un pago. */
+        get: operations["ReservasController_estado"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenantSlug}/clientes/me/reservas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Los turnos de la clienta, tambien los que reservo sin cuenta con el mismo email. */
+        get: operations["MisReservasController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/planes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Los planes de la plataforma, para la pagina de precios. */
+        get: operations["PlanesController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenantSlug}/suscripcion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** El plan que rige hoy y el estado de la suscripcion. */
+        get: operations["SuscripcionController_estado"];
+        /** Cambia de plan: al Profesional con el cobro mensual en Mercado Pago, o de vuelta al Basico. */
+        put: operations["SuscripcionController_cambiar"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plataforma/sesiones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inicia sesion en la plataforma. No hay alta: la cuenta la crea el seed. */
+        post: operations["PlataformaController_ingresar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plataforma/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Los centros, con su plan, su cuenta de Mercado Pago y los numeros del mes. */
+        get: operations["PlataformaController_centros"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plataforma/resumen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Los numeros de toda la plataforma en el mes en curso. */
+        get: operations["PlataformaController_resumen"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plataforma/tenants/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
         get?: never;
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Confirma o cancela un turno. */
-        patch: operations["ReservasController_update"];
+        /** Da de baja un centro, o lo reactiva. */
+        patch: operations["PlataformaController_actualizar"];
+        trace?: never;
+    };
+    "/api/v1/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Da de alta un centro en el plan Basico, con quien lo crea como administradora. */
+        post: operations["AltaCentroController_crear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
@@ -137,7 +380,7 @@ export interface components {
              * @example slot_full
              * @enum {string}
              */
-            code: "validation_error" | "invalid_cursor" | "invalid_credentials" | "unauthenticated" | "invalid_token" | "wrong_tenant" | "tenant_not_found" | "servicio_not_found" | "reserva_not_found" | "servicio_name_taken" | "ventanas_superpuestas" | "slot_full" | "outside_business_hours" | "past_date" | "too_far_ahead" | "invalid_transition" | "high_contention";
+            code: "validation_error" | "invalid_cursor" | "invalid_credentials" | "unauthenticated" | "invalid_token" | "wrong_tenant" | "tenant_not_found" | "servicio_not_found" | "reserva_not_found" | "servicio_name_taken" | "ventanas_superpuestas" | "slot_full" | "outside_business_hours" | "past_date" | "too_far_ahead" | "invalid_transition" | "high_contention" | "forbidden_role" | "not_found" | "payload_too_large" | "too_many_requests" | "internal_error" | "http_error" | "invalid_code" | "too_many_codes" | "cliente_not_found" | "online_payment_unavailable" | "payment_provider_unavailable" | "reschedule_not_allowed" | "too_early_for_no_show" | "invalid_state" | "mp_account_change_blocked" | "mercadopago_not_configured" | "monthly_limit_reached" | "plan_limit_reached" | "mercadopago_not_connected" | "invalid_signature" | "slug_taken";
             /**
              * @description Texto en espanol, listo para mostrarle a una persona.
              * @example Ese horario ya no tiene cupo. Elegi otro.
@@ -147,7 +390,8 @@ export interface components {
         CrearSesionDto: {
             /**
              * Format: email
-             * @description Email de la persona administradora del centro.
+             * @description Email de la persona administradora del centro. Se normaliza como en el alta del centro:
+             *     si no, quien se registro como "Lucia@..." no podria volver a entrar escribiendolo igual.
              * @example admin@ejemplo.test
              */
             email: string;
@@ -168,6 +412,84 @@ export interface components {
             accessToken: string;
             usuario: components["schemas"]["UsuarioSesionDto"];
         };
+        PedirCodigoDto: {
+            /**
+             * Format: email
+             * @description El email de la clienta. Si no tiene cuenta en el centro, se crea al entrar.
+             * @example ana@example.com
+             */
+            email: string;
+        };
+        CodigoPedidoDto: {
+            /**
+             * @description Cuanto tarda en vencer el codigo que se acaba de mandar.
+             * @example 10
+             */
+            expiraEnMinutos: number;
+        };
+        CrearSesionClienteDto: {
+            /**
+             * Format: email
+             * @description El email de la clienta. Si no tiene cuenta en el centro, se crea al entrar.
+             * @example ana@example.com
+             */
+            email: string;
+            /**
+             * @description Los seis digitos que llegaron por mail.
+             * @example 482913
+             */
+            codigo: string;
+        };
+        ClienteDto: {
+            /**
+             * @description La identidad de la clienta en el centro. No se cambia: es a donde llega el codigo.
+             * @example ana@example.com
+             */
+            email: string;
+            id: string;
+            /** @description null hasta que lo complete, reservando o desde el perfil. */
+            nombre: string | null;
+            telefono: string | null;
+        };
+        SesionClienteDto: {
+            /**
+             * @description JWT para el header `Authorization: Bearer <token>`. Dura 30 dias: una clienta entra poco,
+             *     y cada ingreso le cuesta ir al mail a buscar el codigo.
+             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+             */
+            accessToken: string;
+            cliente: components["schemas"]["ClienteDto"];
+        };
+        UpdateClienteDto: {
+            nombre?: string;
+            telefono?: string;
+        };
+        CuentaMercadoPagoDto: {
+            /**
+             * @description El id de la cuenta en Mercado Pago.
+             * @example 111222
+             */
+            mpUserId: string | null;
+            /** @description false con credenciales de prueba. */
+            liveMode: boolean | null;
+            /** Format: date-time */
+            conectadaAt: string | null;
+            /** @description Si el centro tiene una cuenta conectada. */
+            conectada: boolean;
+            /** @description MP revoco el acceso: hasta reconectar, el centro no cobra online. */
+            requiereReconexion: boolean;
+        };
+        AutorizacionDto: {
+            /**
+             * @description Adonde mandar a la administradora para que autorice. Vence a los 10 minutos.
+             * @example https://auth.mercadopago.com/authorization?client_id=...
+             */
+            url: string;
+        };
+        ConectarCuentaDto: {
+            code: string;
+            state: string;
+        };
         CursorPageDto: {
             data: Record<string, never>[];
             /**
@@ -187,6 +509,16 @@ export interface components {
              * @example 540000
              */
             senaCentavos: number;
+            /**
+             * @description Hasta cuantas horas antes la clienta reprograma sola. null: no puede.
+             * @example 24
+             */
+            reprogramacionHorasAntes: number | null;
+            /**
+             * @description Hasta cuantas horas antes la clienta cancela con reembolso total.
+             * @example 24
+             */
+            cancelacionHorasAntes: number;
             id: string;
             /** @description Nombre del tratamiento. Unico dentro del centro. */
             nombre: string;
@@ -214,6 +546,13 @@ export interface components {
             /** @description Sena en centavos. El service valida ademas que no supere al precio. */
             senaCentavos: number;
             requiereValoracion?: boolean;
+            /**
+             * @description Hasta cuantas horas antes del turno la clienta puede reprogramar sola, sin costo. null
+             *     apaga la reprogramacion por autogestion; el centro puede reprogramar siempre.
+             */
+            reprogramacionHorasAntes?: number | null;
+            /** @description Hasta cuantas horas antes la clienta cancela con reembolso total. */
+            cancelacionHorasAntes?: number;
         };
         UpdateServicioDto: {
             /** @description Nombre del tratamiento. Unico dentro del centro. */
@@ -231,6 +570,13 @@ export interface components {
             /** @description Sena en centavos. El service valida ademas que no supere al precio. */
             senaCentavos?: number;
             requiereValoracion?: boolean;
+            /**
+             * @description Hasta cuantas horas antes del turno la clienta puede reprogramar sola, sin costo. null
+             *     apaga la reprogramacion por autogestion; el centro puede reprogramar siempre.
+             */
+            reprogramacionHorasAntes?: number | null;
+            /** @description Hasta cuantas horas antes la clienta cancela con reembolso total. */
+            cancelacionHorasAntes?: number;
             activo?: boolean;
         };
         VentanaAtencionDto: {
@@ -302,12 +648,41 @@ export interface components {
              */
             metodoPago: "efectivo" | "mercadopago";
             servicioId: string;
-            /** @description Un solo campo, como el formulario del prototipo. */
-            clienteNombre: string;
-            /** Format: email */
-            clienteEmail: string;
-            clienteTelefono: string;
+            /** @description Un solo campo, como el formulario del prototipo. Obligatorio sin sesion de clienta. */
+            clienteNombre?: string;
+            /**
+             * Format: email
+             * @description La identidad de la clienta: la reserva queda asociada a este email aunque no tenga
+             *     cuenta. Obligatorio sin sesion de clienta; con sesion, sale de la cuenta.
+             */
+            clienteEmail?: string;
+            /** @description Obligatorio sin sesion de clienta. */
+            clienteTelefono?: string;
             notas?: string;
+        };
+        CobroDto: {
+            /**
+             * @description La sena, o el precio total si se paga con Mercado Pago, en centavos.
+             * @example 540000
+             */
+            montoCentavos: number;
+            /**
+             * @description Lo que entro por Mercado Pago, aprobado.
+             * @example 540000
+             */
+            pagadoCentavos: number;
+            /**
+             * @description Lo que se devolvio.
+             * @example 0
+             */
+            reembolsadoCentavos: number;
+            /**
+             * Format: date-time
+             * @description Hasta cuando se puede pagar; despues la reserva vence. null si ya no esta pendiente.
+             */
+            venceAt: string | null;
+            /** @description El link de Mercado Pago al que se redirige para pagar. null si ya no esta pendiente. */
+            checkoutUrl: string | null;
         };
         ReservaDto: {
             /** @example 2026-10-05 */
@@ -317,10 +692,15 @@ export interface components {
             /** @example 10:30 */
             horaFin: string;
             /**
-             * @description `pendiente`, `confirmada` o `cancelada`.
+             * @description `pendiente` (esperando el pago), `confirmada`, `cancelada` o `ausente`.
              * @example confirmada
              */
             estado: string;
+            /**
+             * @description `clienta`, `centro` o `sistema` (vencio sin pagarse). null si no esta cancelada.
+             * @example null
+             */
+            canceladaPor: string | null;
             /**
              * @description `efectivo` o `mercadopago`.
              * @example efectivo
@@ -331,23 +711,245 @@ export interface components {
              * @example 540000
              */
             senaCentavos: number;
+            /**
+             * @description Precio congelado al momento de reservar, en centavos.
+             * @example 1800000
+             */
+            precioCentavos: number;
+            /** @description El cobro online. null si no hay nada que pagar por Mercado Pago. */
+            cobro: components["schemas"]["CobroDto"] | null;
+            /**
+             * @description La politica que la clienta acepto al reservar. null: no puede reprogramar sola.
+             * @example 24
+             */
+            reprogramacionHorasAntes: number | null;
+            /** @example 24 */
+            cancelacionHorasAntes: number;
             id: string;
+            /**
+             * @description Si la clienta puede reprogramarla sola ahora. Lo calcula el servidor con la hora del
+             *     centro, para que el front no tenga que hacer aritmetica de zonas horarias.
+             */
+            puedeReprogramar: boolean;
+            /** @description Si cancelarla ahora devuelve lo pagado. Fuera de plazo se pierde todo lo pagado. */
+            puedeCancelarConReembolso: boolean;
             clienteNombre: string;
             clienteEmail: string;
             clienteTelefono: string;
             notas: string | null;
             servicioId: string;
+            /** @description La clienta duenia del turno. Existe aunque haya reservado sin cuenta. */
+            clienteId: string;
             /** Format: date-time */
             createdAt: string;
         };
+        EstadoReservaSoloDto: {
+            /**
+             * @description `pendiente`, `confirmada`, `cancelada` o `ausente`.
+             * @example confirmada
+             */
+            estado: string;
+        };
         UpdateReservaDto: {
             /**
-             * @description Nuevo estado. Transiciones validas: pendiente -> confirmada | cancelada,
-             *     confirmada -> cancelada. `cancelada` es terminal.
+             * @description Transiciones validas: pendiente -> confirmada | cancelada, confirmada -> cancelada |
+             *     ausente. `cancelada` y `ausente` son terminales.
              * @example cancelada
              * @enum {string}
              */
-            estado: "confirmada" | "cancelada";
+            estado?: "confirmada" | "cancelada" | "ausente";
+            /**
+             * @description Fecha nueva, para reprogramar. Va con `hora`.
+             * @example 2026-10-12
+             */
+            fecha?: string;
+            /**
+             * @description Hora nueva, de la grilla del centro. Va con `fecha`.
+             * @example 15:00
+             */
+            hora?: string;
+            /**
+             * @description Solo el centro, solo al cancelar: si se devuelve lo pagado. Obligatorio si hubo pago.
+             *     Para la clienta lo decide la politica del servicio.
+             */
+            reembolsar?: boolean;
+        };
+        PlanDto: {
+            /**
+             * @example profesional
+             * @enum {string}
+             */
+            id: "basico" | "profesional";
+            /** @example 1990000 */
+            precioCentavos: number;
+            /** @example 60 */
+            turnosPorMes: number | null;
+        };
+        SuscripcionMpDto: {
+            /**
+             * @example profesional
+             * @enum {string}
+             */
+            plan: "basico" | "profesional";
+            /**
+             * @description El estado en Mercado Pago. `pending` hasta que la administradora autoriza el cobro.
+             * @example authorized
+             * @enum {string}
+             */
+            estado: "pending" | "authorized" | "paused" | "cancelled";
+            /** @description Donde la administradora autoriza el cobro mensual. Solo mientras esta `pending`. */
+            url: string | null;
+        };
+        SuscripcionDto: {
+            /**
+             * @description El plan que rige hoy. Sus limites salen de GET /planes.
+             * @example basico
+             * @enum {string}
+             */
+            plan: "basico" | "profesional";
+            /**
+             * Format: date-time
+             * @description Hasta cuando esta pago el plan. Con la suscripcion activa hay 10 dias de gracia despues,
+             *     que cubren los reintentos de Mercado Pago si un cobro falla.
+             */
+            pagoHasta: string | null;
+            /** @description La suscripcion en Mercado Pago. null si el centro nunca se suscribio. */
+            suscripcion: components["schemas"]["SuscripcionMpDto"] | null;
+        };
+        UpdateSuscripcionDto: {
+            /**
+             * @example profesional
+             * @enum {string}
+             */
+            plan: "basico" | "profesional";
+            /**
+             * Format: email
+             * @description El email de la cuenta de Mercado Pago que va a pagar: si no coincide, Mercado Pago
+             *     rechaza el cobro. Default: el de la administradora.
+             * @example pagos@lodelili.com
+             */
+            emailPagador?: string;
+        };
+        CrearSesionPlataformaDto: {
+            /**
+             * Format: email
+             * @description Email de la persona administradora del centro. Se normaliza como en el alta del centro:
+             *     si no, quien se registro como "Lucia@..." no podria volver a entrar escribiendolo igual.
+             * @example admin@ejemplo.test
+             */
+            email: string;
+            /** @description Su contrasena. */
+            password: string;
+        };
+        SuperadminDto: {
+            id: string;
+            nombre: string;
+            email: string;
+        };
+        SesionPlataformaDto: {
+            /**
+             * @description JWT para el header `Authorization: Bearer <token>`. Vale solo en /plataforma.
+             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+             */
+            accessToken: string;
+            superadmin: components["schemas"]["SuperadminDto"];
+        };
+        CentroDto: {
+            /** @example lo-de-lili */
+            slug: string;
+            /**
+             * @description El plan que rige hoy.
+             * @enum {string}
+             */
+            plan: "basico" | "profesional";
+            /**
+             * @description El estado de la suscripcion en Mercado Pago. null si nunca se suscribio.
+             * @enum {string|null}
+             */
+            suscripcionEstado: "pending" | "authorized" | "paused" | "cancelled" | null;
+            /**
+             * Format: date-time
+             * @description Hasta cuando esta pago el plan.
+             */
+            pagoHasta: string | null;
+            /**
+             * @description Si el centro cobra con Mercado Pago.
+             * @enum {string}
+             */
+            mercadoPago: "conectada" | "requiere_reconexion" | "sin_conectar";
+            nombre: string;
+            activo: boolean;
+            /**
+             * Format: date-time
+             * @description Cuando se dio de alta.
+             */
+            createdAt: string;
+            servicios: number;
+            clientas: number;
+            /** @description Turnos del mes en curso, por la fecha del turno y sin los cancelados. */
+            turnosDelMes: number;
+            /** @description Lo cobrado online en el mes en curso, sin lo que ya se devolvio de esos pagos. */
+            cobradoDelMesCentavos: number;
+        };
+        PorPlanDto: {
+            basico: number;
+            profesional: number;
+        };
+        ResumenDto: {
+            /**
+             * @description El mes de los numeros, en la hora de Argentina.
+             * @example 2026-09
+             */
+            mes: string;
+            centros: number;
+            centrosActivos: number;
+            /** @description Los que se dieron de alta en el mes. */
+            centrosNuevos: number;
+            /** @description Los centros activos, por plan vigente. */
+            porPlan: components["schemas"]["PorPlanDto"];
+            /** @description Suscripciones autorizadas por el precio del plan: lo que se espera cobrar por mes. */
+            ingresoMensualCentavos: number;
+            turnosDelMes: number;
+            cobradoDelMesCentavos: number;
+        };
+        UpdateCentroDto: {
+            /** @description false da de baja el centro: sus rutas responden 404 y deja de tomar turnos. */
+            activo: boolean;
+        };
+        AdministradoraDto: {
+            /** @example Lucia Gomez */
+            nombre: string;
+            /**
+             * Format: email
+             * @example lucia@esteticaluz.com
+             */
+            email: string;
+            /** @description De 12 a 128 caracteres. El tope existe para que un body gigante no ponga a trabajar a scrypt. */
+            password: string;
+        };
+        CrearCentroDto: {
+            /** @example Estetica Luz */
+            nombre: string;
+            /**
+             * @description Va en la URL del centro: minusculas, numeros y guiones, de 3 a 40 caracteres.
+             * @example estetica-luz
+             */
+            slug: string;
+            /** @description Quien da de alta el centro: queda como su administradora. */
+            admin: components["schemas"]["AdministradoraDto"];
+        };
+        CentroCreadoResumenDto: {
+            slug: string;
+            nombre: string;
+        };
+        CentroCreadoDto: {
+            /**
+             * @description JWT para el header `Authorization: Bearer <token>`.
+             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+             */
+            accessToken: string;
+            usuario: components["schemas"]["UsuarioSesionDto"];
+            centro: components["schemas"]["CentroCreadoResumenDto"];
         };
     };
     responses: never;
@@ -393,6 +995,450 @@ export interface operations {
             };
             /** @description El centro no existe. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    ClientesController_pedirCodigo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PedirCodigoDto"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodigoPedidoDto"];
+                };
+            };
+            /** @description El email no es valido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Demasiados codigos para ese email, o demasiadas peticiones. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    ClientesController_ingresar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearSesionClienteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SesionClienteDto"];
+                };
+            };
+            /** @description Codigo invalido, vencido, ya usado o con los intentos agotados. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    ClientesController_findMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClienteDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro, o no es de una clienta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    ClientesController_updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClienteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClienteDto"];
+                };
+            };
+            /** @description Datos invalidos. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro, o no es de una clienta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    CuentaMercadoPagoController_estado: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuentaMercadoPagoDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    CuentaMercadoPagoController_conectar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConectarCuentaDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuentaMercadoPagoDto"];
+                };
+            };
+            /** @description El state vencio, es de otro centro, o Mercado Pago rechazo el codigo. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description La cuenta actual tiene pagos en curso o turnos pagos por venir: si se cambia, no se podrian saldar. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    CuentaMercadoPagoController_desconectar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuentaMercadoPagoDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description La cuenta tiene pagos en curso o turnos pagos por venir, o la suscripcion al plan Profesional sigue activa. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    CuentaMercadoPagoController_autorizacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutorizacionDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description La plataforma no tiene configurada la app de Mercado Pago. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -493,7 +1539,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
-            /** @description El token es de otro centro. */
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -605,7 +1651,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
-            /** @description El token es de otro centro. */
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -667,7 +1713,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
-            /** @description El token es de otro centro. */
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -729,7 +1775,11 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
-            /** @description El token es de otro centro. */
+            /**
+             * @description plan_limit_reached: alguna capacidad pasa la del plan del centro. Tambien forbidden_role.
+             *
+             *     El token es de otro centro, o de una cuenta que no es de administracion.
+             */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -805,7 +1855,7 @@ export interface operations {
     ReservasController_findAll: {
         parameters: {
             query: {
-                estado?: "pendiente" | "confirmada" | "cancelada";
+                estado?: "pendiente" | "cancelada" | "confirmada" | "ausente";
                 servicioId?: string;
                 /** @description Desde esta fecha, inclusive. */
                 desde?: string;
@@ -845,7 +1895,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
-            /** @description El token es de otro centro. */
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -918,6 +1968,56 @@ export interface operations {
             };
         };
     };
+    ReservasController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reservaId: string;
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservaDto"];
+                };
+            };
+            /** @description Falta el token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description La reserva no existe, o no es de la clienta de la sesion. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     ReservasController_update: {
         parameters: {
             query?: never;
@@ -943,7 +2043,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReservaDto"];
                 };
             };
-            /** @description El estado pedido no existe. */
+            /** @description Estado y fecha juntos, fecha sin hora, o reembolsar fuera de lugar. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -952,7 +2052,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
-            /** @description Falta el token o no es valido. */
+            /** @description Falta el token. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -961,13 +2061,54 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
-            /** @description El token es de otro centro. */
+            /** @description Token de otro centro, o una clienta pidiendo algo que es del centro. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description La reserva no existe, o no es de la clienta de la sesion. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Transicion invalida, fuera de plazo para reprogramar, sin cupo en el horario nuevo o ausente antes de hora. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    ReservasController_estado: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reservaId: string;
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoReservaSoloDto"];
                 };
             };
             /** @description La reserva no existe. */
@@ -979,7 +2120,419 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
-            /** @description Esa transicion de estado no es valida. */
+        };
+    };
+    MisReservasController_findAll: {
+        parameters: {
+            query: {
+                estado?: "pendiente" | "cancelada" | "confirmada" | "ausente";
+                servicioId?: string;
+                /** @description Desde esta fecha, inclusive. */
+                desde?: string;
+                /** @description Hasta esta fecha, inclusive. */
+                hasta?: string;
+                /** @description Cuantos elementos devolver como maximo en esta pagina. */
+                limit: number;
+                /** @description El nextCursor que devolvio la pagina anterior. Es opaco: mandalo tal cual. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una pagina de resultados. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPageDto"] & {
+                        data?: components["schemas"]["ReservaDto"][];
+                    };
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro, o no es de una clienta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesController_findAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDto"][];
+                };
+            };
+        };
+    };
+    SuscripcionController_estado: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuscripcionDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    SuscripcionController_cambiar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSuscripcionDto"];
+            };
+        };
+        responses: {
+            /** @description Profesional: `suscripcion.url` es donde autorizar el cobro mensual, y el plan rige desde el primer cobro aprobado. Basico: cancela la suscripcion, y lo pagado sigue hasta `pagoHasta`. Pedir el plan que ya se pidio no cambia nada. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuscripcionDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token es de otro centro, o de una cuenta que no es de administracion. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description mercadopago_not_connected: el Profesional pide la cuenta de Mercado Pago del centro conectada. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Mercado Pago no respondio. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description La plataforma no tiene configurado el cobro de los planes. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    PlataformaController_ingresar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearSesionPlataformaDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SesionPlataformaDto"];
+                };
+            };
+            /** @description Credenciales incorrectas. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    PlataformaController_centros: {
+        parameters: {
+            query: {
+                /** @description Solo los activos, o solo los dados de baja. Sin el filtro, todos. */
+                activo?: boolean;
+                /** @description Cuantos elementos devolver como maximo en esta pagina. */
+                limit: number;
+                /** @description El nextCursor que devolvio la pagina anterior. Es opaco: mandalo tal cual. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una pagina de resultados. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPageDto"] & {
+                        data?: components["schemas"]["CentroDto"][];
+                    };
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token no es de la plataforma. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    PlataformaController_resumen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumenDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token no es de la plataforma. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    PlataformaController_actualizar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCentroDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentroDto"];
+                };
+            };
+            /** @description Falta el token o no es valido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El token no es de la plataforma. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description El centro no existe. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    AltaCentroController_crear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearCentroDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentroCreadoDto"];
+                };
+            };
+            /** @description Algun dato es invalido: el slug, el email o la contrasena. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description slug_taken: el slug ya esta en uso o es una palabra reservada. */
             409: {
                 headers: {
                     [name: string]: unknown;

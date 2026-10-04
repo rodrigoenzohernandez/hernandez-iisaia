@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Aviso } from '@/components/Aviso';
 import { Boton } from '@/components/Boton';
+import { campo, etiqueta, nota } from '@/components/campos';
 import { Flecha, FlechaIzquierda, Tilde } from '@/components/Iconos';
 import {
   crearReserva,
@@ -15,10 +17,6 @@ import { formatearDuracion, formatearFechaLarga, formatearPrecio } from '@/lib/f
 import { SelectorFecha } from './SelectorFecha';
 
 const PASOS = ['Tratamiento', 'Día y hora', 'Tus datos'] as const;
-
-const campo =
-  'mt-2 w-full border border-tinta/20 bg-papel px-4 py-3 text-[0.98rem] text-tinta transition-colors placeholder:text-tinta-tenue focus:border-verde-hondo focus:outline-none';
-const etiqueta = 'angosta block text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-tinta-suave';
 
 export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: Servicio | null }) {
   const [paso, setPaso] = useState<0 | 1 | 2>(inicial ? 1 : 0);
@@ -34,6 +32,7 @@ export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: 
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo');
 
   const [enviando, setEnviando] = useState(false);
+  const [redirigiendo, setRedirigiendo] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [reserva, setReserva] = useState<Reserva | null>(null);
 
@@ -61,6 +60,15 @@ export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: 
         clienteTelefono: telefono,
         notas: notas.trim() || undefined,
       });
+
+      // En un centro que cobra online la reserva nace `pendiente` con la URL de Mercado Pago.
+      // El cupo queda retenido hasta `cobro.venceAt`, veinte minutos, y después vence sola.
+      if (creada.estado === 'pendiente' && creada.cobro?.checkoutUrl) {
+        setRedirigiendo(true);
+        window.location.href = creada.cobro.checkoutUrl;
+        return;
+      }
+
       setReserva(creada);
     } catch (e) {
       if (!(e instanceof ErrorApi)) throw e;
@@ -83,12 +91,39 @@ export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: 
           setHora(null);
           setPaso(0);
           break;
+        // El centro no cobra online: el único método que le sirve es efectivo. Se lo dejamos
+        // elegido para que solo tenga que volver a enviar.
+        case 'online_payment_unavailable':
+          setMetodoPago('efectivo');
+          break;
+        // El turno no quedó tomado en ninguno de los dos casos: se queda donde está para
+        // reintentar sin volver a elegir nada.
+        case 'payment_provider_unavailable':
+        case 'monthly_limit_reached':
+        case 'too_many_requests':
+          break;
         default:
           break;
       }
     } finally {
       setEnviando(false);
     }
+  }
+
+  // La redirección a Mercado Pago no es instantánea. Sin esto la pantalla se queda en el
+  // formulario con el botón deshabilitado y parece colgada.
+  if (redirigiendo) {
+    return (
+      <section className="mt-16 max-w-[52ch]">
+        <h2 className="ancha text-[clamp(1.4rem,2.4vw,2rem)] font-bold uppercase leading-tight tracking-[-0.025em]">
+          Te llevamos a pagar
+        </h2>
+        <p className="angosta mt-6 text-[1.02rem] leading-relaxed text-tinta-suave">
+          Estamos abriendo Mercado Pago para que abones la seña. Tu horario queda reservado
+          veinte minutos mientras tanto.
+        </p>
+      </section>
+    );
   }
 
   if (reserva && servicio) {
@@ -139,12 +174,9 @@ export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: 
       </ol>
 
       {aviso && (
-        <p
-          role="status"
-          className="mt-8 bg-verde-humo px-6 py-5 text-[0.95rem] leading-relaxed text-tinta"
-        >
+        <Aviso tono="error" className="mt-8">
           {aviso}
-        </p>
+        </Aviso>
       )}
 
       {/* ---------- 01 ---------- */}
@@ -265,8 +297,8 @@ export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: 
                     autoComplete="email"
                     aria-describedby="email-nota"
                   />
-                  <p id="email-nota" className="angosta mt-2 text-[0.78rem] leading-relaxed text-tinta-tenue">
-                    No mandamos mails: nos sirve para encontrar tu turno si nos escribís.
+                  <p id="email-nota" className={nota}>
+                    Te mandamos ahí la confirmación, y es con el que entrás a ver tus turnos.
                   </p>
                 </div>
                 <div>
@@ -422,7 +454,7 @@ function Confirmacion({ reserva, servicio }: { reserva: Reserva; servicio: Servi
       <p className="angosta mt-7 max-w-[56ch] text-[1.02rem] leading-relaxed text-tinta-suave">
         {confirmada
           ? 'Te esperamos. La seña la abonás en el local el día del turno y se descuenta del total.'
-          : 'Elegiste Mercado Pago, pero todavía no cobramos online. El centro ve tu pedido y confirma el turno a mano; hasta entonces el horario te queda reservado.'}
+          : 'El centro tiene que confirmarlo a mano. Hasta entonces el horario te queda reservado.'}
       </p>
 
       <dl className="mt-12 grid max-w-[46rem] gap-x-12 gap-y-7 border-t border-tinta/15 pt-9 sm:grid-cols-2">
@@ -436,14 +468,21 @@ function Confirmacion({ reserva, servicio }: { reserva: Reserva; servicio: Servi
       </dl>
 
       <p className="angosta mt-12 max-w-[56ch] bg-verde-humo px-6 py-5 text-[0.92rem] leading-relaxed">
-        Anotá el día y la hora: todavía no mandamos mails de confirmación, y el turno no se puede
-        cancelar ni reprogramar desde acá. Para cambiarlo hay que hablar con el centro.
+        Te mandamos la confirmación por mail a {reserva.clienteEmail}. Guardá ese mail: es el
+        comprobante del turno y lleva el monto que abonaste.
       </p>
 
-      <div className="mt-12">
+      <div className="mt-12 flex flex-wrap items-center gap-7">
+        <Link
+          href="/mis-turnos"
+          className="inline-flex items-center gap-2.5 text-[0.76rem] font-semibold uppercase tracking-[0.16em] text-tinta underline decoration-verde decoration-2 underline-offset-[0.35em]"
+        >
+          Ver mis turnos
+          <Flecha className="h-4 w-4" />
+        </Link>
         <Link
           href="/"
-          className="inline-flex items-center gap-2.5 text-[0.76rem] font-semibold uppercase tracking-[0.16em] text-tinta underline decoration-verde decoration-2 underline-offset-[0.35em]"
+          className="inline-flex items-center gap-2.5 text-[0.76rem] font-semibold uppercase tracking-[0.16em] text-tinta-suave underline decoration-tinta/30 underline-offset-[0.35em]"
         >
           <FlechaIzquierda className="h-4 w-4" />
           Volver al inicio
