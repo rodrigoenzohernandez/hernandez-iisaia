@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { Boton } from '@/components/Boton';
 import { listarServicios, type Reserva, type Servicio } from '@/lib/cliente';
 import { listarReservas, type FiltrosReservas } from '@/lib/admin';
 import { hoyEnCentro } from '@/lib/formato';
 import { EncabezadoSeccion } from './EncabezadoSeccion';
 import { PanelAnonimo, PanelCargando, PanelError } from './EstadosPanel';
 import { FilaAgenda } from './FilaAgenda';
+import { FormularioTurno } from './FormularioTurno';
 import { usePanel } from './usePanel';
 
 const ESTADOS = [
@@ -23,6 +25,7 @@ export function Agenda() {
   // El default es "de hoy en adelante": lo que la administradora necesita ver al abrir.
   const [desde, setDesde] = useState(() => hoyEnCentro());
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [cargandoTurno, setCargandoTurno] = useState(false);
 
   const { estado, recargar, salir } = usePanel<Datos>(
     async (token) => {
@@ -43,9 +46,36 @@ export function Agenda() {
 
   if (estado.tipo === 'anonimo') return <PanelAnonimo />;
 
+  // Cargar un turno ocupa la pantalla: una cosa a la vez, como el ABM de tratamientos.
+  if (estado.tipo === 'listo' && cargandoTurno) {
+    return (
+      <section>
+        <FormularioTurno
+          servicios={[...estado.datos.servicios.values()]}
+          token={estado.token}
+          onListo={() => {
+            setCargandoTurno(false);
+            recargar();
+          }}
+          onCancelar={() => setCargandoTurno(false)}
+        />
+      </section>
+    );
+  }
+
   return (
     <section>
-      <EncabezadoSeccion titulo="Agenda" onSalir={salir} />
+      <EncabezadoSeccion
+        titulo="Agenda"
+        onSalir={salir}
+        acciones={
+          estado.tipo === 'listo' && (
+            <Boton onClick={() => setCargandoTurno(true)} className="py-2.5 text-[0.72rem]">
+              Cargar turno
+            </Boton>
+          )
+        }
+      />
 
       {/* ---- filtros ---- */}
       <div className="mt-10 flex flex-wrap items-end gap-x-8 gap-y-5">
