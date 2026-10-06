@@ -152,9 +152,9 @@ services:
       context: ./frontend
       args:
         # Se hornea en el bundle del navegador durante el build. Tiene que ser una dirección
-        # que resuelva la clienta desde su máquina, no un nombre de la red del compose.
+        # que resuelva la clienta desde su máquina, no un nombre de la red del compose. El slug
+        # del centro ya no se hornea: va en la URL (/[slug]/...), un build sirve a todos.
         NEXT_PUBLIC_API_BASE_URL: http://localhost:3100/api/v1
-        NEXT_PUBLIC_TENANT_SLUG: lo-de-lili
     restart: unless-stopped
     ports:
       - '3101:3101'
