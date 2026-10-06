@@ -9,9 +9,7 @@ esta entrega: esto cubre los cinco endpoints públicos del contrato, no los once
 
 ## Cómo se ejecuta
 
-Hacen falta **Node 24** (`nvm use 24`; con Node 18 Next no arranca) y Docker. Son dos frontends:
-este (`frontend/`, la app multi-tenant, puerto **3101**) y [`../frontend-emil`](../frontend-emil),
-una landing aparte en el puerto **3102** que no consume la API.
+Hacen falta **Node 24** (`nvm use 24`; con Node 18 Next no arranca) y Docker.
 
 Tres secretos, sin default a propósito; generalos una vez:
 
@@ -21,20 +19,14 @@ openssl rand -base64 32   # ENCRYPTION_KEY  (cifra los tokens de Mercado Pago; s
 openssl rand -base64 18   # SEED_ADMIN_PASSWORD
 ```
 
-### Opción A — Todo con Docker, + emil en dev
+### Opción A — Todo con Docker
 
-Desde [`../`](..), un solo comando levanta la base (5442), la API (3100) y **este** frontend (3101):
+Desde [`../`](..), un solo comando levanta la base (5442), la API (3100) y este frontend (3101):
 
 ```bash
 cd ..
 cp .env.example .env            # pegá los 3 secretos
 docker compose up -d --build
-```
-
-Y el segundo front, en otra terminal:
-
-```bash
-cd frontend-emil && npm run dev   # http://localhost:3102
 ```
 
 La migración y la siembra corren solas y en orden. El seed de Prisma borra y recrea —empieza por
@@ -48,7 +40,7 @@ docker compose --profile resembrar run --rm resembrar
 
 ### Opción B — Modo dev con recarga en caliente
 
-Para iterar el front con hot reload, en tres terminales:
+Para iterar el front con hot reload, en dos terminales:
 
 ```bash
 # 1) backend (Postgres en Docker + API afuera), desde ../backend
@@ -59,17 +51,13 @@ THROTTLE_LIMIT=1000 npm run start:dev  # API en 3100
 # 2) este frontend
 nvm use 24 && cp .env.example .env.local
 npm run dev                            # http://localhost:3101
-
-# 3) el front de emil
-cd ../frontend-emil && npm run dev     # http://localhost:3102
 ```
 
 El `THROTTLE_LIMIT` alto no es un atajo: el alta de reserva acepta cinco peticiones por minuto y
 por IP, así que probar el formulario agota el límite en treinta segundos y la API devuelve `429`.
 
 El puerto **3101 no es decorativo**: es el que el backend trae en su `CORS_ORIGIN` por omisión. Si
-lo cambiás acá, cambialo también allá. No mezcles las dos opciones: las dos usan el 3101 para este
-front.
+lo cambiás acá, cambialo también allá. No corras la opción A y la B a la vez: las dos usan el 3101.
 
 ### Puertos, URLs y credenciales
 
@@ -79,7 +67,6 @@ front.
 | Registrar un centro | `http://localhost:3101/registrarse` |
 | Login de superadmin | `http://localhost:3101/plataforma/ingresar` |
 | Un centro · su panel | `http://localhost:3101/lo-de-lili` · `…/lo-de-lili/admin/ingresar` |
-| Front de emil (landing) | `http://localhost:3102` |
 | API · docs | `http://localhost:3100/api/v1` · `…/api/v1/docs` |
 
 El seed crea `lo-de-lili` (Profesional), `bella-piel` (Básico) y `centro-cerrado` (desactivado).

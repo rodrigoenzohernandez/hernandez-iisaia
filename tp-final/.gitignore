@@ -1,3 +1,6 @@
 # Lo lee docker compose y lleva JWT_SECRET y SEED_ADMIN_PASSWORD en claro.
 .env
 !.env.example
+
+# Front de emil: se preserva local, fuera de git
+frontend-emil/
