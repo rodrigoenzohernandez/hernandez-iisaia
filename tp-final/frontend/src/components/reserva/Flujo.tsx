@@ -15,10 +15,12 @@ import {
 } from '@/lib/cliente';
 import { formatearDuracion, formatearFechaLarga, formatearPrecio } from '@/lib/formato';
 import { SelectorFecha } from './SelectorFecha';
+import { useSlug } from '@/hooks/useSlug';
 
 const PASOS = ['Tratamiento', 'Día y hora', 'Tus datos'] as const;
 
 export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: Servicio | null }) {
+  const slug = useSlug();
   const [paso, setPaso] = useState<0 | 1 | 2>(inicial ? 1 : 0);
   const [servicio, setServicio] = useState<Servicio | null>(inicial);
   const [fecha, setFecha] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: 
     setEnviando(true);
     setAviso(null);
     try {
-      const creada = await crearReserva({
+      const creada = await crearReserva(slug, {
         servicioId: servicio.id,
         fecha,
         hora,
@@ -435,6 +437,7 @@ function Dato({
 }
 
 function Confirmacion({ reserva, servicio }: { reserva: Reserva; servicio: Servicio }) {
+  const slug = useSlug();
   const confirmada = reserva.estado === 'confirmada';
   return (
     <section className="mt-10">
@@ -474,7 +477,7 @@ function Confirmacion({ reserva, servicio }: { reserva: Reserva; servicio: Servi
 
       <div className="mt-12 flex flex-wrap items-center gap-7">
         <Link
-          href="/mis-turnos"
+          href={`/${slug}/mis-turnos`}
           className="inline-flex items-center gap-2.5 text-[0.76rem] font-semibold uppercase tracking-[0.16em] text-tinta underline decoration-verde decoration-2 underline-offset-[0.35em]"
         >
           Ver mis turnos

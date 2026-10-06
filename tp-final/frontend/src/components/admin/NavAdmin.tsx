@@ -3,25 +3,25 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const ENLACES = [
-  { href: '/admin', texto: 'Agenda' },
-  { href: '/admin/tratamientos', texto: 'Tratamientos' },
-  { href: '/admin/horarios', texto: 'Horarios' },
-  { href: '/admin/cobros', texto: 'Cobros' },
-] as const;
-
 /**
  * La nav del panel. El tramo activo lo marca el subrayado verde —la misma señal que el
  * encabezado público usa para su acción primaria—, no un cambio de color del texto.
  */
-export function NavAdmin() {
+export function NavAdmin({ slug }: { slug: string }) {
   const ruta = usePathname();
+  const base = `/${slug}/admin`;
+  const enlaces = [
+    { href: base, texto: 'Agenda' },
+    { href: `${base}/tratamientos`, texto: 'Tratamientos' },
+    { href: `${base}/horarios`, texto: 'Horarios' },
+    { href: `${base}/cobros`, texto: 'Cobros' },
+  ];
 
   return (
     <nav className="flex flex-wrap items-center gap-x-7 gap-y-2 sm:gap-x-8">
-      {ENLACES.map((e) => {
-        // `/admin` es activo solo exacto; los otros, también en sus sub-rutas.
-        const activo = e.href === '/admin' ? ruta === '/admin' : ruta.startsWith(e.href);
+      {enlaces.map((e) => {
+        // La agenda es activa solo exacta; las otras, también en sus sub-rutas.
+        const activo = e.href === base ? ruta === base : ruta.startsWith(e.href);
         return (
           <Link
             key={e.href}

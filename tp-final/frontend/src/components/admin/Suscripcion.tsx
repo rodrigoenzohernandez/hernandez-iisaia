@@ -7,6 +7,7 @@ import { campo, etiqueta, nota } from '@/components/campos';
 import { ErrorApi, type Plan } from '@/lib/cliente';
 import { cambiarPlan, type Suscripcion as SuscripcionDto } from '@/lib/admin';
 import { formatearFechaLarga, formatearPrecio } from '@/lib/formato';
+import { useSlug } from '@/hooks/useSlug';
 
 /**
  * El plan del centro y el cambio de plan. El plan rige desde el primer cobro aprobado, no
@@ -24,6 +25,7 @@ export function Suscripcion({
   token: string;
   onCambio: () => void;
 }) {
+  const slug = useSlug();
   const [emailPagador, setEmailPagador] = useState('');
   const [subiendo, setSubiendo] = useState(false);
   const [bajando, setBajando] = useState(false);
@@ -39,7 +41,7 @@ export function Suscripcion({
     setTrabajando(true);
     setError(null);
     try {
-      const resp = await cambiarPlan(token, 'profesional', emailPagador.trim() || undefined);
+      const resp = await cambiarPlan(slug, token, 'profesional', emailPagador.trim() || undefined);
       // El PUT devuelve la URL donde la administradora autoriza el cobro mensual.
       if (resp.suscripcion?.url) {
         window.location.href = resp.suscripcion.url;
@@ -58,7 +60,7 @@ export function Suscripcion({
     setTrabajando(true);
     setError(null);
     try {
-      await cambiarPlan(token, 'basico');
+      await cambiarPlan(slug, token, 'basico');
       setBajando(false);
       onCambio();
     } catch (e) {

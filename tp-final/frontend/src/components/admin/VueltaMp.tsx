@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Aviso } from '@/components/Aviso';
 import { BotonEnlace } from '@/components/Boton';
 import { Flecha, Tilde } from '@/components/Iconos';
-import { ErrorApi, SLUG } from '@/lib/cliente';
+import { ErrorApi } from '@/lib/cliente';
 import { conectarMercadoPago } from '@/lib/admin';
 import { leerSlugMp, leerToken, sesionVencida } from '@/lib/sesion';
 
@@ -14,7 +14,6 @@ type Estado =
   | { tipo: 'conectando' }
   | { tipo: 'ok' }
   | { tipo: 'anonimo' }
-  | { tipo: 'otro_centro'; slug: string }
   | { tipo: 'error'; mensaje: string };
 
 /**
@@ -27,6 +26,7 @@ type Estado =
 export function VueltaMp() {
   const params = useSearchParams();
   const [estado, setEstado] = useState<Estado>({ tipo: 'conectando' });
+  const [slug, setSlug] = useState<string | null>(null);
   // En desarrollo el efecto corre dos veces; sin esto se canjea el code dos veces y el segundo falla.
   const yaCorrio = useRef(false);
 
@@ -44,20 +44,21 @@ export function VueltaMp() {
         return;
       }
 
-      const slug = leerSlugMp() ?? SLUG;
-      if (slug !== SLUG) {
-        setEstado({ tipo: 'otro_centro', slug });
+      const elSlug = leerSlugMp();
+      if (!elSlug) {
+        setEstado({ tipo: 'error', mensaje: 'No sabemos a qué centro volver. Empezá la conexión de nuevo desde Cobros.' });
         return;
       }
+      setSlug(elSlug);
 
-      const token = leerToken('admin');
+      const token = leerToken('admin', elSlug);
       if (!token) {
         setEstado({ tipo: 'anonimo' });
         return;
       }
 
       try {
-        await conectarMercadoPago(token, code, state);
+        await conectarMercadoPago(elSlug, token, code, state);
         setEstado({ tipo: 'ok' });
       } catch (e) {
         if (!(e instanceof ErrorApi)) throw e;
@@ -99,7 +100,7 @@ export function VueltaMp() {
           Ya podés cobrar las señas online. Desde Cobros manejás el plan y la conexión.
         </p>
         <div className="mt-11">
-          <BotonEnlace href="/admin/cobros">
+          <BotonEnlace href={slug ? `/${slug}/admin/cobros` : '/'}>
             Ir a Cobros
             <Flecha className="h-4 w-4" />
           </BotonEnlace>
@@ -119,25 +120,11 @@ export function VueltaMp() {
           desde Cobros.
         </p>
         <div className="mt-11">
-          <BotonEnlace href="/admin/ingresar">
+          <BotonEnlace href={slug ? `/${slug}/admin/ingresar` : '/'}>
             Ingresar
             <Flecha className="h-4 w-4" />
           </BotonEnlace>
         </div>
-      </section>
-    );
-  }
-
-  if (estado.tipo === 'otro_centro') {
-    return (
-      <section className="max-w-[52ch]">
-        <h1 className="ancha text-[clamp(1.5rem,2.8vw,2.3rem)] font-bold uppercase leading-tight tracking-[-0.025em]">
-          Esta conexión es de otro centro
-        </h1>
-        <p className="angosta mt-7 text-[1.02rem] leading-relaxed text-tinta-suave">
-          La autorización volvió para <span className="font-semibold">{estado.slug}</span>, y este
-          panel atiende a otro centro.
-        </p>
       </section>
     );
   }
@@ -149,7 +136,7 @@ export function VueltaMp() {
       </h1>
       <Aviso tono="error" className="mt-7">{estado.mensaje}</Aviso>
       <p className="mt-10">
-        <Link href="/admin/cobros" className="inline-flex items-center gap-2.5 text-[0.76rem] font-semibold uppercase tracking-[0.16em] text-tinta underline decoration-verde decoration-2 underline-offset-[0.35em]">
+        <Link href={slug ? `/${slug}/admin/cobros` : '/'} className="inline-flex items-center gap-2.5 text-[0.76rem] font-semibold uppercase tracking-[0.16em] text-tinta underline decoration-verde decoration-2 underline-offset-[0.35em]">
           Volver a Cobros
           <Flecha className="h-4 w-4" />
         </Link>

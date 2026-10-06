@@ -46,11 +46,12 @@ const BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   'http://localhost:3100/api/v1';
 
-export const SLUG = process.env.NEXT_PUBLIC_TENANT_SLUG ?? 'lo-de-lili';
-
-/** Prefijo de las rutas del centro. Las de plataforma y `/planes` no lo llevan. */
-export function enCentro(ruta: string): string {
-  return `/tenants/${SLUG}${ruta}`;
+/**
+ * Prefijo de las rutas de un centro. El slug ya no se hornea en el build: viaja en la URL
+ * (`/[slug]/...`) y cada llamada lo recibe. Las rutas de plataforma y `/planes` no lo llevan.
+ */
+export function enCentro(slug: string, ruta: string): string {
+  return `/tenants/${slug}${ruta}`;
 }
 
 export type Opciones = Omit<RequestInit, 'body'> & { token?: string; body?: unknown };
@@ -90,18 +91,18 @@ export type Pagina<T> = { data: T[]; nextCursor: string | null };
 
 /* ------------------------------------------------------------------ público */
 
-export async function listarServicios(token?: string): Promise<Servicio[]> {
+export async function listarServicios(slug: string, token?: string): Promise<Servicio[]> {
   // Sin token devuelve solo los activos; con token de administradora, también los dados de baja.
-  const pagina = await pedir<Pagina<Servicio>>(enCentro('/servicios?limit=100'), { token });
+  const pagina = await pedir<Pagina<Servicio>>(enCentro(slug, '/servicios?limit=100'), { token });
   return pagina.data;
 }
 
-export function obtenerServicio(servicioId: string, token?: string): Promise<Servicio> {
-  return pedir<Servicio>(enCentro(`/servicios/${servicioId}`), { token });
+export function obtenerServicio(slug: string, servicioId: string, token?: string): Promise<Servicio> {
+  return pedir<Servicio>(enCentro(slug, `/servicios/${servicioId}`), { token });
 }
 
-export function obtenerDisponibilidad(servicioId: string, fecha: string): Promise<Disponibilidad> {
-  return pedir<Disponibilidad>(enCentro(`/servicios/${servicioId}/disponibilidad?fecha=${fecha}`));
+export function obtenerDisponibilidad(slug: string, servicioId: string, fecha: string): Promise<Disponibilidad> {
+  return pedir<Disponibilidad>(enCentro(slug, `/servicios/${servicioId}/disponibilidad?fecha=${fecha}`));
 }
 
 /** `/planes` es un array pelado, no `{ data }`, y no lleva el prefijo del centro. */
@@ -113,12 +114,12 @@ export function listarPlanes(): Promise<Plan[]> {
  * El estado real de una reserva, sin token y sin datos personales. Es lo que hay que creerle
  * a la vuelta de Mercado Pago: los parámetros que vienen en la query los escribe cualquiera.
  */
-export function estadoReserva(reservaId: string): Promise<{ estado: EstadoReserva }> {
-  return pedir<{ estado: EstadoReserva }>(enCentro(`/reservas/${reservaId}/estado`));
+export function estadoReserva(slug: string, reservaId: string): Promise<{ estado: EstadoReserva }> {
+  return pedir<{ estado: EstadoReserva }>(enCentro(slug, `/reservas/${reservaId}/estado`));
 }
 
-export function obtenerReserva(reservaId: string, token: string): Promise<Reserva> {
-  return pedir<Reserva>(enCentro(`/reservas/${reservaId}`), { token });
+export function obtenerReserva(slug: string, reservaId: string, token: string): Promise<Reserva> {
+  return pedir<Reserva>(enCentro(slug, `/reservas/${reservaId}`), { token });
 }
 
 export type DatosReserva = {
@@ -137,7 +138,7 @@ export type DatosReserva = {
  * endpoint: cambia el token. Con sesión de clienta, los datos de contacto salen del perfil y
  * pueden omitirse.
  */
-export async function crearReserva(datos: DatosReserva, token?: string): Promise<Reserva> {
+export async function crearReserva(slug: string, datos: DatosReserva, token?: string): Promise<Reserva> {
   // Campo por campo y no un spread: el backend rechaza con 400 cualquier propiedad de más,
   // y `horaFin`, `senaCentavos` y `precioCentavos` los calcula él.
   const cuerpo: Record<string, unknown> = {
@@ -155,7 +156,7 @@ export async function crearReserva(datos: DatosReserva, token?: string): Promise
   // perdedora de un empate y reintentar entra limpio.
   for (let intento = 0; ; intento++) {
     try {
-      return await pedir<Reserva>(enCentro('/reservas'), { method: 'POST', body: cuerpo, token });
+      return await pedir<Reserva>(enCentro(slug, '/reservas'), { method: 'POST', body: cuerpo, token });
     } catch (error) {
       const reintentable = error instanceof ErrorApi && error.codigo === 'high_contention';
       if (!reintentable || intento >= 2) throw error;

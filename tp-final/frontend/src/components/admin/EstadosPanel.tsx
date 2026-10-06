@@ -1,3 +1,4 @@
+import { Aviso } from '@/components/Aviso';
 import { Boton, BotonEnlace } from '@/components/Boton';
 import { Flecha } from '@/components/Iconos';
 
@@ -25,9 +26,7 @@ export function PanelAnonimo() {
 export function PanelError({ mensaje, onReintentar }: { mensaje: string; onReintentar: () => void }) {
   return (
     <div className="max-w-[54ch]">
-      <p role="alert" className="border-l-2 border-tinta bg-verde-humo px-6 py-5 text-[0.95rem] leading-relaxed text-tinta">
-        {mensaje}
-      </p>
+      <Aviso tono="error">{mensaje}</Aviso>
       <div className="mt-8">
         <Boton tono="borde" onClick={onReintentar}>
           Reintentar

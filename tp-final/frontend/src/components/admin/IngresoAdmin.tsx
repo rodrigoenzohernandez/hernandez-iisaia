@@ -9,6 +9,7 @@ import { Flecha } from '@/components/Iconos';
 import { ErrorApi } from '@/lib/cliente';
 import { iniciarSesionAdmin } from '@/lib/admin';
 import { guardarToken } from '@/lib/sesion';
+import { useSlug } from '@/hooks/useSlug';
 
 /**
  * Ingreso de la administradora: email y contraseña. A diferencia de la clienta, acá sí hay
@@ -17,6 +18,7 @@ import { guardarToken } from '@/lib/sesion';
  */
 export function IngresoAdmin() {
   const router = useRouter();
+  const slug = useSlug();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -27,9 +29,9 @@ export function IngresoAdmin() {
     setEnviando(true);
     setError(null);
     try {
-      const sesion = await iniciarSesionAdmin(email.trim(), password);
-      guardarToken('admin', sesion.accessToken);
-      router.replace('/admin');
+      const sesion = await iniciarSesionAdmin(slug, email.trim(), password);
+      guardarToken('admin', sesion.accessToken, slug);
+      router.replace(`/${slug}/admin`);
     } catch (e) {
       if (!(e instanceof ErrorApi)) throw e;
       // Email o contraseña equivocados vuelven como el mismo `invalid_credentials`: no se
@@ -41,10 +43,7 @@ export function IngresoAdmin() {
 
   return (
     <section className="max-w-[46ch]">
-      <p className="angosta text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-verde-hondo">
-        Panel del centro
-      </p>
-      <h1 className="ancha mt-4 text-[clamp(1.5rem,2.8vw,2.3rem)] font-bold uppercase leading-tight tracking-[-0.025em]">
+      <h1 className="ancha text-[clamp(1.5rem,2.8vw,2.3rem)] font-bold uppercase leading-tight tracking-[-0.025em]">
         Ingresá a tu agenda
       </h1>
 

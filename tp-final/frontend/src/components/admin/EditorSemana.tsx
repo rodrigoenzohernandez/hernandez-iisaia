@@ -5,6 +5,7 @@ import { Aviso } from '@/components/Aviso';
 import { Boton } from '@/components/Boton';
 import { ErrorApi, type Plan } from '@/lib/cliente';
 import { reemplazarVentanas, type Ventana } from '@/lib/admin';
+import { useSlug } from '@/hooks/useSlug';
 
 export type Franja = Ventana & { key: string };
 
@@ -38,6 +39,7 @@ export function EditorSemana({
   plan: Plan;
   nuevaKey: () => string;
 }) {
+  const slug = useSlug();
   const [franjas, setFranjas] = useState<Franja[]>(inicial);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export function EditorSemana({
       capacidad: f.capacidad,
     }));
     try {
-      await reemplazarVentanas(token, ventanas);
+      await reemplazarVentanas(slug, token, ventanas);
       // El borrador en pantalla ya es lo que se guardó: no hace falta recargar ni re-montar,
       // y así el aviso de confirmación no se borra solo.
       setOk(true);

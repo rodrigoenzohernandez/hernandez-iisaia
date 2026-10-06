@@ -7,6 +7,7 @@ import { campo, etiqueta, nota } from '@/components/campos';
 import { SelectorFecha } from '@/components/reserva/SelectorFecha';
 import { crearReserva, ErrorApi, type Servicio } from '@/lib/cliente';
 import { formatearFechaLarga } from '@/lib/formato';
+import { useSlug } from '@/hooks/useSlug';
 
 /**
  * Cargar un turno a nombre de una clienta, desde el panel. Es el mismo `POST /reservas` con el
@@ -29,6 +30,7 @@ export function FormularioTurno({
   onCancelar: () => void;
 }) {
   const activos = servicios.filter((s) => s.activo);
+  const slug = useSlug();
   const [servicioId, setServicioId] = useState('');
   const [fecha, setFecha] = useState<string | null>(null);
   const [hora, setHora] = useState<string | null>(null);
@@ -59,6 +61,7 @@ export function FormularioTurno({
     setError(null);
     try {
       await crearReserva(
+        slug,
         {
           servicioId: servicio.id,
           fecha,

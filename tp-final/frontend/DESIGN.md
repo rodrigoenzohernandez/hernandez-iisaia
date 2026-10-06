@@ -61,6 +61,13 @@ typography:
     fontWeight: 400
     lineHeight: 1.4
     fontFeature: "'tnum' 1"
+  titulo-panel:
+    fontFamily: "Archivo, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "clamp(1.5rem, 2.8vw, 2.3rem)"
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: "-0.025em"
+    fontVariation: "'wdth' 125"
 rounded:
   duro: "0px"
   foco: "1px"
@@ -212,6 +219,16 @@ Una paleta de tres familias —verde de campo, tinta carbón verdoso, papel verd
 - **Label** (600, 0.58–0.8rem, tracking 0.12em–0.3em, caps, angosta): etiquetas de formulario, rótulos de dato, nav, botones y las etiquetas del pie y del panel de resumen. El tracking sube con el tamaño chico: 0.3em a 0.62rem, 0.12em a 0.8rem.
 - **Ordinal** (800, `clamp(2.4rem, 4vw, 3.6rem)`, lh 0.85, tracking -0.035em, ancha, tabular): los 01/02/03 de la landing, en verde hondo. En el riel de pasos del flujo baja a 1.2rem y el peso codifica el estado (800 en curso / 600 recorrido / 300 no alcanzado).
 
+### Escala Operación (panel)
+
+Las superficies de Operación —panel de administración y cuenta de clienta— densifican el ramo con una escala de micro-rótulos y datos **medida del build, no inventada**. Son rungs fijos que extienden —no reemplazan— el ramo de la landing/reserva: `.angosta` rotula, `.cifra` da el dato, `.ancha` titula.
+
+- **Título de sección del panel** (ancha caps, 700, `clamp(1.5rem, 2.8vw, 2.3rem)`, lh 1.25, tracking -0.025em): el H1 único de cada pantalla de Operación (`EncabezadoSeccion`, `EstadosPanel`, ingresos, vuelta de pago). Es más corto que el headline de la landing (`clamp(1.6rem, 2.9vw, 2.5rem)`) a propósito, y se sostiene solo, **sin copete/eyebrow encima**.
+- **Micro-rótulos** (angosta caps, 600, tracking 0.14em–0.2em): rungs `0.82 · 0.76 · 0.72 · 0.68 · 0.66 · 0.62 · 0.6 · 0.58rem`. Encabezados de columna de tabla, rótulos `dt`, badges de estado, nav del panel. `0.72rem` es el ancla (= label del ramo); `0.58rem` es el piso.
+- **Datos de panel** (angosta/cifra, caja baja, 400–700): rungs `0.95 · 0.92 · 0.9 · 0.88 · 0.85 · 0.8rem`. Celdas de agenda, montos, metadatos y textos de apoyo cortos; `0.95rem` es el más usado (incluye el cuerpo del `Aviso`). `0.92rem` = cifra del ramo; `0.98rem` = campo; `1.02rem` = body.
+- **Cifras destacadas** (cifra, 700): `1.3rem` para el monto destacado (suscripción/resumen) y `1.4rem` con tracking 0.4em para el único campo de código de ingreso. Dos valores intencionales, no rungs libres.
+- **Títulos intermedios** (ancha caps): `1.22rem` (= title del ramo), `1.1rem`, `1.05rem` para sub-títulos y nombres de ficha dentro del panel.
+
 ### Named Rules
 
 **La regla de los dos extremos.** Un solo sistema tipográfico: `.ancha` (`font-stretch: 125%`) para todo lo que declara y `.angosta` (`font-stretch: 82%`) para todo lo que informa. El eje de ancho hace el trabajo expresivo que en otro sistema haría una segunda familia. No se agrega una segunda familia ni una serif de contraste.
@@ -219,6 +236,8 @@ Una paleta de tres familias —verde de campo, tinta carbón verdoso, papel verd
 **La regla del numeral como dato.** Todo numeral que se pueda comparar en columna —precio, seña, hora, fecha, duración, día del mes, ordinal— lleva `.cifra` (`tabular-nums` + `"tnum" 1`). Una cifra sin `.cifra` es un bug de composición.
 
 **La regla de la caja alta corta.** Las mayúsculas son para títulos, etiquetas y botones. Ningún párrafo de lectura va en caps.
+
+**La regla de la escala de panel.** Las superficies de Operación eligen tamaño de un set fijo de rungs medidos del build (micro-rótulos 0.58→0.82rem, datos 0.8→0.95rem), no de un valor nuevo por pantalla. Un tamaño fuera de la escala es un one-off: o entra como rung nombrado o se alinea al rung vecino. El ramo de la landing/reserva queda intacto; esta escala sólo densifica hacia abajo para tablas y fichas de panel.
 
 ## Layout
 

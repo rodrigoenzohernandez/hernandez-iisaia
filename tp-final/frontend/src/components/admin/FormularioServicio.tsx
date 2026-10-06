@@ -6,6 +6,7 @@ import { Boton } from '@/components/Boton';
 import { campo, etiqueta, nota } from '@/components/campos';
 import { ErrorApi, type Servicio } from '@/lib/cliente';
 import { crearServicio, actualizarServicio, type CrearServicio } from '@/lib/admin';
+import { useSlug } from '@/hooks/useSlug';
 
 /**
  * Alta y edición de un tratamiento. El mismo formulario para los dos: si llega `servicio`,
@@ -26,6 +27,7 @@ export function FormularioServicio({
   onListo: () => void;
   onCancelar: () => void;
 }) {
+  const slug = useSlug();
   const [nombre, setNombre] = useState(servicio?.nombre ?? '');
   const [descripcion, setDescripcion] = useState(servicio?.descripcion ?? '');
   const [duracion, setDuracion] = useState(String(servicio?.duracionMinutos ?? 30));
@@ -70,9 +72,9 @@ export function FormularioServicio({
 
     try {
       if (servicio) {
-        await actualizarServicio(token, servicio.id, datos);
+        await actualizarServicio(slug, token, servicio.id, datos);
       } else {
-        await crearServicio(token, datos);
+        await crearServicio(slug, token, datos);
       }
       onListo();
     } catch (e) {

@@ -1,27 +1,28 @@
 import type { Metadata } from 'next';
+import { Encabezado } from '@/components/Encabezado';
 import { Espina } from '@/components/Espina';
 import { Pie } from '@/components/Pie';
-import { EncabezadoAdmin } from '@/components/admin/EncabezadoAdmin';
-import { Tratamientos } from '@/components/admin/Tratamientos';
+import { MisTurnos } from '@/components/cuenta/MisTurnos';
 
 export const metadata: Metadata = {
-  title: 'Tratamientos — Natura Estética Integral',
+  title: 'Mis turnos — Natura Estética Integral',
   robots: { index: false },
 };
 
-export default function AdminTratamientos() {
+export default async function Turnos(props: PageProps<'/[slug]/mis-turnos'>) {
+  const { slug } = await props.params;
   return (
     <>
-      <EncabezadoAdmin />
+      <Encabezado slug={slug} />
 
       <main className="relative bg-papel px-6 py-20 lg:px-12 lg:py-28">
         <Espina />
         <div className="relative mx-auto max-w-[1380px] pl-7 lg:pl-10">
-          <Tratamientos />
+          <MisTurnos />
         </div>
       </main>
 
-      <Pie />
+      <Pie slug={slug} />
     </>
   );
 }

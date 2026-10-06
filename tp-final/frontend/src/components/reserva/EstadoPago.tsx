@@ -13,7 +13,7 @@ const TOPE_MS = 120_000;
 
 type Estado = EstadoReserva | 'consultando' | 'error';
 
-export function EstadoPago({ reservaId }: { reservaId: string }) {
+export function EstadoPago({ slug, reservaId }: { slug: string; reservaId: string }) {
   const [estado, setEstado] = useState<Estado>('consultando');
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [seCanso, setSeCanso] = useState(false);
@@ -25,7 +25,7 @@ export function EstadoPago({ reservaId }: { reservaId: string }) {
 
     async function consultar() {
       try {
-        const { estado: actual } = await estadoReserva(reservaId);
+        const { estado: actual } = await estadoReserva(slug, reservaId);
         if (!vigente) return;
         setEstado(actual);
         if (actual !== 'pendiente') return;
@@ -46,7 +46,7 @@ export function EstadoPago({ reservaId }: { reservaId: string }) {
       vigente = false;
       clearTimeout(temporizador);
     };
-  }, [reservaId]);
+  }, [slug, reservaId]);
 
   const { titulo, texto } = leer(estado, seCanso, mensaje);
   const confirmada = estado === 'confirmada';

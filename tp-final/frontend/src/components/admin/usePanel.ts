@@ -18,7 +18,14 @@ export type EstadoPanel<T> =
   | { tipo: 'error'; mensaje: string }
   | { tipo: 'listo'; token: string; datos: T };
 
+/**
+ * La sesión del panel: el rol y, para la administradora, el slug del centro. La plataforma es
+ * global y no lleva slug.
+ */
+export type SesionPanel = { rol: 'admin'; slug: string } | { rol: 'plataforma' };
+
 export function usePanel<T>(
+  sesion: SesionPanel,
   cargar: (token: string) => Promise<T>,
   deps: readonly unknown[] = [],
 ): {
@@ -26,6 +33,7 @@ export function usePanel<T>(
   recargar: () => void;
   salir: () => void;
 } {
+  const slug = sesion.rol === 'admin' ? sesion.slug : undefined;
   const [estado, setEstado] = useState<EstadoPanel<T>>({ tipo: 'cargando' });
   const [contador, setContador] = useState(0);
 
@@ -36,7 +44,7 @@ export function usePanel<T>(
     // render ya arranca en `cargando` por el estado inicial.
 
     (async () => {
-      const token = leerToken('admin');
+      const token = leerToken(sesion.rol, slug);
       if (!token) {
         if (vigente) setEstado({ tipo: 'anonimo' });
         return;
@@ -48,7 +56,7 @@ export function usePanel<T>(
         if (!vigente) return;
         if (!(e instanceof ErrorApi)) throw e;
         if (sesionVencida(e.codigo)) {
-          cerrarSesion('admin');
+          cerrarSesion(sesion.rol, slug);
           setEstado({ tipo: 'anonimo' });
           return;
         }
@@ -61,13 +69,13 @@ export function usePanel<T>(
     };
     // `cargar` se recrea en cada render; las deps reales las declara quien llama.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contador, ...deps]);
+  }, [contador, slug, sesion.rol, ...deps]);
 
   return {
     estado,
     recargar: () => setContador((n) => n + 1),
     salir: () => {
-      cerrarSesion('admin');
+      cerrarSesion(sesion.rol, slug);
       setEstado({ tipo: 'anonimo' });
     },
   };

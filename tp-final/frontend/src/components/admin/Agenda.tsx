@@ -10,6 +10,7 @@ import { PanelAnonimo, PanelCargando, PanelError } from './EstadosPanel';
 import { FilaAgenda } from './FilaAgenda';
 import { FormularioTurno } from './FormularioTurno';
 import { usePanel } from './usePanel';
+import { useSlug } from '@/hooks/useSlug';
 
 const ESTADOS = [
   { valor: '', texto: 'Todos' },
@@ -27,14 +28,16 @@ export function Agenda() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [cargandoTurno, setCargandoTurno] = useState(false);
 
+  const slug = useSlug();
   const { estado, recargar, salir } = usePanel<Datos>(
+    { rol: 'admin', slug },
     async (token) => {
       const filtros: FiltrosReservas = {};
       if (desde) filtros.desde = desde;
       if (filtroEstado) filtros.estado = filtroEstado;
       const [pagina, servicios] = await Promise.all([
-        listarReservas(token, filtros),
-        listarServicios(token),
+        listarReservas(slug, token, filtros),
+        listarServicios(slug, token),
       ]);
       return {
         reservas: pagina.data,

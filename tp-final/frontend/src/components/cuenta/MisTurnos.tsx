@@ -9,6 +9,7 @@ import { ErrorApi, listarServicios, type Reserva, type Servicio } from '@/lib/cl
 import { cancelarMiReserva, misReservas, reprogramarMiReserva } from '@/lib/cuenta';
 import { formatearFechaLarga, formatearPrecio } from '@/lib/formato';
 import { cerrarSesion, leerToken, sesionVencida } from '@/lib/sesion';
+import { useSlug } from '@/hooks/useSlug';
 
 type Estado =
   | { tipo: 'cargando' }
@@ -22,6 +23,7 @@ type Estado =
     };
 
 export function MisTurnos() {
+  const slug = useSlug();
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
   const [recargar, setRecargar] = useState(0);
 
@@ -29,7 +31,7 @@ export function MisTurnos() {
     let vigente = true;
 
     async function cargar() {
-      const token = leerToken('clienta');
+      const token = leerToken('clienta', slug);
       if (!token) {
         if (vigente) setEstado({ tipo: 'anonimo' });
         return;
@@ -37,7 +39,7 @@ export function MisTurnos() {
       try {
         // El catálogo va aparte porque la reserva trae `servicioId` y no el tratamiento:
         // hace falta para el nombre y para la grilla de reprogramación.
-        const [pagina, servicios] = await Promise.all([misReservas(token), listarServicios()]);
+        const [pagina, servicios] = await Promise.all([misReservas(slug, token), listarServicios(slug)]);
         if (!vigente) return;
         setEstado({
           tipo: 'listo',
@@ -51,7 +53,7 @@ export function MisTurnos() {
         // El token venció, es de otro centro o la cuenta ya no existe: insistir con él no
         // lleva a ningún lado, así que se tira y se vuelve a pedir el ingreso.
         if (sesionVencida(e.codigo) || e.codigo === 'cliente_not_found') {
-          cerrarSesion('clienta');
+          cerrarSesion('clienta', slug);
           setEstado({ tipo: 'anonimo' });
           return;
         }
@@ -63,7 +65,7 @@ export function MisTurnos() {
     return () => {
       vigente = false;
     };
-  }, [recargar]);
+  }, [recargar, slug]);
 
   if (estado.tipo === 'cargando') {
     // La carga se cuenta, no gira: el sistema no tiene spinners.
@@ -84,7 +86,7 @@ export function MisTurnos() {
           Te mandamos un código al mail con el que reservaste. No hace falta contraseña.
         </p>
         <div className="mt-11">
-          <BotonEnlace href="/ingresar">
+          <BotonEnlace href={`/${slug}/ingresar`}>
             Ingresar
             <Flecha className="h-4 w-4" />
           </BotonEnlace>
@@ -120,7 +122,7 @@ export function MisTurnos() {
         <button
           type="button"
           onClick={() => {
-            cerrarSesion('clienta');
+            cerrarSesion('clienta', slug);
             setEstado({ tipo: 'anonimo' });
           }}
           className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-tinta-suave underline decoration-tinta/30 underline-offset-[0.35em] transition-colors hover:text-tinta"
@@ -135,7 +137,7 @@ export function MisTurnos() {
             Todavía no tenés turnos con este mail. Si reservaste con otro, entrá con ese.
           </p>
           <div className="mt-10">
-            <BotonEnlace href="/reservar">
+            <BotonEnlace href={`/${slug}/reservar`}>
               Reservar un turno
               <Flecha className="h-4 w-4" />
             </BotonEnlace>
@@ -173,6 +175,7 @@ function FilaTurno({
   token: string;
   onCambio: () => void;
 }) {
+  const slug = useSlug();
   const [accion, setAccion] = useState<Accion>(null);
   const [trabajando, setTrabajando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -242,7 +245,7 @@ function FilaTurno({
           <Aviso>{textoDeCancelacion(reserva, pagado)}</Aviso>
           <div className="mt-6 flex flex-wrap items-center gap-5">
             <Boton
-              onClick={() => correr(() => cancelarMiReserva(token, reserva.id))}
+              onClick={() => correr(() => cancelarMiReserva(slug, token, reserva.id))}
               disabled={trabajando}
               className="py-2.5 text-[0.72rem]"
             >
@@ -278,7 +281,7 @@ function FilaTurno({
                   hora={null}
                   recargar={0}
                   onElegir={(fecha, hora) =>
-                    correr(() => reprogramarMiReserva(token, reserva.id, fecha, hora))
+                    correr(() => reprogramarMiReserva(slug, token, reserva.id, fecha, hora))
                   }
                 />
               </div>

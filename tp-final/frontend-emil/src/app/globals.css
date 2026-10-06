@@ -1,0 +1,329 @@
+@import "tailwindcss";
+
+/*
+  Natura Estética Integral — landing "tablero de salidas".
+  Mundo: un panel split-flap mecánico. Negro-tablero, solapas marfil, un ámbar señal que
+  carga el estado a escala de página. El movimiento (el flip) es la identidad.
+*/
+
+@theme {
+  --color-tablero: #141009; /* negro-tablero cálido, el fondo de la sala */
+  --color-tablero-hondo: #0b0806; /* el pozo detrás de las solapas */
+  --color-solapa: #e7ddc8; /* la cara de la solapa: marfil cálido, como una Solari real */
+  --color-solapa-alta: #efe6d4; /* la mitad superior de la solapa, un punto más clara */
+  --color-solapa-tinta: #171209; /* la tinta oscura de los caracteres sobre la solapa marfil */
+  --color-solapa-luz: #f6f0e1; /* el filo de luz bajo la costura */
+  --color-marfil: #f4efe3; /* la tinta clara: texto sobre el tablero oscuro */
+  --color-marfil-tenue: #bcb298; /* texto secundario, teñido del marfil, nunca gris */
+  --color-marfil-débil: #9a8f72; /* metadatos de baja jerarquía; ≥4.5:1 sobre el tablero */
+  --color-senal: #f0a62e; /* el ámbar: estado, la acción, el acento único */
+  --color-senal-viva: #ffc24d; /* el ámbar encendido, hover de la acción */
+  --color-costura: #b1a688; /* la línea de pliegue entre las dos mitades de la solapa */
+
+  --font-display: var(--fuente-display);
+  --font-body: var(--fuente-body);
+  --font-mono: var(--fuente-mono);
+
+  /* Curvas de emil: ease-out fuerte para lo que entra, drawer para la solapa. */
+  --ease-salida: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-solapa: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  /* El tabular lo pide todo lo que es dato de tablero. */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  background: var(--color-tablero);
+}
+
+body {
+  background: var(--color-tablero);
+  color: var(--color-marfil);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* ---- superficies del navegador, tematizadas (nada de defaults) ---- */
+::selection {
+  background: var(--color-senal);
+  color: var(--color-tablero);
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-tablero-hondo);
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2318;
+  border: 3px solid var(--color-tablero-hondo);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3020;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-senal);
+  outline-offset: 3px;
+}
+
+/* ---- utilidades de familia ---- */
+.ancha {
+  font-family: var(--font-display);
+}
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-variant-numeric: tabular-nums;
+}
+.cifra {
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================================
+   SPLIT-FLAP
+   Cada celda es una solapa de reloj-de-aletas: dos mitades fijas y dos hojas
+   que giran. La mitad de arriba de lo viejo cae (0→-90), la de abajo de lo
+   nuevo entra (90→0). La costura siempre visible lo lee como mecánico.
+   ========================================================================= */
+
+.flap {
+  --alto: var(--flap-alto, 1em);
+  --ancho: var(--flap-ancho, 0.72em);
+  position: relative;
+  display: inline-block;
+  width: var(--ancho);
+  height: var(--alto);
+  margin: 0 0.028em;
+  perspective: 180px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: var(--alto);
+  text-align: center;
+  color: var(--color-solapa-tinta);
+  vertical-align: top;
+}
+
+.flap__half {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  overflow: hidden;
+  background: var(--color-solapa);
+  box-sizing: border-box;
+}
+.flap__half span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: var(--alto);
+  display: block;
+}
+.flap__half--top {
+  top: 0;
+  border-radius: 0.06em 0.06em 0 0;
+  background: var(--color-solapa-alta);
+  border-bottom: 0.5px solid var(--color-costura);
+  align-items: flex-end;
+}
+.flap__half--top span {
+  top: 0;
+}
+.flap__half--bottom {
+  bottom: 0;
+  border-radius: 0 0 0.06em 0.06em;
+  border-top: 0.5px solid var(--color-solapa-luz);
+}
+.flap__half--bottom span {
+  bottom: 0;
+  top: auto;
+}
+
+.flap__leaf {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  overflow: hidden;
+  background: var(--color-solapa);
+  box-sizing: border-box;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+.flap__leaf span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: var(--alto);
+  display: block;
+}
+.flap__leaf--top {
+  top: 0;
+  transform-origin: bottom;
+  background: var(--color-solapa-alta);
+  border-bottom: 0.5px solid var(--color-costura);
+  animation: flap-top var(--flap-dur, 150ms) var(--ease-solapa) forwards;
+}
+.flap__leaf--top span {
+  top: 0;
+}
+.flap__leaf--bottom {
+  bottom: 0;
+  transform-origin: top;
+  transform: rotateX(90deg);
+  border-top: 0.5px solid var(--color-solapa-luz);
+  animation: flap-bottom var(--flap-dur, 150ms) var(--ease-solapa) forwards;
+}
+.flap__leaf--bottom span {
+  bottom: 0;
+  top: auto;
+}
+
+@keyframes flap-top {
+  0% {
+    transform: rotateX(0deg);
+  }
+  100% {
+    transform: rotateX(-90deg);
+  }
+}
+@keyframes flap-bottom {
+  0%,
+  50% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+/* La celda en reposo, sin giro: una sola cara con costura. */
+.flap__rest {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-solapa);
+  border-radius: 0.06em;
+  box-sizing: border-box;
+  /* La solapa marfil se apoya sobre el tablero negro: una sombra con offset y blur, no un halo. */
+  box-shadow:
+    0 2px 7px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 var(--color-solapa-luz);
+}
+.flap__rest::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--color-costura);
+  box-shadow: 0 0.5px 0 var(--color-solapa-luz);
+}
+
+/* =========================================================================
+   Movimiento de entrada (secciones) y reduced-motion
+   ========================================================================= */
+.sube {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 560ms var(--ease-salida),
+    transform 560ms var(--ease-salida);
+}
+.sube[data-visible="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* El chip de ESTADO flipea como una solapa al entrar en vista: legible y con el gesto del
+   tablero asentándose. La perspectiva la pone el contenedor de la celda. */
+.flip-in {
+  opacity: 0;
+  transform: rotateX(-90deg);
+  transform-origin: top center;
+  transition:
+    transform 420ms var(--ease-solapa),
+    opacity 220ms ease;
+}
+.flip-in[data-visible="true"] {
+  opacity: 1;
+  transform: rotateX(0deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flap__leaf--top,
+  .flap__leaf--bottom {
+    animation: none !important;
+  }
+  .flap__leaf {
+    display: none !important;
+  }
+  .sube,
+  .flip-in {
+    transition: opacity 240ms ease;
+    transform: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* El punto "en vivo" del masthead. */
+.punto-vivo {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-senal);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-senal) 70%, transparent);
+  animation: latido 2.4s var(--ease-salida) infinite;
+}
+@keyframes latido {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-senal) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 0.5rem transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .punto-vivo {
+    animation: none;
+  }
+}
+
+/* La muesca que marca el estado "con valoración" en el tablero (estado por estructura). */
+.muesca {
+  position: relative;
+}
+.muesca::before {
+  content: "";
+  position: absolute;
+  left: -0.9rem;
+  top: 50%;
+  width: 0.45rem;
+  height: 1px;
+  background: currentColor;
+  transform: translateY(-50%);
+  opacity: 0.6;
+}

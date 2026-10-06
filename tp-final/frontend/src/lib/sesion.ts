@@ -1,46 +1,50 @@
 'use client';
 
-import { SLUG, type CodigoError } from './cliente';
+import type { CodigoError } from './cliente';
 
 /**
- * Un token es de un solo centro y de un solo rol. La clave los lleva a los dos: un token de
- * `lo-de-lili` contra el catálogo de `bella-piel` da 403, también en las rutas públicas.
+ * Un token de clienta o de administradora es de un solo centro y de un solo rol: la clave los
+ * lleva a los dos (`turnos:${slug}:${rol}`), así un token de `lo-de-lili` no se usa contra
+ * `bella-piel`. El token de plataforma es global: no pertenece a ningún centro, así que su
+ * clave no lleva slug.
  */
-type Rol = 'clienta' | 'admin';
+type Rol = 'clienta' | 'admin' | 'plataforma';
 
-function clave(rol: Rol): string {
-  return `turnos:${SLUG}:${rol}`;
+function clave(rol: Rol, slug?: string): string {
+  if (rol === 'plataforma') return 'turnos:plataforma';
+  if (!slug) throw new Error(`El rol ${rol} necesita un slug de centro`);
+  return `turnos:${slug}:${rol}`;
 }
 
 // El almacenamiento puede fallar o venir vacío: ventana privada, datos borrados, permisos.
 // Nada de esto debe romper una pantalla.
-export function leerToken(rol: Rol): string | null {
+export function leerToken(rol: Rol, slug?: string): string | null {
   try {
-    return window.localStorage.getItem(clave(rol));
+    return window.localStorage.getItem(clave(rol, slug));
   } catch {
     return null;
   }
 }
 
-export function guardarToken(rol: Rol, token: string): void {
+export function guardarToken(rol: Rol, token: string, slug?: string): void {
   try {
-    window.localStorage.setItem(clave(rol), token);
+    window.localStorage.setItem(clave(rol, slug), token);
   } catch {
     // Sin persistencia la sesión dura lo que dura la pestaña, que es mejor que romper.
   }
 }
 
-export function borrarToken(rol: Rol): void {
+export function borrarToken(rol: Rol, slug?: string): void {
   try {
-    window.localStorage.removeItem(clave(rol));
+    window.localStorage.removeItem(clave(rol, slug));
   } catch {
     // Nada que hacer: el token ya no se va a poder leer igual.
   }
 }
 
 /** No hay endpoint de cierre de sesión: el token no tiene estado en el servidor. */
-export function cerrarSesion(rol: Rol): void {
-  borrarToken(rol);
+export function cerrarSesion(rol: Rol, slug?: string): void {
+  borrarToken(rol, slug);
 }
 
 /**

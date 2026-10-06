@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 
 /**
- * El bloque de aviso del sistema: campo verde humo, borde duro.
+ * El bloque de aviso del sistema, de borde duro. El estado se codifica por campo, como todo
+ * el mundo: el dato de apoyo va en campo verde humo; el error invierte a campo tinta macizo
+ * con texto papel, así se distingue por estructura y no por una franja de color.
  *
- * El tono decide el rol de accesibilidad, que es lo que cambia de verdad: un `alert`
- * interrumpe al lector de pantalla y un `status` espera a que termine la frase en curso. Un
- * error que no interrumpe se lee tarde; un dato de apoyo que interrumpe, molesta.
+ * El tono decide además el rol de accesibilidad: un `alert` interrumpe al lector de pantalla
+ * y un `status` espera a que termine la frase en curso.
  */
 export function Aviso({
   tono = 'info',
@@ -20,10 +21,8 @@ export function Aviso({
   return (
     <p
       role={esError ? 'alert' : 'status'}
-      // El error se marca con la barra de tinta además del texto: el color por sí solo no
-      // alcanza, y acá los dos tonos comparten fondo.
-      className={`bg-verde-humo px-6 py-5 text-[0.95rem] leading-relaxed text-tinta ${
-        esError ? 'border-l-2 border-tinta' : ''
+      className={`px-6 py-5 text-[0.95rem] leading-relaxed ${
+        esError ? 'bg-tinta text-papel' : 'bg-verde-humo text-tinta'
       } ${className}`}
     >
       {children}

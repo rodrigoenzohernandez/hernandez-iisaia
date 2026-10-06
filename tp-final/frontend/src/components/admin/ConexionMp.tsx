@@ -4,13 +4,14 @@ import { useState } from 'react';
 import { Aviso } from '@/components/Aviso';
 import { Boton } from '@/components/Boton';
 import { Tilde } from '@/components/Iconos';
-import { ErrorApi, SLUG } from '@/lib/cliente';
+import { ErrorApi } from '@/lib/cliente';
 import {
   desconectarMercadoPago,
   urlAutorizacionMercadoPago,
   type CuentaMercadoPago,
 } from '@/lib/admin';
 import { recordarSlugMp } from '@/lib/sesion';
+import { useSlug } from '@/hooks/useSlug';
 import { formatearFechaLarga } from '@/lib/formato';
 
 /**
@@ -30,6 +31,7 @@ export function ConexionMp({
   token: string;
   onCambio: () => void;
 }) {
+  const slug = useSlug();
   const [trabajando, setTrabajando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmandoBaja, setConfirmandoBaja] = useState(false);
@@ -38,9 +40,9 @@ export function ConexionMp({
     setTrabajando(true);
     setError(null);
     try {
-      const { url } = await urlAutorizacionMercadoPago(token);
+      const { url } = await urlAutorizacionMercadoPago(slug, token);
       // El slug se guarda ANTES de irnos: la vuelta cae en una URL fija y así sabe a dónde volver.
-      recordarSlugMp(SLUG);
+      recordarSlugMp(slug);
       window.location.href = url;
     } catch (e) {
       if (!(e instanceof ErrorApi)) throw e;
@@ -54,7 +56,7 @@ export function ConexionMp({
     setTrabajando(true);
     setError(null);
     try {
-      await desconectarMercadoPago(token);
+      await desconectarMercadoPago(slug, token);
       setConfirmandoBaja(false);
       onCambio();
     } catch (e) {

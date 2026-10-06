@@ -6,6 +6,7 @@ import { EncabezadoSeccion } from './EncabezadoSeccion';
 import { PanelAnonimo, PanelCargando, PanelError } from './EstadosPanel';
 import { EditorSemana, type Franja } from './EditorSemana';
 import { usePanel } from './usePanel';
+import { useSlug } from '@/hooks/useSlug';
 
 type Datos = { franjas: Franja[]; plan: Plan };
 
@@ -13,11 +14,12 @@ let contadorKey = 0;
 const nuevaKey = () => `f${contadorKey++}`;
 
 export function Horarios() {
-  const { estado, recargar, salir } = usePanel<Datos>(async (token) => {
+  const slug = useSlug();
+  const { estado, recargar, salir } = usePanel<Datos>({ rol: 'admin', slug }, async (token) => {
     const [ventanas, planes, suscripcion] = await Promise.all([
-      obtenerVentanas(token),
+      obtenerVentanas(slug, token),
       listarPlanes(),
-      obtenerSuscripcion(token),
+      obtenerSuscripcion(slug, token),
     ]);
     const plan = planes.find((p) => p.id === suscripcion.plan) ?? planes[0];
     return {

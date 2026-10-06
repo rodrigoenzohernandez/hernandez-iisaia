@@ -11,16 +11,17 @@ export const metadata: Metadata = {
     'Elegí el tratamiento, mirá los horarios libres de la agenda real y reservá tu turno en tres pasos.',
 };
 
-export default async function Reservar(props: PageProps<'/reservar'>) {
+export default async function Reservar(props: PageProps<'/[slug]/reservar'>) {
+  const { slug } = await props.params;
   const { servicio: buscado } = await props.searchParams;
-  const servicios = await listarServicios().catch(() => [] as Servicio[]);
+  const servicios = await listarServicios(slug).catch(() => [] as Servicio[]);
 
   const id = Array.isArray(buscado) ? buscado[0] : buscado;
   const inicial = servicios.find((s) => s.id === id) ?? null;
 
   return (
     <>
-      <Encabezado />
+      <Encabezado slug={slug} />
 
       <main className="relative bg-papel px-6 py-16 lg:px-12 lg:py-24">
         <Espina />
@@ -42,7 +43,7 @@ export default async function Reservar(props: PageProps<'/reservar'>) {
         </div>
       </main>
 
-      <Pie />
+      <Pie slug={slug} />
     </>
   );
 }

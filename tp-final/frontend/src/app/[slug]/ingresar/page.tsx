@@ -10,10 +10,11 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-export default function Ingresar() {
+export default async function Ingresar(props: PageProps<'/[slug]/ingresar'>) {
+  const { slug } = await props.params;
   return (
     <>
-      <Encabezado />
+      <Encabezado slug={slug} />
 
       <main className="relative bg-papel px-6 py-20 lg:px-12 lg:py-28">
         <Espina />
@@ -22,7 +23,7 @@ export default function Ingresar() {
         </div>
       </main>
 
-      <Pie />
+      <Pie slug={slug} />
     </>
   );
 }

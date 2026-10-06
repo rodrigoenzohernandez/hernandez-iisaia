@@ -12,6 +12,7 @@ import { EncabezadoSeccion } from './EncabezadoSeccion';
 import { PanelAnonimo, PanelCargando, PanelError } from './EstadosPanel';
 import { Suscripcion } from './Suscripcion';
 import { usePanel } from './usePanel';
+import { useSlug } from '@/hooks/useSlug';
 
 type Datos = {
   cuenta: CuentaMercadoPago;
@@ -20,10 +21,11 @@ type Datos = {
 };
 
 export function Cobros() {
-  const { estado, recargar, salir } = usePanel<Datos>(async (token) => {
+  const slug = useSlug();
+  const { estado, recargar, salir } = usePanel<Datos>({ rol: 'admin', slug }, async (token) => {
     const [cuenta, suscripcion, planes] = await Promise.all([
-      obtenerCuentaMercadoPago(token),
-      obtenerSuscripcion(token),
+      obtenerCuentaMercadoPago(slug, token),
+      obtenerSuscripcion(slug, token),
       listarPlanes(),
     ]);
     return { cuenta, suscripcion, planes };

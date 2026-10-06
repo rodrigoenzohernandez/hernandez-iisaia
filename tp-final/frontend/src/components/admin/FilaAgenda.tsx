@@ -12,6 +12,7 @@ import {
   reprogramarReserva,
 } from '@/lib/admin';
 import { formatearFechaLarga, formatearPrecio } from '@/lib/formato';
+import { useSlug } from '@/hooks/useSlug';
 
 type Accion = null | 'cancelar' | 'reprogramar';
 
@@ -26,6 +27,7 @@ export function FilaAgenda({
   token: string;
   onCambio: () => void;
 }) {
+  const slug = useSlug();
   const [accion, setAccion] = useState<Accion>(null);
   const [trabajando, setTrabajando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export function FilaAgenda({
         <div className="mt-6 flex flex-wrap items-center gap-4">
           {pendiente && (
             <Boton
-              onClick={() => correr(() => confirmarReserva(token, reserva.id))}
+              onClick={() => correr(() => confirmarReserva(slug, token, reserva.id))}
               disabled={trabajando}
               className="py-2.5 text-[0.72rem]"
             >
@@ -105,7 +107,7 @@ export function FilaAgenda({
           {confirmada && (
             <Boton
               tono="borde"
-              onClick={() => correr(() => marcarAusente(token, reserva.id))}
+              onClick={() => correr(() => marcarAusente(slug, token, reserva.id))}
               disabled={trabajando}
               className="py-2.5 text-[0.72rem]"
             >
@@ -130,7 +132,7 @@ export function FilaAgenda({
               </Aviso>
               <div className="mt-6 flex flex-wrap items-center gap-4">
                 <Boton
-                  onClick={() => correr(() => cancelarReserva(token, reserva.id, true))}
+                  onClick={() => correr(() => cancelarReserva(slug, token, reserva.id, true))}
                   disabled={trabajando}
                   className="py-2.5 text-[0.72rem]"
                 >
@@ -138,7 +140,7 @@ export function FilaAgenda({
                 </Boton>
                 <Boton
                   tono="borde"
-                  onClick={() => correr(() => cancelarReserva(token, reserva.id, false))}
+                  onClick={() => correr(() => cancelarReserva(slug, token, reserva.id, false))}
                   disabled={trabajando}
                   className="py-2.5 text-[0.72rem]"
                 >
@@ -155,7 +157,7 @@ export function FilaAgenda({
               </Aviso>
               <div className="mt-6 flex flex-wrap items-center gap-4">
                 <Boton
-                  onClick={() => correr(() => cancelarReserva(token, reserva.id, false))}
+                  onClick={() => correr(() => cancelarReserva(slug, token, reserva.id, false))}
                   disabled={trabajando}
                   className="py-2.5 text-[0.72rem]"
                 >
@@ -183,7 +185,7 @@ export function FilaAgenda({
                   hora={null}
                   recargar={0}
                   onElegir={(fecha, hora) =>
-                    correr(() => reprogramarReserva(token, reserva.id, fecha, hora))
+                    correr(() => reprogramarReserva(slug, token, reserva.id, fecha, hora))
                   }
                 />
               </div>

@@ -9,6 +9,7 @@ import { Flecha, FlechaIzquierda } from '@/components/Iconos';
 import { ErrorApi } from '@/lib/cliente';
 import { iniciarSesionClienta, pedirCodigo } from '@/lib/cuenta';
 import { guardarToken } from '@/lib/sesion';
+import { useSlug } from '@/hooks/useSlug';
 
 const LARGO_CODIGO = 6;
 
@@ -21,6 +22,7 @@ const LARGO_CODIGO = 6;
  */
 export function Ingreso() {
   const router = useRouter();
+  const slug = useSlug();
   const [paso, setPaso] = useState<'email' | 'codigo'>('email');
   const [email, setEmail] = useState('');
   const [codigo, setCodigo] = useState('');
@@ -33,7 +35,7 @@ export function Ingreso() {
     setEnviando(true);
     setError(null);
     try {
-      const { expiraEnMinutos } = await pedirCodigo(email.trim());
+      const { expiraEnMinutos } = await pedirCodigo(slug, email.trim());
       setMinutos(expiraEnMinutos);
       setCodigo('');
       setPaso('codigo');
@@ -51,9 +53,9 @@ export function Ingreso() {
     setEnviando(true);
     setError(null);
     try {
-      const sesion = await iniciarSesionClienta(email.trim(), codigo.trim());
-      guardarToken('clienta', sesion.accessToken);
-      router.replace('/mis-turnos');
+      const sesion = await iniciarSesionClienta(slug, email.trim(), codigo.trim());
+      guardarToken('clienta', sesion.accessToken, slug);
+      router.replace(`/${slug}/mis-turnos`);
     } catch (e) {
       if (!(e instanceof ErrorApi)) throw e;
       setError(e.message);

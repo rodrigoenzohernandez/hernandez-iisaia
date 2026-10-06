@@ -10,12 +10,16 @@ import { EncabezadoSeccion } from './EncabezadoSeccion';
 import { PanelAnonimo, PanelCargando, PanelError } from './EstadosPanel';
 import { FormularioServicio } from './FormularioServicio';
 import { usePanel } from './usePanel';
+import { useSlug } from '@/hooks/useSlug';
 
 type Edicion = null | { servicio: Servicio | null };
 
 export function Tratamientos() {
   // Con token de administradora, el listado trae también los dados de baja.
-  const { estado, recargar, salir } = usePanel<Servicio[]>((token) => listarServicios(token));
+  const slug = useSlug();
+  const { estado, recargar, salir } = usePanel<Servicio[]>({ rol: 'admin', slug }, (token) =>
+    listarServicios(slug, token),
+  );
   const [edicion, setEdicion] = useState<Edicion>(null);
 
   if (estado.tipo === 'anonimo') return <PanelAnonimo />;
@@ -89,6 +93,7 @@ function FilaServicio({
   onEditar: () => void;
   onCambio: () => void;
 }) {
+  const slug = useSlug();
   const [trabajando, setTrabajando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,7 +101,7 @@ function FilaServicio({
     setTrabajando(true);
     setError(null);
     try {
-      await actualizarServicio(token, servicio.id, { activo: !servicio.activo });
+      await actualizarServicio(slug, token, servicio.id, { activo: !servicio.activo });
       onCambio();
     } catch (e) {
       if (!(e instanceof ErrorApi)) throw e;
