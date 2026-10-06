@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { CENTRO } from '@/lib/centro';
+import { nombreDeSlug } from '@/lib/centro';
 import { Marca } from './Marca';
 
-export function Encabezado({ sobreFoto = false }: { sobreFoto?: boolean }) {
+export function Encabezado({ slug, sobreFoto = false }: { slug: string; sobreFoto?: boolean }) {
   return (
     <header
       className={
@@ -12,15 +12,25 @@ export function Encabezado({ sobreFoto = false }: { sobreFoto?: boolean }) {
       }
     >
       <div className="mx-auto flex max-w-[1380px] items-center justify-between gap-6 px-6 py-6 lg:px-12">
-        <Link href="/" aria-label={`${CENTRO.nombre} — inicio`}>
-          <Marca />
+        <Link href={`/${slug}`} aria-label={`${nombreDeSlug(slug)} — inicio`}>
+          <Marca slug={slug} />
         </Link>
-        <Link
-          href="/reservar"
-          className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] underline decoration-verde decoration-2 transition-colors duration-200 hover:text-verde"
-        >
-          Reservar turno
-        </Link>
+        {/* Dos enlaces, una sola jerarquía: el subrayado verde es de la acción primaria y
+            no se reparte. "Mis turnos" va sin él, que es la diferencia que se ve. */}
+        <nav className="flex items-center gap-7 sm:gap-9">
+          <Link
+            href={`/${slug}/mis-turnos`}
+            className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] opacity-70 transition-opacity duration-200 hover:opacity-100"
+          >
+            Mis turnos
+          </Link>
+          <Link
+            href={`/${slug}/reservar`}
+            className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] underline decoration-verde decoration-2 transition-colors duration-200 hover:text-verde"
+          >
+            Reservar turno
+          </Link>
+        </nav>
       </div>
     </header>
   );

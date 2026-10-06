@@ -14,6 +14,7 @@ import {
   sumarMeses,
 } from '@/lib/formato';
 import { FlechaIzquierda, Flecha } from '@/components/Iconos';
+import { useSlug } from '@/hooks/useSlug';
 
 const LETRAS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 // El backend rechaza con `too_far_ahead` más allá de noventa días, así que el calendario
@@ -41,6 +42,7 @@ type Props = {
 };
 
 export function SelectorFecha({ servicio, fecha, hora, onElegir, recargar }: Props) {
+  const slug = useSlug();
   const hoy = hoyEnCentro();
   const ultimo = sumarDias(hoy, DIAS_MAXIMOS);
 
@@ -60,7 +62,7 @@ export function SelectorFecha({ servicio, fecha, hora, onElegir, recargar }: Pro
   useEffect(() => {
     if (!dia || !clave) return;
     let vigente = true;
-    obtenerDisponibilidad(servicio.id, dia)
+    obtenerDisponibilidad(slug, servicio.id, dia)
       .then((disponibilidad) => {
         if (vigente) setRespuesta({ clave, slots: disponibilidad.data, error: null });
       })
@@ -75,7 +77,7 @@ export function SelectorFecha({ servicio, fecha, hora, onElegir, recargar }: Pro
     return () => {
       vigente = false;
     };
-  }, [servicio.id, dia, clave]);
+  }, [servicio.id, dia, clave, slug]);
 
   const listo = respuesta?.clave === clave;
   const cargando = clave !== null && !listo;

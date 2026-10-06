@@ -9,64 +9,84 @@ esta entrega: esto cubre los cinco endpoints públicos del contrato, no los once
 
 ## Cómo se ejecuta
 
-Hacen falta **Node 24** (`nvm use 24`; con Node 18 Next no arranca) y el backend corriendo.
+Hacen falta **Node 24** (`nvm use 24`; con Node 18 Next no arranca) y Docker.
 
-Primero la API, desde `../backend`:
-
-```bash
-nvm use && cp .env.example .env    # completar JWT_SECRET y SEED_ADMIN_PASSWORD
-npm install && npm run setup       # levanta Postgres en Docker, migra y siembra
-THROTTLE_LIMIT=1000 npm run start:dev
-```
-
-El `THROTTLE_LIMIT` alto no es un atajo: el alta de reserva acepta cinco peticiones por minuto
-y por IP, así que probar el formulario agota el límite en treinta segundos y la API empieza a
-devolver `429`.
-
-Después el frontend:
+Tres secretos, sin default a propósito; generalos una vez:
 
 ```bash
-nvm use 24
-npm install
-cp .env.example .env.local
-npm run dev                        # http://localhost:3101
+openssl rand -base64 48   # JWT_SECRET
+openssl rand -base64 32   # ENCRYPTION_KEY  (cifra los tokens de Mercado Pago; sin ella la API no arranca)
+openssl rand -base64 18   # SEED_ADMIN_PASSWORD
 ```
 
-El puerto **3101 no es decorativo**: es el que el backend trae en su `CORS_ORIGIN` por omisión.
-Si lo cambiás acá, cambialo también allá.
+### Opción A — Todo con Docker
 
-| Variable | Para qué |
-| --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | Raíz de la API. Por omisión `http://localhost:3100/api/v1` |
-| `NEXT_PUBLIC_TENANT_SLUG` | El centro dentro de la plataforma multi-tenant: `lo-de-lili` |
-
-### O todo junto con Docker
-
-Desde [`../`](..) hay un `docker-compose.yml` que levanta la base, la API y este frontend sin
-instalar Node:
+Desde [`../`](..), un solo comando levanta la base (5442), la API (3100) y este frontend (3101):
 
 ```bash
 cd ..
-cp .env.example .env     # completar JWT_SECRET y SEED_ADMIN_PASSWORD
+cp .env.example .env            # pegá los 3 secretos
 docker compose up -d --build
 ```
 
-La migración y la siembra inicial corren solas y en orden. El seed de Prisma borra y recrea
-—empieza por las reservas—, así que en vez de ejecutarlo a ciegas el compose primero consulta
-si la tabla `Tenant` tiene filas: siembra si está vacía y no toca nada si ya hay datos. Eso
-hace que repetir `docker compose up` sea seguro. Para volver al estado inicial a propósito,
-borrando lo cargado:
+La migración y la siembra corren solas y en orden. El seed de Prisma borra y recrea —empieza por
+las reservas—, así que en vez de ejecutarlo a ciegas el compose primero consulta si la tabla
+`Tenant` tiene filas: siembra si está vacía y no toca nada si ya hay datos. Por eso repetir
+`docker compose up` es seguro. Para volver al estado inicial a propósito, borrando lo cargado:
 
 ```bash
 docker compose --profile resembrar run --rm resembrar
 ```
 
+### Opción B — Modo dev con recarga en caliente
+
+Para iterar el front con hot reload, en dos terminales:
+
+```bash
+# 1) backend (Postgres en Docker + API afuera), desde ../backend
+nvm use && cp .env.example .env        # pegá los 3 secretos
+npm install && npm run setup           # levanta Postgres, migra y siembra
+THROTTLE_LIMIT=1000 npm run start:dev  # API en 3100
+
+# 2) este frontend
+nvm use 24 && cp .env.example .env.local
+npm run dev                            # http://localhost:3101
+```
+
+El `THROTTLE_LIMIT` alto no es un atajo: el alta de reserva acepta cinco peticiones por minuto y
+por IP, así que probar el formulario agota el límite en treinta segundos y la API devuelve `429`.
+
+El puerto **3101 no es decorativo**: es el que el backend trae en su `CORS_ORIGIN` por omisión. Si
+lo cambiás acá, cambialo también allá. No corras la opción A y la B a la vez: las dos usan el 3101.
+
+### Puertos, URLs y credenciales
+
+| Dónde | URL |
+| --- | --- |
+| Landing de plataforma | `http://localhost:3101/` |
+| Registrar un centro | `http://localhost:3101/registrarse` |
+| Login de superadmin | `http://localhost:3101/plataforma/ingresar` |
+| Un centro · su panel | `http://localhost:3101/lo-de-lili` · `…/lo-de-lili/admin/ingresar` |
+| API · docs | `http://localhost:3100/api/v1` · `…/api/v1/docs` |
+
+El seed crea `lo-de-lili` (Profesional), `bella-piel` (Básico) y `centro-cerrado` (desactivado).
+Todas las cuentas de administración y la de la plataforma entran con la contraseña de
+`SEED_ADMIN_PASSWORD`: `lili@lodelili.test`, `admin@bellapiel.test`, `superadmin@turnos.test`. Las
+clientas (`clienta@<centro>.test`) entran con un código que la API imprime en su consola
+(`docker compose logs -f backend` en la opción A).
+
+| Variable | Para qué |
+| --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | Raíz de la API. Por omisión `http://localhost:3100/api/v1` |
+| `API_BASE_URL_INTERNA` | Solo en Docker: la que usa el servidor de Next para traer datos |
+
 **Las dos direcciones de la API no son la misma.** `NEXT_PUBLIC_API_BASE_URL` se hornea en el
 bundle del navegador durante el build y tiene que ser una dirección que resuelva la clienta
 (`http://localhost:3100/api/v1`); `API_BASE_URL_INTERNA` la lee el servidor de Next en tiempo de
-ejecución para las páginas que traen datos del lado del servidor, y ahí `localhost` sería el
-propio contenedor del frontend, así que apunta a `http://backend:3100/api/v1`. Fuera de Docker
-las dos coinciden y no hace falta definir la interna.
+ejecución para las páginas que traen datos del lado del servidor, y ahí `localhost` sería el propio
+contenedor del frontend, así que apunta a `http://backend:3100/api/v1`. Fuera de Docker las dos
+coinciden y no hace falta definir la interna. El slug del centro **ya no se hornea**: viaja en la
+URL (`/[slug]/...`), así que un solo build sirve a todos los centros.
 
 ## El nombre en pantalla y el slug de la API son distintos
 

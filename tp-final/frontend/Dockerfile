@@ -7,13 +7,12 @@ RUN npm ci
 
 COPY . .
 
-# Las NEXT_PUBLIC_* se hornean en el bundle del navegador durante el build, así que tienen
-# que entrar como ARG y no como variable de entorno del contenedor: definirlas en `environment`
-# del compose no tendría ningún efecto sobre el JavaScript que recibe la clienta.
+# La NEXT_PUBLIC_* se hornea en el bundle del navegador durante el build, así que entra como ARG
+# y no como variable de entorno del contenedor: definirla en `environment` del compose no tendría
+# ningún efecto sobre el JavaScript que recibe la clienta. El slug del centro ya no se hornea:
+# viaja en la URL (/[slug]/...), un mismo build sirve a todos los centros.
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:3100/api/v1
-ARG NEXT_PUBLIC_TENANT_SLUG=lo-de-lili
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
-ENV NEXT_PUBLIC_TENANT_SLUG=$NEXT_PUBLIC_TENANT_SLUG
 
 RUN npm run build
 

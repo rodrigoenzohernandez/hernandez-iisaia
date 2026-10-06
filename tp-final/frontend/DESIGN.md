@@ -61,6 +61,13 @@ typography:
     fontWeight: 400
     lineHeight: 1.4
     fontFeature: "'tnum' 1"
+  titulo-panel:
+    fontFamily: "Archivo, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "clamp(1.5rem, 2.8vw, 2.3rem)"
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: "-0.025em"
+    fontVariation: "'wdth' 125"
 rounded:
   duro: "0px"
   foco: "1px"
@@ -165,6 +172,8 @@ La densidad es alta pero ordenada por un solo eje vertical. Verde oliva vivo com
 
 Un solo sistema tipográfico variable llevado a los dos extremos de su eje de ancho hace el trabajo que en otro sistema pediría una segunda familia: caps anchas y pesadas para las declaraciones, angosta para las fichas. Se rechaza explícitamente el arreglo de categoría: foto difuminada, serif fina, crema, y un formulario de contacto que promete que alguien va a responder.
 
+El mundo viste ahora un producto multi-tenant. Las superficies de un centro derivan su marca del slug de la URL (`nombreDeSlug`, title-case), y un puñado de superficies de plataforma —landing de venta, alta de centro, ingreso y panel de superadmin— llevan la marca propia «Turnos». Todas corren en el mismo régimen oliva, con la misma espina, la misma tipografía en dos anchos y las mismas reglas de estado: cambia el nombre en la marca, no el mundo. La landing de plataforma es de registro persuasivo (hero de campo verde, pasos 01/02/03, planes, cierre) y reusa pieza por pieza el sistema de la landing de centro.
+
 **Key Characteristics:**
 - Verde a escala de campo, nunca salpicado como acento decorativo.
 - Cero radio y cero sombra: la profundidad es campo de color y foto a sangre.
@@ -212,6 +221,16 @@ Una paleta de tres familias —verde de campo, tinta carbón verdoso, papel verd
 - **Label** (600, 0.58–0.8rem, tracking 0.12em–0.3em, caps, angosta): etiquetas de formulario, rótulos de dato, nav, botones y las etiquetas del pie y del panel de resumen. El tracking sube con el tamaño chico: 0.3em a 0.62rem, 0.12em a 0.8rem.
 - **Ordinal** (800, `clamp(2.4rem, 4vw, 3.6rem)`, lh 0.85, tracking -0.035em, ancha, tabular): los 01/02/03 de la landing, en verde hondo. En el riel de pasos del flujo baja a 1.2rem y el peso codifica el estado (800 en curso / 600 recorrido / 300 no alcanzado).
 
+### Escala Operación (panel)
+
+Las superficies de Operación —panel de administración, cuenta de clienta y las superficies de plataforma (panel de superadmin)— densifican el ramo con una escala de micro-rótulos y datos **medida del build, no inventada**. Son rungs fijos que extienden —no reemplazan— el ramo de la landing/reserva: `.angosta` rotula, `.cifra` da el dato, `.ancha` titula.
+
+- **Título de sección del panel** (ancha caps, 700, `clamp(1.5rem, 2.8vw, 2.3rem)`, lh 1.25, tracking -0.025em): el H1 único de cada pantalla de Operación (`EncabezadoSeccion`, `EstadosPanel`, ingresos, vuelta de pago, "Plataforma"). Es más corto que el headline de la landing (`clamp(1.6rem, 2.9vw, 2.5rem)`) a propósito, y se sostiene solo, **sin copete/eyebrow encima**.
+- **Micro-rótulos** (angosta caps, 600, tracking 0.14em–0.2em): rungs `0.82 · 0.76 · 0.72 · 0.68 · 0.66 · 0.62 · 0.6 · 0.58rem`. Encabezados de columna de tabla, rótulos `dt`, badges de estado, nav del panel, chips de filtro y de estado de centro. `0.72rem` es el ancla (= label del ramo); `0.58rem` es el piso.
+- **Datos de panel** (angosta/cifra, caja baja, 400–700): rungs `0.95 · 0.92 · 0.9 · 0.88 · 0.85 · 0.8rem`. Celdas de agenda, montos, metadatos y textos de apoyo cortos; `0.95rem` es el más usado (incluye el cuerpo del `Aviso`). `0.92rem` = cifra del ramo; `0.98rem` = campo; `1.02rem` = body.
+- **Cifras destacadas** (cifra, 700): `1.3rem` para el monto destacado (suscripción/resumen) y `1.4rem` con tracking 0.4em para el único campo de código de ingreso. Dos valores intencionales, no rungs libres. El valor de la tira de datos se apoya un escalón más abajo, en `1.1rem`, para no competir con el monto destacado.
+- **Títulos intermedios** (ancha caps): `1.22rem` (= title del ramo), `1.1rem`, `1.05rem` para sub-títulos y nombres de ficha dentro del panel.
+
 ### Named Rules
 
 **La regla de los dos extremos.** Un solo sistema tipográfico: `.ancha` (`font-stretch: 125%`) para todo lo que declara y `.angosta` (`font-stretch: 82%`) para todo lo que informa. El eje de ancho hace el trabajo expresivo que en otro sistema haría una segunda familia. No se agrega una segunda familia ni una serif de contraste.
@@ -220,15 +239,17 @@ Una paleta de tres familias —verde de campo, tinta carbón verdoso, papel verd
 
 **La regla de la caja alta corta.** Las mayúsculas son para títulos, etiquetas y botones. Ningún párrafo de lectura va en caps.
 
+**La regla de la escala de panel.** Las superficies de Operación eligen tamaño de un set fijo de rungs medidos del build (micro-rótulos 0.58→0.82rem, datos 0.8→0.95rem), no de un valor nuevo por pantalla. Un tamaño fuera de la escala es un one-off: o entra como rung nombrado o se alinea al rung vecino. El ramo de la landing/reserva queda intacto; esta escala sólo densifica hacia abajo para tablas y fichas de panel.
+
 ## Layout
 
-Un canal único gobierna las dos rutas: contenedor `max-w-[1380px]` centrado, con gutter de 1.5rem que pasa a 3rem desde 1024px. La landing apila secciones de ritmo largo (6rem de padding vertical, 8rem desde 1024px) alternando fondo papel y papel hueso, con dos secciones de fondo tinta —el bloque del centro y el pie— como anclas oscuras. El flujo de reserva usa el mismo canal con ritmo más corto (4rem / 6rem).
+Un canal único gobierna las dos rutas: contenedor `max-w-[1380px]` centrado, con gutter de 1.5rem que pasa a 3rem desde 1024px. La landing apila secciones de ritmo largo (6rem de padding vertical, 8rem desde 1024px) alternando fondo papel y papel hueso, con dos secciones de fondo tinta —el bloque del centro y el pie— como anclas oscuras. El flujo de reserva usa el mismo canal con ritmo más corto (4rem / 6rem). La landing de plataforma hereda este mismo molde: hero tinta con campo verde, pasos numerados, planes sobre papel hueso y cierre tinta.
 
 **La espina** es el riel: un `div` absoluto de 1px en `verde/45` que replica exactamente el gutter y el ancho máximo del canal, de modo que cae sobre el borde izquierdo del contenido. Todo contenedor que vive bajo la espina se despega con `pl-7` (`lg:pl-10`). Corre en todos los anchos salvo sobre el hero, donde es solo de escritorio (`hidden lg:block`): a ancho de teléfono el campo verde va a sangre y la línea le cruzaría el titular, así que ahí arranca al terminar el hero y baja sin cortes hasta el cierre.
 
-Composición del primer viewport: foto a sangre con velo de tinta (25% en móvil; degradé de 45% a transparente desde 1024px) y encima un campo verde de borde duro anclado abajo a la izquierda, que ocupa ~62% del ancho y ~70% del alto en escritorio y va a sangre completo en móvil. Asimétrico y fuera de eje, nunca centrado.
+Composición del primer viewport: foto a sangre con velo de tinta (25% en móvil; degradé de 45% a transparente desde 1024px) y encima un campo verde de borde duro anclado abajo a la izquierda, que ocupa ~62% del ancho y ~70% del alto en escritorio y va a sangre completo en móvil. Asimétrico y fuera de eje, nunca centrado. La landing de plataforma usa la misma clase de hero —campo verde a sangre en móvil, acotado a `min(46rem, 70%)` desde 1024px— con la misma regla del campo entero.
 
-Rejillas observadas: pasos en `5.5rem / 19rem / 1fr` desde 768px, alineados a baseline; destacados en 1 → 2 → 3 columnas; filas del catálogo en `1.6fr / 7rem / 8rem / 8rem / 2rem` desde 768px y en dos columnas apiladas por debajo; grilla de horarios en 3 → 4 columnas; calendario en 7 columnas fijas con `max-w-[22rem]`; paso 3 en `1fr / 20rem` con el resumen reordenado al tope en móvil.
+Rejillas observadas: pasos en `5.5rem / 19rem / 1fr` desde 768px, alineados a baseline; destacados en 1 → 2 → 3 columnas; filas del catálogo en `1.6fr / 7rem / 8rem / 8rem / 2rem` desde 768px y en dos columnas apiladas por debajo; grilla de horarios en 3 → 4 columnas; calendario en 7 columnas fijas con `max-w-[22rem]`; paso 3 en `1fr / 20rem` con el resumen reordenado al tope en móvil; planes de plataforma en 1 → 2 columnas con `max-w-[52rem]`.
 
 **La regla de la espina.** Ninguna sección se apila como banda suelta: cuelga del riel. Un bloque nuevo respeta `pl-7 / lg:pl-10` o rompe la única continuidad vertical que tiene la página.
 
@@ -245,6 +266,8 @@ El único movimiento en Z es la foto de los destacados, que escala a 1.04 en hov
 Borde duro por defecto: radio 0 en botones, campos, tarjetas, filas, avisos, horarios y días del calendario. Tres excepciones documentadas y acotadas: el anillo de foco lleva 1px de radio para que la esquina no se vea astillada, el pulgar del scrollbar es una píldora, y el sello de confirmación es un círculo de 2.75rem porque es una insignia y no una superficie.
 
 Los bordes son de 1px y siempre translúcidos sobre el fondo (`tinta/12`, `tinta/20`, `tinta/15`, `papel/12`) salvo cuando marcan estado, donde toman color pleno (`verde-hondo` en la opción de pago elegida, `verde-vivo` en el horario elegido, `tinta` en el hover del botón de borde).
+
+Una sola variante de trazo documentada: el borde **punteado** de 1px (`border-dashed border-tinta/45`), reservado a un estado de ausencia —un recurso todavía sin configurar, hoy el chip "MP sin conectar" de la tabla de centros—. Es la segunda señal (trazo punteado + texto apagado) del estado como estructura, no un adorno: fuera de ese rol, el borde es sólido.
 
 Los íconos son un set dibujado a mano en SVG de 24 de viewBox, trazo `currentColor` de 1.5, cap y join redondos, sin relleno: flecha, flecha izquierda, tilde, reloj y el sello (tres barras dentro de un círculo, los tres pasos del régimen).
 
@@ -267,20 +290,31 @@ Los íconos son un set dibujado a mano en SVG de 24 de viewBox, trazo `currentCo
 - **Focus:** el borde pasa a verde hondo y el outline por defecto se suprime en favor de ese cambio de borde; el caret es verde hondo en todo input y textarea.
 - **Placeholder:** tinta tenue.
 - **Nota de ayuda:** angosta 0.78rem en tinta tenue, enlazada por `aria-describedby`.
+- **Campo con prefijo (slug):** la entrada de dirección web agrupa un segmento de prefijo (`/…/` o `/`) y el input dentro de un mismo borde que pasa a verde / verde-hondo en `focus-within`. Sobre tinta (la entrada "entrá a tu centro" del hero de plataforma) el mismo campo se invierte: borde `papel/30`, fondo `papel/5`, texto papel, placeholder y prefijo `papel/55`. Es el campo del ramo llevado al campo oscuro, no un control nuevo.
 
 ### Chips (opción de pago)
 - **Style:** `label` clicable con borde de 1px y padding 1.25rem / 1rem; el radio real está oculto (`sr-only`).
 - **Estado:** no elegido con borde `tinta/20` (hover `tinta/45`); elegido con borde verde hondo y fondo `verde-humo/55`. El estado vive en borde **y** fondo a la vez.
 
+### Chips de estado del panel (plataforma)
+Rótulos de estado **no interactivos** en la tabla de centros, en `.angosta` caps 0.6rem tracking 0.16em, padding 0.625rem / 0.25rem. Aplican la regla del estado como estructura a un dato de estado, cada uno con dos señales:
+- **Plan:** Profesional en campo verde pleno (`bg-verde text-tinta`); Básico en borde `tinta/35` sobre transparente. Campo lleno frente a borde, no dos tintes.
+- **Conexión de Mercado Pago — tres estados:** *conectada* = campo verde lavado (`bg-verde/15 text-verde-hondo`); *a reconectar* = campo tinta macizo (`border-tinta bg-tinta text-papel`); *sin conectar* = borde **punteado** `tinta/45` más texto tinta tenue. Relleno, trazo y texto cambian a la vez; ningún estado se distingue solo por tinte.
+- **De baja:** chip `tinta/[0.06]` en tinta tenue, con la fila entera bajada a `opacity-60`.
+
+Los chips de filtro del panel (Todos / Activos / De baja) comparten la gramática del chip de plan: el activo es campo tinta pleno (`bg-tinta text-papel`); el inactivo, borde `tinta/20` (hover `tinta/45`).
+
 ### Cards / Containers
 - **Tarjeta de tratamiento:** sin caja. Foto en relación 4/5 recortada, título, línea de duración · precio en verde hondo, descripción y un "Reservar" con flecha que se desplaza 1 en hover. No hay borde ni fondo: el agrupamiento lo hace el espacio.
+- **Tarjeta de plan (landing de plataforma):** borde duro, radio 0, padding 1.75rem. El plan destacado (Profesional) es campo tinta macizo con texto papel; el Básico es sólo borde `tinta/15`. Precio en `.cifra` 1.6rem peso 700, lista de features en angosta 0.92rem. El destacado se marca por campo de color, no por sombra ni escala.
 - **Panel de resumen del turno:** fondo tinta, texto papel, padding 2rem / 1.75rem, etiquetas en caps `papel/65` y valores en `.cifra`; la seña se destaca en `.cifra .ancha` 1.3rem, peso 700, en verde.
 - **Aviso:** bloque de fondo verde humo, padding 1.25rem / 1.5rem, `role="status"`.
 
+
 ### Navigation
-- **Encabezado:** marca a la izquierda, un único enlace "Reservar turno" a la derecha en caps 0.72rem con tracking 0.18em y subrayado verde de 2px; hover tiñe el texto de verde. Sobre el hero el encabezado es transparente y absoluto con texto papel; en el resto de las rutas es una barra tinta.
-- **Marca:** sello dibujado de 1.75rem más "NATURA" en ancha caps tracking 0.2em sobre "Estética integral" en angosta 0.58rem con tracking 0.22em (0.34em desde 640px) y 70% de opacidad.
-- **Pie:** fondo tinta, tres columnas, encabezados de columna en label verde 0.62rem tracking 0.3em, horarios en `.cifra`.
+- **Encabezado:** marca a la izquierda, un único enlace "Reservar turno" (centro) o "Registrá tu centro" (plataforma) a la derecha en caps 0.72rem con tracking 0.18em y subrayado verde de 2px; hover tiñe el texto de verde. Sobre el hero el encabezado es transparente y absoluto con texto papel; en el resto de las rutas es una barra tinta. En el panel de superadmin el CTA de alta se apaga (`conRegistro = false`) y queda sólo la marca.
+- **Marca:** sello dibujado de 1.75rem (`h-7 w-7`) más el nombre en ancha caps 0.95rem tracking 0.2em. El nombre es **contenido, no constante**: en las superficies de plataforma es la marca propia «Turnos»; en las de un centro se deriva del slug con `nombreDeSlug` (title-case, fallback honesto hasta que el backend exponga el nombre real). El patrón —sello + wordmark en ancha caps— es el invariante; la bajada de dos líneas que llevaba la marca original ya no está en el build.
+- **Pie:** fondo tinta, encabezados/enlaces en label 0.62–0.7rem tracking 0.18–0.3em sobre `papel/55`, horarios en `.cifra`. El pie de la plataforma se reduce a la marca "Turnos" y un enlace "Plataforma".
 
 ### Riel de pasos (flujo de reserva)
 Lista horizontal sobre una hairline `tinta/15`. Cada paso es un botón con su ordinal tabular y su nombre; el paso en curso lleva `aria-current="step"`, texto tinta y ordinal extrabold en verde hondo; el recorrido es clicable en tinta tenue con hover a tinta; el no alcanzado va deshabilitado. El estado se codifica por **peso del numeral**, no por peso y opacidad encimados a la vez.
@@ -293,7 +327,12 @@ La interacción de firma del producto. Tres estados, distinguidos por estructura
 
 El calendario que la acompaña usa celdas cuadradas de 2.75rem en `.cifra`: día elegido en fondo tinta con texto papel y peso 700, día disponible con hover verde humo, día fuera de rango en `tinta/20` y deshabilitado. La cuenta de disponibilidad se enuncia en texto ("N de M horarios libres") dentro de un `aria-live="polite"`, y la carga **se cuenta, no gira**: "Consultando la agenda…", sin spinner.
 
-**La regla del estado como estructura.** Libre / sin cupo / elegido se distinguen por relleno, forma y texto para lector de pantalla, nunca solo por tinte. Un estado nuevo que solo cambie de color no está terminado.
+**La regla del estado como estructura.** Libre / sin cupo / elegido —y todo estado del panel: plan, conexión de MP, alta/baja— se distinguen por relleno, forma, trazo y texto para lector de pantalla, nunca solo por tinte. Un estado nuevo que solo cambie de color no está terminado.
+
+### Tira de datos (resumen de panel, componente de firma)
+El resumen de una pantalla de panel es una **tira horizontal** colgada de la espina, entre dos reglas `tinta/15` (`border-y`): un mes en micro-rótulo verde hondo (0.62rem tracking 0.2em) y, debajo, una fila de pares dato→rótulo con `flex flex-wrap gap-x-10` —valor en `.cifra .ancha` 1.1rem peso 700, rótulo pegado en `.angosta` 0.8rem tinta tenue—. **No es una grilla de tarjetas métricas:** la cifra vive al ras del texto, no en una caja con su número gigante. El 1.1rem es deliberadamente más chico que el 1.3rem del monto destacado del resumen de turno, para que la tira se lea como una fila de datos y no como un tablero de números-héroe.
+
+**La regla de la tira de datos.** El resumen de una pantalla de panel es una tira de datos colgada de la espina (`.cifra .ancha` para el valor, `.angosta` para el rótulo), nunca una grilla de tarjetas métricas con un número gigante por caja. El dato se imprime en la fila; no se enmarca.
 
 ## Do's and Don'ts
 
@@ -304,7 +343,10 @@ El calendario que la acompaña usa celdas cuadradas de 2.75rem en `.cifra`: día
 - **Do** aplicar `.cifra` a todo precio, seña, hora, fecha, duración, día del mes y ordinal.
 - **Do** elegir entre `.ancha` y `.angosta` en cada bloque de texto: declara o informa, no hay tercer registro.
 - **Do** colgar las secciones nuevas de la espina con `pl-7 / lg:pl-10`, y mantenerla en todos los anchos salvo cuando cruzaría un titular a sangre.
-- **Do** codificar todo estado con al menos dos señales: relleno más forma, o borde más fondo, o peso más color.
+- **Do** codificar todo estado con al menos dos señales: relleno más forma, o borde más fondo, o trazo más texto, o peso más color.
+- **Do** rotular un estado de panel (plan, conexión, baja) como chip con dos señales —campo lleno, borde sólido o trazo punteado, más texto—, nunca solo por color.
+- **Do** resumir una pantalla de panel con una tira de datos colgada de la espina (`.cifra .ancha` valor + `.angosta` rótulo).
+- **Do** derivar la marca del centro del slug con `nombreDeSlug`, y usar la marca propia «Turnos» sólo en las superficies de plataforma.
 - **Do** dibujar los íconos nuevos en el set existente: viewBox 24, trazo `currentColor` 1.5, sin relleno, cap y join redondos.
 - **Do** contar la carga en palabras dentro de un `aria-live` en vez de girar un spinner.
 - **Do** respetar `prefers-reduced-motion`: la reducción global ya anula transiciones y animaciones.
@@ -313,8 +355,10 @@ El calendario que la acompaña usa celdas cuadradas de 2.75rem en `.cifra`: día
 - **Don't** poner blanco, papel ni ningún claro sobre `{colors.verde}` o `{colors.verde-vivo}`.
 - **Don't** usar el verde como acento salpicado: puntitos, viñetas, iconitos sueltos, o una línea decorativa suelta.
 - **Don't** agregar radio a una superficie rectangular ni sombra a ningún elemento: el sistema es plano y de borde duro.
+- **Don't** usar el borde punteado como adorno: su único permiso es marcar un estado de ausencia (un recurso sin configurar), como segunda señal junto al texto apagado.
+- **Don't** resumir una pantalla de panel con una grilla de tarjetas métricas de número gigante: el resumen es una tira de datos colgada de la espina.
 - **Don't** introducir una segunda familia tipográfica ni una serif de contraste; el eje `wdth` de Archivo cubre el contraste.
-- **Don't** usar la micro-etiqueta en caps (0.58–0.72rem, tracking ≥0.18em) como copete decorativo encima de un titular: en este build sólo rotula un dato real —el próximo turno libre, el nombre de una columna del pie, el rótulo de un `dt`— y ese es su único permiso.
+- **Don't** usar la micro-etiqueta en caps (0.58–0.72rem, tracking ≥0.18em) como copete decorativo encima de un titular: en este build sólo rotula un dato real —el próximo turno libre, el nombre de una columna del pie, el rótulo de un `dt`, un chip de estado— y ese es su único permiso.
 - **Don't** distinguir un estado únicamente por color ni encimar peso y opacidad para marcar "no disponible": deja el elemento casi invisible.
 - **Don't** usar caja alta en párrafos de lectura ni superar las ~62ch de medida.
 - **Don't** bajar el texto de lectura sobre papel por debajo de `{colors.tinta-tenue}`, ni el texto sobre tinta por debajo de `papel/55`.

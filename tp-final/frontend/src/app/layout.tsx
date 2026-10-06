@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Archivo } from "next/font/google";
-import { CENTRO } from "@/lib/centro";
+import { PLATAFORMA } from "@/lib/centro";
 import "./globals.css";
 
 // Un solo sistema tipográfico llevado a los dos extremos del eje de ancho: caps anchas para
@@ -14,9 +14,9 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: `${CENTRO.nombre} — Reservá tu turno`,
+  title: PLATAFORMA.nombreLargo,
   description:
-    "Centro de estética integral. Elegí el tratamiento, mirá los horarios que realmente quedan libres y reservá tu turno sin crear una cuenta.",
+    "La agenda de turnos de tu centro de estética, online. Tus clientas reservan solas contra la grilla real, sin WhatsApp y sin esperar respuesta.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
