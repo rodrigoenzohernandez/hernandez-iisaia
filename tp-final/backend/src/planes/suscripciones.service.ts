@@ -113,8 +113,9 @@ export class SuscripcionesService {
         reason: `Plan ${plan.nombre} - ${tenant.nombre}`,
         amountCents: plan.precioCentavos,
         payerEmail,
+        // La pantalla del front donde vive la suscripcion.
         backUrl: esHttps(env.frontendUrl)
-          ? `${env.frontendUrl}/${tenant.slug}/admin/suscripcion`
+          ? `${env.frontendUrl}/${tenant.slug}/admin/cobros`
           : undefined,
       }),
     );

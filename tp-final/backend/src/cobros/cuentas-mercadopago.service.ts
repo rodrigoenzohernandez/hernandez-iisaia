@@ -67,9 +67,12 @@ export class CuentasMercadoPagoService {
 
   /**
    * La cuenta de MP del centro en contexto para COBRAR, o null si hoy no puede cobrar online:
-   * sin cuenta conectada, o esperando que la reconecten.
+   * sin cuenta conectada, esperando que la reconecten, o sin una URL publica donde MP avise.
+   * Un cobro sin aviso se cobra y no confirma nada: la reserva vence con la plata adentro y
+   * ningun pago queda registrado para devolverla.
    */
   async delCentro(slug: string): Promise<MercadoPago | null> {
+    if (!esHttps(env.publicApiUrl)) return null;
     const cuenta = await this.db.cuentaMercadoPago.findFirst({
       select: { accessTokenCifrado: true, requiereReconexion: true },
     });
@@ -96,8 +99,8 @@ export class CuentasMercadoPagoService {
         accessTokenCifrado,
         'tokens-de-mercado-pago',
       ),
-      // MP exige HTTPS: sin una URL publica, en desarrollo el aviso no llega y se usa un
-      // tunel, o la verificacion lo simula.
+      // MP exige HTTPS. Solo la usan los checkouts, y delCentro no cobra sin ella: en local,
+      // un tunel.
       notificationUrl: esHttps(env.publicApiUrl)
         ? `${env.publicApiUrl}/api/v1/tenants/${slug}/webhooks/mercadopago`
         : undefined,

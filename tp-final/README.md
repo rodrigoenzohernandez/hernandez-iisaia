@@ -58,8 +58,16 @@ Todos entran con la contraseña de `SEED_ADMIN_PASSWORD`: `lili@lodelili.test`,
 (`clienta@<centro>.test`) entran con un código que la API imprime en su consola.
 
 Mercado Pago es opcional. Sin credenciales, la API arranca igual y ningún centro cobra online.
-Para probar contra el sandbox sin pasar por OAuth, alcanza con las credenciales de prueba en
-`SEED_MP_ACCESS_TOKEN` y `SEED_MP_USER_ID`; el resto está en el
+Para probar contra el sandbox sin pasar por OAuth hacen falta dos cosas:
+
+- las credenciales de prueba en `SEED_MP_ACCESS_TOKEN` y `SEED_MP_USER_ID`;
+- `PUBLIC_API_URL` con una URL HTTPS que llegue a la API, donde Mercado Pago avisa los pagos.
+  En local es un túnel: `cloudflared tunnel --url http://localhost:3100`. Sin ella ningún
+  centro cobra online, porque el pago se cobraría y el turno no se confirmaría nunca.
+
+La vuelta automática al sitio después de pagar (`FRONTEND_URL`) también pide HTTPS, porque
+Mercado Pago descarta las URLs `http://localhost`. En local se puede omitir: el turno se
+confirma igual con el aviso. El resto está en el
 [README de la librería](backend/src/lib/mercadopago/README.md).
 
 Si algo no arranca:
@@ -95,6 +103,53 @@ La corrida imprime el resultado por sección y deja el detalle —el request y e
 cada caso— en `docs/verificacion.md`. Ese archivo **no se commitea**: cambia entero en cada
 corrida, porque los identificadores y las fechas se recalculan. La tabla de resultados de la
 última corrida está en el pull request.
+
+### Desplegado: Supabase, Render y Vercel
+
+La base en Supabase, la API en Render y el front en Vercel. En producción no hace falta túnel:
+Render y Vercel ya sirven HTTPS. Lo que hay que configurar en la API, además de lo de siempre:
+
+| Variable en Render | Valor | Sin ella |
+| --- | --- | --- |
+| `PUBLIC_API_URL` | `https://<api>.onrender.com` | Ningún centro cobra online |
+| `FRONTEND_URL` | `https://<front>.vercel.app` | Quien paga no vuelve sola al sitio |
+| `CORS_ORIGIN` | `https://<front>.vercel.app` | El navegador no le puede hablar a la API |
+| `TRUST_PROXY` | `3`, los proxies que Render pone delante | El límite de peticiones lo comparten todos los usuarios |
+| `ENCRYPTION_KEY` | La misma siempre | No se pueden leer los tokens de MP ya guardados |
+
+En Vercel, `NEXT_PUBLIC_API_BASE_URL=https://<api>.onrender.com/api/v1`. Se hornea en el
+build: si cambia, hay que volver a desplegar.
+
+`TRUST_PROXY=3` sale de lo que reporta la comunidad de Render, no de su documentación. Render
+no limpia el `X-Forwarded-For` que manda el cliente, así que `true` dejaría falsear la IP. Para
+comprobarlo: seis logins fallidos seguidos desde la compu dan `429`, y en el mismo minuto el
+celular con datos móviles tiene que poder entrar (si no entra, el valor es bajo). Y seis con
+`curl -H 'X-Forwarded-For: <una IP distinta cada vez>'` tienen que dar `429` igual (si no, es
+alto y la IP se puede falsear).
+
+**Conectar un centro a la cuenta de prueba**, desde tu máquina contra Supabase. No uses el
+seed, que borra la base. Las credenciales salen del `.env` local, y la `ENCRYPTION_KEY` tiene que
+ser la de Render, porque el token se guarda cifrado con ella:
+
+```bash
+DATABASE_URL='<la de Supabase>' ENCRYPTION_KEY='<la de Render>' npm run mp:conectar-prueba -- lo-de-lili
+```
+
+**En Mercado Pago**, para la demo (el detalle está en *Credenciales de prueba* del README de la
+librería):
+
+- **Pagar** se hace logueada con una cuenta compradora de prueba, a mano y en un navegador
+  común.
+- **Para que los reembolsos salgan**, hay que activar las credenciales de producción de la app
+  de prueba. Sin eso, el centro recibe el mail para devolver a mano.
+- **Suscripciones y "Conectar con Mercado Pago"** necesitan además la app de la plataforma:
+  ver *Instalación en Mercado Pago* en el
+  [README de la librería](backend/src/lib/mercadopago/README.md). Con `NODE_ENV=production`
+  no se conectan vendedoras de prueba por OAuth: para una demo, el script de arriba.
+
+En el plan gratis de Render la API se duerme a los quince minutos sin tráfico: las tareas
+periódicas paran, y un aviso de MP que llega mientras despierta puede vencer y reintentarse
+más tarde.
 
 ## Arquitectura
 
