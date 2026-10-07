@@ -124,6 +124,13 @@ tiene que dar lo mismo: escribir estados, no incrementos.
 - **Pagar.** Logueada como compradora de prueba (Tus integraciones → Cuentas de prueba), en una
   pestaña de incógnito, con las tarjetas de prueba: titular `APRO` aprueba, `OTHE` rechaza.
 - **Cuentas.** Compradora y vendedora tienen que ser del mismo país.
+- **Navegador.** Como invitada, MP rechaza el pago: "Una de las partes con la que intentás
+  hacer el pago es de prueba". En un navegador automatizado, logueada, el botón Pagar no se
+  habilita: el pago de prueba se hace a mano.
+- **Reembolsar.** Con la app de prueba sin las credenciales de producción activadas
+  (`certification_status: not_certified`), el reembolso responde `401 Unauthorized use of live
+  credentials` (cause 7). Cobrar no lo pide. MP indica activarlas en el panel de developers,
+  entrando como la vendedora de prueba.
 
 ## Trampas que resuelve
 
