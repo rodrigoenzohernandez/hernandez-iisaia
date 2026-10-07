@@ -112,9 +112,9 @@ if (
   );
 }
 
-// Con Mercado Pago configurado, en produccion hacen falta las dos URLs: sin PUBLIC_API_URL el
-// checkout sale sin notification_url, el aviso del pago no llega nunca y la reserva vence con
-// la plata cobrada; sin FRONTEND_URL no hay pagina de vuelta.
+// Con Mercado Pago configurado, en produccion hacen falta las dos URLs: sin PUBLIC_API_URL MP
+// no tiene donde avisar los pagos y ningun centro cobra online; sin FRONTEND_URL no hay pagina
+// de vuelta.
 const conMercadoPago = !!(
   process.env.MP_CLIENT_ID || process.env.MP_PLATFORM_ACCESS_TOKEN
 );

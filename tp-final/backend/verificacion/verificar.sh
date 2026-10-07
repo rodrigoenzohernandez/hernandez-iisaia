@@ -30,6 +30,10 @@ OTRO=/tenants/bella-piel
 
 command -v jq >/dev/null || { echo 'Falta jq. En macOS: brew install jq'; exit 1; }
 [[ -f "$RAIZ/.env" ]] && { set -a; . "$RAIZ/.env"; set +a; }
+# Las credenciales de prueba de MP son para probar a mano: con ellas el seed conecta Lo de
+# Lili a una cuenta real, y los casos esperan que arranque sin cuenta y la conecte el mock.
+# Vacias y no unset: el seed relee el .env, y loadEnvFile no pisa una variable que ya existe.
+export SEED_MP_ACCESS_TOKEN= SEED_MP_USER_ID= SEED_MP_PUBLIC_KEY=
 PASSWORD=${SEED_ADMIN_PASSWORD:?Falta SEED_ADMIN_PASSWORD en .env}
 
 curl -so /dev/null "$BASE$T/servicios" || { echo "La API no responde en $BASE. Levantala con: npm|pnpm run start:verify"; exit 1; }
