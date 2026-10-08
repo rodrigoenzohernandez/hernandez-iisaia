@@ -150,14 +150,10 @@ export function obtenerSuscripcion(slug: string, token: string): Promise<Suscrip
  * Subir al Profesional devuelve `suscripcion.url`: hay que redirigir ahí. El plan rige recién
  * desde el primer cobro aprobado, no desde este PUT.
  */
-export function cambiarPlan(slug: string, 
+export function cambiarPlan(slug: string,
   token: string,
   plan: 'basico' | 'profesional',
-  emailPagador?: string,
 ): Promise<Suscripcion> {
-  return pedir<Suscripcion>(enCentro(slug, '/suscripcion'), {
-    method: 'PUT',
-    body: emailPagador ? { plan, emailPagador } : { plan },
-    token,
-  });
+  // Sin emailPagador: el backend usa el de la cuenta de Mercado Pago conectada del centro.
+  return pedir<Suscripcion>(enCentro(slug, '/suscripcion'), { method: 'PUT', body: { plan }, token });
 }
