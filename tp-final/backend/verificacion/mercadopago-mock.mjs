@@ -2,7 +2,7 @@
 // Mock de la API de Mercado Pago para verificar.sh.
 //
 // Implementa lo que usa la libreria de src/lib/mercadopago —preferencias, pagos, reembolsos,
-// suscripciones, cobros de suscripcion y OAuth— con estado en memoria. La API se levanta con
+// suscripciones, cobros de suscripcion, OAuth y la cuenta del token— con estado en memoria. La API se levanta con
 // MP_API_URL apuntando aca (npm run start:verify) y el SDK real le habla a este servidor en vez
 // de a api.mercadopago.com: lo que se prueba es el codigo de verdad, no un doble.
 //
@@ -194,6 +194,12 @@ createServer(async (req, res) => {
     return responder(res, 201, reembolso);
   }
 
+  // La cuenta del token, con un email como el de las cuentas de prueba de MP.
+  if (path === '/users/me' && req.method === 'GET') {
+    const id = cuentaDe(token);
+    return responder(res, 200, { id, email: `cuenta-${id}@testuser.com` });
+  }
+
   if (path === '/preapproval' && req.method === 'POST') {
     const id = `preap-${nuevoId()}`;
     const datos = {
@@ -216,6 +222,15 @@ createServer(async (req, res) => {
     if (!s || deOtraCuenta(s, token)) return error(res, 404, 'preapproval not found');
     if (req.method === 'PUT') Object.assign(s.datos, cuerpo);
     return responder(res, 200, s.datos);
+  }
+
+  // Los cobros de una suscripcion que ve esta cuenta.
+  if (path === '/authorized_payments/search' && req.method === 'GET') {
+    const id = url.searchParams.get('preapproval_id');
+    const results = [...facturas.values()]
+      .filter((f) => f.datos.preapproval_id === id && !deOtraCuenta(f, token))
+      .map((f) => f.datos);
+    return responder(res, 200, { paging: { total: results.length }, results });
   }
 
   if ((m = /^\/authorized_payments\/(\d+)$/.exec(path)) && req.method === 'GET') {

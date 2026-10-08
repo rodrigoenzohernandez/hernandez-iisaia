@@ -1043,6 +1043,8 @@ check 'se leen con el tope del plan' 1 "$(jq '.data[0].capacidad' "$TMP/body")"
 req 'y se guardan tal como se leen' 200 PUT "$OTRO/ventanas-atencion" "$(jq -c '{data}' "$TMP/body")" "$TOKEN_OTRO"
 req 'volver a suscribirse despues de cancelar' 200 PUT "$OTRO/suscripcion" '{"plan":"profesional"}' "$TOKEN_OTRO"
 check 'queda pendiente, y sin gracia: nunca se cobro' 'basico pending' "$(jq -r '"\(.plan) \(.suscripcion.estado)"' "$TMP/body")"
+check 'sin emailPagador paga la cuenta de MP conectada del centro' 'cuenta-222333@testuser.com' \
+  "$(llamadas_mp | jq -r '[.[] | select(.path == "/preapproval" and .metodo == "POST")] | last | .cuerpo.payer_email')"
 req 'y cancelarla otra vez' 200 PUT "$OTRO/suscripcion" '{"plan":"basico"}' "$TOKEN_OTRO"
 req 'desconectar Mercado Pago con un cobro abierto' 409 DELETE "$OTRO/cuenta-mercadopago" '' "$TOKEN_OTRO"
 check 'la clienta todavia puede pagar: la cuenta no se va' mp_account_change_blocked "$(jq -r .code "$TMP/body")"
@@ -1148,6 +1150,11 @@ wait "${SUSCRIPCIONES[@]}"
 CREADAS=$(llamadas_mp | jq '[.[] | select(.path == "/preapproval" and .cuerpo.external_reference == "estetica-luz")] | length')
 CANCELADAS=$(llamadas_mp | jq '[.[] | select(.metodo == "PUT" and (.path | startswith("/preapproval/")) and .cuerpo.status == "cancelled")] | length')
 check 'dos pedidos del Profesional a la vez dejan una sola suscripcion viva' 1 "$((CREADAS - (CANCELADAS - CANCELADAS_ANTES)))"
+SUB_LUZ=$(sql "select \"suscripcionMpId\" from \"Tenant\" where slug = 'estetica-luz'")
+mock /__test/facturas -X POST -d "$(jq -nc --arg s "$SUB_LUZ" '{suscripcion:$s, status:"approved"}')" >/dev/null
+req 'Mercado Pago la cobro y el aviso no llego' 200 GET /tenants/estetica-luz/suscripcion '' "$TOKEN_NUEVO"
+check 'al consultar el plan concilia con Mercado Pago: rige el Profesional' 'profesional authorized' \
+  "$(jq -r '"\(.plan) \(.suscripcion.estado)"' "$TMP/body")"
 req 'dar de baja el centro nuevo' 200 PATCH /plataforma/tenants/estetica-luz '{"activo":false}' "$TOKEN_PLATAFORMA"
 check 'queda inactivo' false "$(jq -r .activo "$TMP/body")"
 check 'y la baja cancela su suscripcion: Mercado Pago no le sigue cobrando' cancelled \

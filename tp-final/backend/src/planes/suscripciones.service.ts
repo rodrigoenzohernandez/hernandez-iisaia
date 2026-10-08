@@ -5,7 +5,7 @@ import {
   mpNoResponde,
   mpSinConfigurar,
 } from '../cobros/cuentas-mercadopago.service.js';
-import type { TenantRequest, UsuarioRequest } from '../common/decorators.js';
+import type { TenantRequest } from '../common/decorators.js';
 import { env } from '../env.js';
 import {
   type MercadoPago,
@@ -32,6 +32,13 @@ function unMesDespues(fecha: Date): Date {
   return d;
 }
 
+const sinCuentaConectada = () =>
+  new ConflictException({
+    code: 'mercadopago_not_connected',
+    message:
+      'Para el plan Profesional, primero conecta la cuenta de Mercado Pago del centro.',
+  });
+
 /**
  * La suscripcion de cada centro a la plataforma. Vive en Tenant y no en una tabla propia: el
  * aviso de Mercado Pago llega a una ruta sin centro en la URL, y una tabla con tenantId no se
@@ -48,11 +55,27 @@ export class SuscripcionesService {
     private readonly cuentas: CuentasMercadoPagoService,
   ) {}
 
-  async estado(): Promise<SuscripcionDto> {
-    const t = await this.db.tenant.findFirstOrThrow({
-      where: { id: TenantContext.require() },
-      select: { ...camposDelPlan, suscripcionMpId: true, suscripcionUrl: true },
-    });
+  async estado({ conciliar = false } = {}): Promise<SuscripcionDto> {
+    const leer = () =>
+      this.db.tenant.findFirstOrThrow({
+        where: { id: TenantContext.require() },
+        select: {
+          ...camposDelPlan,
+          suscripcionMpId: true,
+          suscripcionUrl: true,
+        },
+      });
+    let t = await leer();
+    // Pendiente, o autorizada sin ningun cobro registrado: o MP todavia no cobro, o el aviso no
+    // llego. MP no reenvia los avisos de un evento que no estaba configurado, asi que sin esto
+    // un centro que pago se queda en Basico hasta el cobro del mes siguiente.
+    const desactualizada =
+      t.suscripcionEstado === 'pending' ||
+      (t.suscripcionEstado === 'authorized' && !t.planPagoHasta);
+    if (conciliar && t.suscripcionMpId && desactualizada) {
+      await this.conciliar(t.suscripcionMpId);
+      t = await leer();
+    }
     return {
       plan: planVigente(t),
       pagoHasta: t.planPagoHasta,
@@ -74,7 +97,6 @@ export class SuscripcionesService {
    */
   async cambiar(
     tenant: TenantRequest,
-    usuario: UsuarioRequest,
     dto: UpdateSuscripcionDto,
   ): Promise<SuscripcionDto> {
     if (dto.plan === 'basico') {
@@ -91,20 +113,12 @@ export class SuscripcionesService {
     // El Profesional existe para cobrar online: sin la cuenta del centro no hay a donde.
     const cuenta = await this.cuentas.estado();
     if (!cuenta.conectada || cuenta.requiereReconexion) {
-      throw new ConflictException({
-        code: 'mercadopago_not_connected',
-        message:
-          'Para el plan Profesional, primero conecta la cuenta de Mercado Pago del centro.',
-      });
+      throw sinCuentaConectada();
     }
-    const payerEmail =
-      dto.emailPagador ??
-      (
-        await this.db.usuario.findFirstOrThrow({
-          where: { id: usuario.id },
-          select: { email: true },
-        })
-      ).email;
+    // Paga la cuenta de MP que conecto el centro: MP solo deja autorizar la suscripcion a la
+    // cuenta de payer_email, y el email con el que la administradora entra al panel no tiene
+    // por que ser el de su cuenta de MP.
+    const payerEmail = dto.emailPagador ?? (await this.emailDelCentro(tenant));
     const plan = PLANES.profesional;
     const s = await this.llamar((mp) =>
       mp.createSubscription({
@@ -195,6 +209,50 @@ export class SuscripcionesService {
         data: { planPagoHasta: hasta },
       });
     }
+  }
+
+  /**
+   * Trae de MP la suscripcion y sus cobros y los registra como si hubieran llegado los avisos:
+   * la misma logica, asi que un aviso que llega despues no cambia nada. Si MP no responde, se
+   * muestra lo que hay y lo corrige el proximo aviso o la proxima consulta.
+   */
+  private async conciliar(suscripcionMpId: string): Promise<void> {
+    const mp = this.cuentas.dePlataforma();
+    if (!mp) return;
+    try {
+      const subscription = await mp.getSubscription(suscripcionMpId);
+      await this.registrarEvento({
+        type: 'subscription',
+        subscription,
+        verified: true,
+      });
+      for (const charge of await mp.getSubscriptionCharges(suscripcionMpId)) {
+        await this.registrarEvento({
+          type: 'subscription_charge',
+          charge,
+          verified: true,
+        });
+      }
+    } catch (e) {
+      if (!(e instanceof MercadoPagoError)) throw e;
+      this.logger.warn(
+        `No se pudo conciliar la suscripcion ${suscripcionMpId}: ${e.message}`,
+      );
+    }
+  }
+
+  /** El email de la cuenta de MP conectada del centro, que MP sabe y el panel no muestra. */
+  private async emailDelCentro(tenant: TenantRequest): Promise<string> {
+    const mp = await this.cuentas.paraSaldar(tenant.slug);
+    try {
+      if (mp) return (await mp.getAccount()).email;
+    } catch (e) {
+      if (!(e instanceof MercadoPagoError)) throw e;
+      // Un 401 es que MP revoco el acceso: el centro tiene que reconectar.
+      if (e.status !== 401) mpNoResponde();
+      await this.cuentas.marcarReconexion(tenant);
+    }
+    throw sinCuentaConectada();
   }
 
   private async llamar<T>(fn: (mp: MercadoPago) => Promise<T>): Promise<T> {
