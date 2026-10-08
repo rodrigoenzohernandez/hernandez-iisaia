@@ -824,8 +824,8 @@ export interface components {
             plan: "basico" | "profesional";
             /**
              * Format: email
-             * @description El email de la cuenta de Mercado Pago que va a pagar: si no coincide, Mercado Pago
-             *     rechaza el cobro. Default: el de la administradora.
+             * @description Solo si paga otra cuenta de Mercado Pago que la conectada: si no coincide con la que
+             *     autoriza, Mercado Pago rechaza el cobro. Default: el de la cuenta conectada del centro.
              * @example pagos@lodelili.com
              */
             emailPagador?: string;

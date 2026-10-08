@@ -59,6 +59,7 @@ const sub = await mp.createSubscription({
 await mp.getSubscription(sub.id);
 await mp.cancelSubscription(sub.id);         // irreversible en MP
 await mp.getSubscriptionCharge(idDeCobro);   // cada cobro mensual
+await mp.getSubscriptionCharges(sub.id);     // todos: para conciliar si un aviso no llego
 ```
 
 ### 3. Cuentas conectadas (OAuth, modelo marketplace)
@@ -69,6 +70,8 @@ const verifier = oauth.newVerifier();                     // PKCE: guardarlo has
 const url = oauth.authorizationUrl(state, verifier);      // challenge S256
 const cuenta = await oauth.connect(code, verifier);       // accessToken, refreshToken, userId...
 const renovada = await oauth.refresh(cuenta.refreshToken); // el refresh viejo deja de servir
+const { email } = await mp.getAccount();                  // la cuenta del token: el panel no
+                                                          // muestra el email de las de prueba
 ```
 
 Para conectar cuentas vendedoras de prueba en staging, `testToken: true` pide credenciales de
@@ -97,7 +100,7 @@ switch (evento.type) {
    un aviso falso solo puede hacer que se consulte algo real.
 4. Devuelve el evento normalizado.
 
-Un id que la cuenta no ve vuelve como `ignored`.
+Un id que la cuenta no ve, o que no es de ese recurso (MP da 400), vuelve como `ignored`.
 
 MP reintenta cada aviso durante días. Como el evento trae el estado actual, procesarlo dos veces
 tiene que dar lo mismo: escribir estados, no incrementos.
@@ -127,10 +130,11 @@ tiene que dar lo mismo: escribir estados, no incrementos.
 - **Navegador.** Como invitada, MP rechaza el pago: "Una de las partes con la que intentás
   hacer el pago es de prueba". En un navegador automatizado, logueada, el botón Pagar no se
   habilita: el pago de prueba se hace a mano.
-- **Reembolsar.** Con la app de prueba sin las credenciales de producción activadas
-  (`certification_status: not_certified`), el reembolso responde `401 Unauthorized use of live
-  credentials` (cause 7). Cobrar no lo pide. MP indica activarlas en el panel de developers,
-  entrando como la vendedora de prueba.
+- **Reembolsar no se pudo probar.** Los pagos de cuentas de prueba son `live_mode: true`. Con el
+  token `APP_USR` de la cuenta, el reembolso responde `401 Unauthorized use of live credentials`
+  (cause 7). MP lo atribuye a credenciales de producción sin activar, y la app de prueba siguió
+  `not_certified`. Con el token `TEST-` que da OAuth con `testToken`, responde `404 Payment
+  not found`, porque busca el pago en el ambiente de sandbox. Cobrar no pide nada de esto.
 
 ## Trampas que resuelve
 

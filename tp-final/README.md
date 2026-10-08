@@ -88,7 +88,7 @@ Para correr la verificación hacen falta dos cosas, en dos corridas distintas:
 
 ```bash
 npm run start:verify     # en otra terminal
-npm run verify           # 555 casos de dominio
+npm run verify           # 558 casos de dominio
 
 npm run start:dev        # ahora con los límites de default
 npm run verify:limite    # que el límite de peticiones exista
@@ -127,25 +127,40 @@ celular con datos móviles tiene que poder entrar (si no entra, el valor es bajo
 `curl -H 'X-Forwarded-For: <una IP distinta cada vez>'` tienen que dar `429` igual (si no, es
 alto y la IP se puede falsear).
 
-**Conectar un centro a la cuenta de prueba**, desde tu máquina contra Supabase. No uses el
-seed, que borra la base. Las credenciales salen del `.env` local, y la `ENCRYPTION_KEY` tiene que
-ser la de Render, porque el token se guarda cifrado con ella:
+**Mercado Pago tiene dos papeles.** La plataforma tiene una sola app de Mercado Pago, y se
+configura una vez, en Render. Cada centro conecta su propia cuenta con el botón "Conectar con
+Mercado Pago", y la API guarda sus tokens cifrados en la base: nadie toca variables por un centro.
 
-```bash
-DATABASE_URL='<la de Supabase>' ENCRYPTION_KEY='<la de Render>' npm run mp:conectar-prueba -- lo-de-lili
-```
+| Variable en Render | De dónde sale |
+| --- | --- |
+| `MP_CLIENT_ID` | El número de la app |
+| `MP_CLIENT_SECRET` | Credenciales de producción de la app (pide activarlas) |
+| `MP_REDIRECT_URI` | `https://<front>.vercel.app/mercadopago/vuelta`, registrada en la app |
+| `MP_PLATFORM_ACCESS_TOKEN` | El access token de la cuenta dueña de la app: cobra las suscripciones |
+| `MP_WEBHOOK_SECRET` | La clave secreta de Webhooks de la app |
 
-**En Mercado Pago**, para la demo (el detalle está en *Credenciales de prueba* del README de la
-librería):
+En el panel de la app, una vez, logueada con la cuenta dueña:
 
-- **Pagar** se hace logueada con una cuenta compradora de prueba, a mano y en un navegador
-  común.
-- **Para que los reembolsos salgan**, hay que activar las credenciales de producción de la app
-  de prueba. Sin eso, el centro recibe el mail para devolver a mano.
-- **Suscripciones y "Conectar con Mercado Pago"** necesitan además la app de la plataforma:
-  ver *Instalación en Mercado Pago* en el
-  [README de la librería](backend/src/lib/mercadopago/README.md). Con `NODE_ENV=production`
-  no se conectan vendedoras de prueba por OAuth: para una demo, el script de arriba.
+- **Configuración de la aplicación:** la URL de vuelta, exacta, y el flujo authorization code
+  con PKCE. Sin eso, MP muestra "La aplicación no está preparada para conectarse".
+- **Webhooks, pestaña Modo productivo:** `https://<api>.onrender.com/api/v1/webhooks/mercadopago`
+  con el evento *Planes y suscripciones*. Va en productivo también con cuentas de prueba, porque
+  sus pagos son `live_mode`. Los cobros de los centros no van acá: cada uno lleva su URL de aviso.
+
+Si un aviso de suscripción no llega, al abrir Cobros el backend le pregunta a MP el estado real.
+
+**Para probar con cuentas de prueba** (el detalle, en *Credenciales de prueba* del
+[README de la librería](backend/src/lib/mercadopago/README.md)):
+
+- Hacen falta tres: la dueña de la app, que en el sandbox es la que MP crea con ella; la de un
+  centro; y una compradora. Ninguna se puede pagar a sí misma.
+- Pagar y autorizar se hace a mano, en un navegador común.
+- `MP_OAUTH_TEST_TOKEN=true` conecta centros de prueba por OAuth. Con `NODE_ENV=production` no se
+  acepta.
+- Los reembolsos por API no se pudieron probar en el sandbox. Si fallan, el centro recibe el
+  mail para devolver a mano.
+- `npm run mp:conectar-prueba -- <slug>` conecta un centro sin OAuth, para desarrollo local:
+  escribe la misma fila que el botón. Contra Supabase, con la `ENCRYPTION_KEY` de Render.
 
 En el plan gratis de Render la API se duerme a los quince minutos sin tráfico: las tareas
 periódicas paran, y un aviso de MP que llega mientras despierta puede vencer y reintentarse
@@ -173,7 +188,7 @@ tp-final/
     │   └── conectar-mp.ts         conecta un centro a una cuenta de prueba de MP, sin OAuth
     ├── openapi.json               el contrato, regenerado con `npm run spec`
     ├── verificacion/
-    │   ├── verificar.sh           los 555 casos de dominio
+    │   ├── verificar.sh           los 558 casos de dominio
     │   ├── verificar-limite.sh    que el límite de peticiones exista
     │   └── mercadopago-mock.mjs   la API de Mercado Pago en memoria, para verificar
     └── src/
