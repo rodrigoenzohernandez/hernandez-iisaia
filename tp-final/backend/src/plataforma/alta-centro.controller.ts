@@ -52,7 +52,7 @@ export class AltaCentroController {
   @Publico()
   @ApiTenant()
   @Get(':tenantSlug')
-  @ApiOkResponse({ type: CentroPublicoDto })
+  @ApiOkResponse({ type: CentroPublicoDto, description: 'El slug y el nombre del centro.' })
   // El guard ya busco el centro para resolver el tenant, y un centro dado de baja ya dio 404
   // ahi: esta ruta no consulta la base. Copia dos campos y no el objeto, asi lo que se sume a
   // TenantRequest no sale solo. Nunca el id: es el claim tid del JWT, y filtrarlo es la razon

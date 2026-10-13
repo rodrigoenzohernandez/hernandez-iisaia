@@ -2572,6 +2572,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description El slug y el nombre del centro. */
             200: {
                 headers: {
                     [name: string]: unknown;

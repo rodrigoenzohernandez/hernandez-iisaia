@@ -2367,7 +2367,7 @@
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "El slug y el nombre del centro.",
             "content": {
               "application/json": {
                 "schema": {
