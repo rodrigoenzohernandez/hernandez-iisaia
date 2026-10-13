@@ -12,7 +12,7 @@ export async function Encabezado({ slug, sobreFoto = false }: { slug: string; so
           : 'relative z-20 bg-tinta text-papel'
       }
     >
-      <div className="mx-auto flex max-w-[1380px] items-center justify-between gap-6 px-6 py-6 lg:px-12">
+      <div className="mx-auto flex max-w-[1380px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-6 py-6 lg:px-12">
         <Link href={`/${slug}`} aria-label={`${nombre} — inicio`}>
           <Marca nombre={nombre} />
         </Link>
