@@ -1,17 +1,29 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiOkResponse,
 } from '@nestjs/swagger';
-import { LimiteAltaDeCentro, Publico } from '../common/decorators.js';
+import { ApiTenant } from '../common/api.decorators.js';
+import {
+  CurrentTenant,
+  LimiteAltaDeCentro,
+  Publico,
+  type TenantRequest,
+} from '../common/decorators.js';
 import { ErrorDto } from '../common/error.dto.js';
-import { CentroCreadoDto, CrearCentroDto } from './dto/alta-centro.dto.js';
+import {
+  CentroCreadoDto,
+  CentroPublicoDto,
+  CrearCentroDto,
+} from './dto/alta-centro.dto.js';
 import { PlataformaService } from './plataforma.service.js';
 
 /**
- * El alta de centros: asi aparecen los centros nuevos. Sigue sin haber GET /tenants: listar
- * los centros publicaria la cartera de clientes, y eso es del panel de la plataforma.
+ * El recurso centro: su alta y su cara publica. Sigue sin haber GET /tenants: listar los
+ * centros publicaria la cartera de clientes, y eso es del panel de la plataforma. El detalle de
+ * uno si existe, porque quien lo pide ya sabe el slug.
  */
 @Controller('tenants')
 export class AltaCentroController {
@@ -34,5 +46,18 @@ export class AltaCentroController {
   })
   crear(@Body() dto: CrearCentroDto): Promise<CentroCreadoDto> {
     return this.plataforma.crearCentro(dto);
+  }
+
+  /** El nombre de un centro, para mostrarlo en su sitio. */
+  @Publico()
+  @ApiTenant()
+  @Get(':tenantSlug')
+  @ApiOkResponse({ type: CentroPublicoDto })
+  // El guard ya busco el centro para resolver el tenant, y un centro dado de baja ya dio 404
+  // ahi: esta ruta no consulta la base. Copia dos campos y no el objeto, asi lo que se sume a
+  // TenantRequest no sale solo. Nunca el id: es el claim tid del JWT, y filtrarlo es la razon
+  // por la que el MVP no tenia esta ruta.
+  perfil(@CurrentTenant() centro: TenantRequest): CentroPublicoDto {
+    return { slug: centro.slug, nombre: centro.nombre };
   }
 }

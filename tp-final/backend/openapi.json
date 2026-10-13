@@ -2349,6 +2349,49 @@
           "AltaCentro"
         ]
       }
+    },
+    "/api/v1/tenants/{tenantSlug}": {
+      "get": {
+        "operationId": "AltaCentroController_perfil",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CentroPublicoDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "El nombre de un centro, para mostrarlo en su sitio.",
+        "tags": [
+          "AltaCentro"
+        ]
+      }
     }
   },
   "info": {
@@ -3611,7 +3654,7 @@
           "admin"
         ]
       },
-      "CentroCreadoResumenDto": {
+      "CentroPublicoDto": {
         "type": "object",
         "properties": {
           "slug": {
@@ -3638,7 +3681,7 @@
             "$ref": "#/components/schemas/UsuarioSesionDto"
           },
           "centro": {
-            "$ref": "#/components/schemas/CentroCreadoResumenDto"
+            "$ref": "#/components/schemas/CentroPublicoDto"
           }
         },
         "required": [
