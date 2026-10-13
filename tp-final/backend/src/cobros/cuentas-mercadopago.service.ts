@@ -4,6 +4,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
@@ -33,8 +34,16 @@ type Estado = { tid: string; verifier: string; exp: number };
 export const esHttps = (url?: string): url is string =>
   !!url?.startsWith('https://');
 
-/** Mercado Pago no respondio, o respondio con un error que no es del pedido. */
-export function mpNoResponde(): never {
+/**
+ * Mercado Pago no respondio, o respondio con un error que no es del pedido. La respuesta de MP
+ * queda en el log: sin ella, un error de configuracion se ve igual que una caida.
+ */
+export function mpNoResponde(e: unknown): never {
+  new Logger('MercadoPago').warn(
+    e instanceof MercadoPagoError
+      ? `MP respondio ${e.status}: ${e.message} ${JSON.stringify(e.details ?? null)}`
+      : String(e),
+  );
   throw new BadGatewayException({
     code: 'payment_provider_unavailable',
     message: 'Mercado Pago no respondio. Proba de nuevo en unos minutos.',
@@ -173,7 +182,7 @@ export class CuentasMercadoPagoService {
             'Mercado Pago rechazo la conexion. Volve a conectar desde el panel.',
         });
       }
-      mpNoResponde();
+      mpNoResponde(e);
     }
 
     const actual = await this.db.cuentaMercadoPago.findFirst({
