@@ -5,7 +5,7 @@ import { EncabezadoAdmin } from '@/components/admin/EncabezadoAdmin';
 import { IngresoAdmin } from '@/components/admin/IngresoAdmin';
 
 export const metadata: Metadata = {
-  title: 'Panel — Natura Estética Integral',
+  title: 'Panel',
   robots: { index: false },
 };
 
