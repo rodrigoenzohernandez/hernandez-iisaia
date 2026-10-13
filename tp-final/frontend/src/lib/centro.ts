@@ -23,6 +23,10 @@ export function nombreCortoDeSlug(slug: string): string {
   return nombreDeSlug(slug).split(' ')[0] ?? slug;
 }
 
+// El mismo formato que `backend/src/common/slug.ts`. Un slug que no puede existir es un 404 sin
+// preguntarle a la API (bots, `/robots.txt`, URLs armadas a mano).
+const SLUG = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+
 /**
  * El centro de un slug, pedido una sola vez por render: `cache` hace que el layout, el
  * encabezado y el pie de una misma página compartan la llamada. Solo memoiza en componentes de
@@ -33,8 +37,11 @@ export function nombreCortoDeSlug(slug: string): string {
  * puede convertir todos los centros en 404.
  */
 export const obtenerCentro = cache(async (slug: string): Promise<Centro | null> => {
+  if (!SLUG.test(slug)) return null;
   try {
-    return await pedir<Centro>(enCentro(slug, ''));
+    // La API en el plan gratuito de Render se duerme y tarda mucho más de 4 s en despertar: sin
+    // el tope, cada página de un centro esperaría a que despierte.
+    return await pedir<Centro>(enCentro(slug, ''), { signal: AbortSignal.timeout(4000) });
   } catch (error) {
     if (error instanceof ErrorApi && error.codigo === 'tenant_not_found') return null;
     return { slug, nombre: nombreDeSlug(slug) };

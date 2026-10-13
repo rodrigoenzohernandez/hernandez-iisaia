@@ -17,7 +17,7 @@ export default async function LayoutCentro({ children, params }: LayoutProps<'/[
 }
 
 /**
- * El nombre del centro en la pestaña y en la vista previa del link. La plantilla aplica a las
+ * El nombre del centro y una descripción propia en la pestaña y en la vista previa del link. La plantilla aplica a las
  * páginas hijas ("Tu pago · Lo de Lili"); la portada, que es de este mismo segmento, se queda
  * con el `default`.
  */
@@ -25,5 +25,8 @@ export async function generateMetadata({ params }: LayoutProps<'/[slug]'>): Prom
   const { slug } = await params;
   const centro = await obtenerCentro(slug);
   if (!centro) return {};
-  return { title: { default: centro.nombre, template: `%s · ${centro.nombre}` } };
+  return {
+    title: { default: centro.nombre, template: `%s · ${centro.nombre}` },
+    description: `Reservá tu turno en ${centro.nombre} con la agenda real del centro.`,
+  };
 }
