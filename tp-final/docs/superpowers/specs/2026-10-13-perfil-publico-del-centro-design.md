@@ -56,6 +56,11 @@ buscó el centro para resolver el tenant, así que la ruta no consulta la base. 
 un centro activo (200) de uno que no existe (404). Lo nuevo es el nombre, que es el nombre
 comercial que el centro muestra en su propia página.
 
+**Por qué el MVP no tenía esta ruta, y por qué ahora sí.** El plan del MVP la descartó: "el
+lookup individual filtraría `Tenant.id`, que es el claim `tid` del JWT". Esa objeción es contra
+devolver la fila, no contra la ruta: acá salen dos campos copiados uno por uno, y la
+verificación exige que el cuerpo no tenga ninguna otra clave.
+
 **Límite de peticiones.** El global de lectura, 120 por minuto por IP. No lleva
 `@LimiteEstricto`, que es para las escrituras públicas.
 
@@ -110,7 +115,9 @@ chequeos con `curl` contra el servidor de Next, corridos antes y después del ca
 
 - `/no-existe` y `/centro-cerrado` dan `404` (hoy dan `200`);
 - el `<title>` de `/lo-de-lili` es "Lo de Lili" (hoy es el de la plataforma);
-- el HTML de `/bella-piel` dice "Bella Piel".
+- el HTML de `/natura`, un centro que la prueba da de alta como "Natura Estética Integral", dice
+  ese nombre (hoy dice "Natura"). `bella-piel` no sirve para esto: su nombre coincide con el
+  derivado del slug, y el chequeo pasaría también en rojo.
 
 **Al final.** Lint y build de los dos lados, `npm run verify` completo y un recorrido en el
 navegador, que incluye apagar la API y ver que `/lo-de-lili` se arma con el nombre derivado.
@@ -128,7 +135,7 @@ navegador, que incluye apagar la API y ver que `/lo-de-lili` se arma con el nomb
 
 - La ruta responde los cuatro casos de la tabla y no devuelve otras claves.
 - `openapi.json` y `api.d.ts` regenerados y commiteados.
-- `/lo-de-lili` y `/bella-piel` muestran su nombre real en el encabezado, el pie y el título.
+- `/lo-de-lili` y `/natura` muestran su nombre real en el encabezado, el pie y el título.
 - `/no-existe` y `/centro-cerrado` dan la página 404 con status `404`.
 - Con la API apagada, `/lo-de-lili` se arma con el nombre derivado del slug.
 - `npm run verify` sin fallas, y lint y build en verde en los dos lados.
