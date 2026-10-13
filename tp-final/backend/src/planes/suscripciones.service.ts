@@ -249,7 +249,7 @@ export class SuscripcionesService {
     } catch (e) {
       if (!(e instanceof MercadoPagoError)) throw e;
       // Un 401 es que MP revoco el acceso: el centro tiene que reconectar.
-      if (e.status !== 401) mpNoResponde();
+      if (e.status !== 401) mpNoResponde(e);
       await this.cuentas.marcarReconexion(tenant);
     }
     throw sinCuentaConectada();
@@ -262,7 +262,7 @@ export class SuscripcionesService {
       return await fn(mp);
     } catch (e) {
       if (!(e instanceof MercadoPagoError)) throw e;
-      mpNoResponde();
+      mpNoResponde(e);
     }
   }
 }
