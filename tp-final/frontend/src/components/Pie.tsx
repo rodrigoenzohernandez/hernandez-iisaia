@@ -1,19 +1,19 @@
 import Link from 'next/link';
-import { nombreDeSlug } from '@/lib/centro';
+import { nombreDelCentro } from '@/lib/centro';
 import { Marca } from './Marca';
 
 /**
- * El pie del centro. Ya no muestra los horarios: no hay endpoint público que los devuelva por
- * slug (las ventanas de atención se leen con token). Hasta que el backend exponga un
- * `GET /tenants/{slug}` público, el pie queda con la marca y los accesos.
+ * El pie del centro. No muestra los horarios: las franjas de atención se leen con token, y el
+ * perfil público del centro trae solo su nombre. Queda con la marca y los accesos.
  */
-export function Pie({ slug }: { slug: string }) {
+export async function Pie({ slug }: { slug: string }) {
+  const nombre = await nombreDelCentro(slug);
   return (
     <footer className="mt-auto bg-tinta text-papel">
       <div className="mx-auto max-w-[1380px] px-6 py-20 lg:px-12">
         <div className="grid gap-14 md:grid-cols-[1.5fr_1fr]">
           <div>
-            <Marca slug={slug} />
+            <Marca nombre={nombre} />
             <p className="angosta mt-7 max-w-[38ch] text-[0.95rem] leading-relaxed text-papel/65">
               Reservá tu turno con la agenda real del centro: elegís el tratamiento, ves los
               horarios que existen y lo tomás vos misma, sin esperar que alguien conteste.
@@ -45,7 +45,7 @@ export function Pie({ slug }: { slug: string }) {
         </div>
 
         <p className="angosta mt-16 border-t border-papel/12 pt-7 text-[0.7rem] uppercase tracking-[0.18em] text-papel/55">
-          {nombreDeSlug(slug)}
+          {nombre}
         </p>
       </div>
     </footer>

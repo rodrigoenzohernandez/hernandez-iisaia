@@ -370,6 +370,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{tenantSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** El nombre de un centro, para mostrarlo en su sitio. */
+        get: operations["AltaCentroController_perfil"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -938,7 +955,7 @@ export interface components {
             /** @description Quien da de alta el centro: queda como su administradora. */
             admin: components["schemas"]["AdministradoraDto"];
         };
-        CentroCreadoResumenDto: {
+        CentroPublicoDto: {
             slug: string;
             nombre: string;
         };
@@ -949,7 +966,7 @@ export interface components {
              */
             accessToken: string;
             usuario: components["schemas"]["UsuarioSesionDto"];
-            centro: components["schemas"]["CentroCreadoResumenDto"];
+            centro: components["schemas"]["CentroPublicoDto"];
         };
     };
     responses: never;
@@ -2534,6 +2551,37 @@ export interface operations {
             };
             /** @description slug_taken: el slug ya esta en uso o es una palabra reservada. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    AltaCentroController_perfil: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del centro en la URL, por ejemplo `lo-de-lili`. */
+                tenantSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentroPublicoDto"];
+                };
+            };
+            /** @description El centro no existe o esta inactivo. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
