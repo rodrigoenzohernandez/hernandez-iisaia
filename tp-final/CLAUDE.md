@@ -27,6 +27,7 @@ lo que cuenta, se actualiza esa sección en el mismo PR.
 | `docs/2.*`, `docs/4.*` | las guías de integración del front: el orden de las llamadas y qué hacer con cada error |
 | `docs/superpowers/` | spec y plan de un feature hecho con superpowers; también congelados |
 | `backend/openapi.json` | el contrato, generado (`npm run spec`); no se edita a mano |
+| `../.claude/skills/tp-final-mercadopago-despliegue/` | configurar y diagnosticar Mercado Pago en Render, Vercel y el panel de MP, con cuentas de prueba |
 
 ## Comandos
 

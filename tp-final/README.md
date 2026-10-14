@@ -163,8 +163,8 @@ Mercado Pago", y la API guarda sus tokens cifrados en la base: nadie toca variab
 
 | Variable en Render | De dónde sale |
 | --- | --- |
-| `MP_CLIENT_ID` | El número de la app |
-| `MP_CLIENT_SECRET` | Credenciales de producción de la app (pide activarlas) |
+| `MP_CLIENT_ID` | Credenciales de producción de la app: Client ID |
+| `MP_CLIENT_SECRET` | Credenciales de producción de la app: Client Secret (pide activarlas) |
 | `MP_REDIRECT_URI` | `https://pasate.vercel.app/mercadopago/vuelta`, registrada en la app |
 | `MP_PLATFORM_ACCESS_TOKEN` | El access token de la cuenta dueña de la app: cobra las suscripciones |
 | `MP_WEBHOOK_SECRET` | La clave secreta de Webhooks de la app |
@@ -180,13 +180,25 @@ En el panel de la app, una vez, logueada con la cuenta dueña:
 Si un aviso de suscripción no llega, al abrir Cobros el backend le pregunta a MP el estado real.
 
 **Para probar con cuentas de prueba** (el detalle, en *Credenciales de prueba* del
-[README de la librería](backend/src/lib/mercadopago/README.md)):
+[README de la librería](backend/src/lib/mercadopago/README.md)). Es un marketplace, y Mercado
+Pago no mezcla cuentas reales con cuentas de prueba en ningún cobro: tampoco la dueña de la app.
 
-- Hacen falta tres: la dueña de la app, que en el sandbox es la que MP crea con ella; la de un
-  centro; y una compradora. Ninguna se puede pagar a sí misma.
-- Pagar y autorizar se hace a mano, en un navegador común.
-- `MP_OAUTH_TEST_TOKEN=true` conecta centros de prueba por OAuth. Con `NODE_ENV=production` no se
-  acepta.
+- Hacen falta tres cuentas de prueba distintas y del mismo país, creadas desde la cuenta real
+  en *Tus integraciones → Cuentas de prueba*: la **integradora**, dueña de la app de la
+  plataforma; la **vendedora**, que conecta el centro; y la **compradora**.
+- La app de la plataforma se crea logueada con la integradora, y **las cinco variables de
+  Mercado Pago salen de esa app**: `MP_CLIENT_ID`, `MP_CLIENT_SECRET` y
+  `MP_PLATFORM_ACCESS_TOKEN` de sus *Credenciales de producción*, que por ser de una cuenta de
+  prueba no mueven plata, y `MP_WEBHOOK_SECRET` de sus Webhooks. La URL de vuelta, PKCE y el
+  webhook se configuran en esa misma app.
+- `MP_OAUTH_TEST_TOKEN` no se carga. Con ella el centro queda con un token `TEST-` y el checkout
+  se abre en `sandbox.mercadopago.com.ar`, donde el pago falla con "Oh, no, algo anduvo mal",
+  logueada o como invitada.
+- Pagar se hace a mano, logueada como la compradora en incógnito, con tarjeta (titular `APRO`).
+  Con *dinero en cuenta*, el flujo que Mercado Pago ofrece primero, el pago de prueba falla.
+- Si la app es de una cuenta real, conectar el centro anda, pero la suscripción da `400 Both
+  payer and collector must be real or test users` y el checkout falla con un `service_error`
+  sin causa.
 - Los reembolsos por API no se pudieron probar en el sandbox. Si fallan, el centro recibe el
   mail para devolver a mano.
 - `npm run mp:conectar-prueba -- <slug>` conecta un centro sin OAuth, para desarrollo local:
@@ -993,6 +1005,16 @@ Mercado Pago:
 
 Los reembolsos por API no se pudieron probar en el sandbox. Si fallan, el centro recibe el mail
 para devolver a mano.
+
+Al desplegarlo, Mercado Pago anduvo recién al tercer intento de configuración, y por dos causas
+que no estaban en el código:
+
+- **La app de la plataforma era de una cuenta real.** Conectar centros anduvo, pero la
+  suscripción y el checkout mezclaban esa app con cuentas de prueba, y Mercado Pago no lo
+  permite. Se resolvió con la app de una cuenta de prueba integradora.
+- **El error de Mercado Pago no quedaba en ningún lado.** La API devolvía
+  `payment_provider_unavailable` y descartaba la respuesta, así que una configuración cruzada se
+  veía igual que una caída. Ahora el status y las causas quedan en el log de Render.
 
 ### En el perfil público
 

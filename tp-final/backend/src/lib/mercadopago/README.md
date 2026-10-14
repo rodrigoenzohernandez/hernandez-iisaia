@@ -74,9 +74,9 @@ const { email } = await mp.getAccount();                  // la cuenta del token
                                                           // muestra el email de las de prueba
 ```
 
-Para conectar cuentas vendedoras de prueba en staging, `testToken: true` pide credenciales de
-prueba en el canje. Es el `test_token` que documenta MP, en el body: la opción `testToken` del
-SDK lo manda como header.
+`testToken: true` pide credenciales de sandbox (`TEST-`) en el canje. Es el `test_token` que
+documenta MP, en el body: la opción `testToken` del SDK lo manda como header. El checkout de
+sandbox falla con cuentas de prueba: ver *Credenciales de prueba*.
 
 ### 4. Webhooks
 
@@ -124,6 +124,15 @@ tiene que dar lo mismo: escribir estados, no incrementos.
 
 - **Credenciales.** Las de prueba de la app, que MP genera solas desde noviembre de 2025 con
   prefijo `APP_USR`, o las de una cuenta vendedora de prueba.
+- **Marketplace.** La app tiene que ser de una cuenta de prueba (tipo *Integrador*), y sus
+  credenciales de producción son las que se usan. Con la app de una cuenta real, OAuth conecta
+  igual, pero la suscripción responde `400 Both payer and collector must be real or test users`
+  y el checkout falla con un `service_error`.
+- **Sandbox.** Con `testToken` el checkout se abre en `sandbox.mercadopago.com.ar` y el pago
+  falla, logueada o como invitada. Sin `testToken`, con todas las cuentas de prueba, el pago es
+  `live_mode` y anda.
+- **Medio de pago.** Con tarjeta. *Dinero en cuenta*, el que MP ofrece primero a una
+  compradora logueada, falla.
 - **Pagar.** Logueada como compradora de prueba (Tus integraciones → Cuentas de prueba), en una
   pestaña de incógnito, con las tarjetas de prueba: titular `APRO` aprueba, `OTHE` rechaza.
 - **Cuentas.** Compradora y vendedora tienen que ser del mismo país.
