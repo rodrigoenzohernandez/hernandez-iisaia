@@ -3,17 +3,46 @@
 Una plataforma que gestiona turnos de centros de estética: catálogo de tratamientos, franjas de
 atención con cupo, reserva con o sin cuenta, cobro de señas y turnos con Mercado Pago en la
 cuenta de cada centro, mails, planes con suscripción mensual y un panel para la plataforma. Es
-multi-tenant desde el esquema: "Lo de Lili" es el primer cliente y no el único. NestJS sobre
-Node 24, Prisma 7 y Postgres 17 en Docker. El frontend en Next.js lo hace un compañero
-consumiendo esta API.
+multi-tenant desde el esquema: "Lo de Lili" es el primer cliente y no el único.
 
-Se hizo en dos etapas, cada una con su plan: el MVP ([plan](docs/1.backend-mvp-plan.md)) y el
-post MVP ([plan](docs/3.backend-post-mvp-plan.md)). Este informe cubre las dos; donde algo del MVP
-cambió después, está dicho.
+Lo hicimos de a dos:
+
+- **Rodrigo Hernández**, el backend: NestJS sobre Node 24, Prisma 7 y Postgres 17. También la
+  integración con Mercado Pago.
+- **Matías Alfaro**, el frontend: Next.js 16, consumiendo esta API. Su arquitectura y sus reglas
+  están en [frontend/README.md](frontend/README.md).
+
+Está desplegado: el sitio en [pasate.vercel.app](https://pasate.vercel.app/) (por ejemplo
+[/lo-de-lili](https://pasate.vercel.app/lo-de-lili)) y la API en
+[hernandez-iisaia.onrender.com/api/v1](https://hernandez-iisaia.onrender.com/api/v1/docs), con la
+base en Supabase.
+
+Se hizo en etapas, cada una con su plan en disco:
+
+1. el MVP ([plan](docs/1.backend-mvp-plan.md));
+2. el post MVP ([plan](docs/3.backend-post-mvp-plan.md));
+3. la prueba contra el sandbox real de Mercado Pago (PRs #7 y #8);
+4. un feature final hecho con superpowers: el perfil público del centro ([spec](docs/superpowers/specs/2026-10-13-perfil-publico-del-centro-design.md),
+   [plan](docs/superpowers/plans/2026-10-13-perfil-publico-del-centro.md), PR #10).
+
+Este informe cubre las cuatro. Donde algo de una etapa cambió después, está dicho.
 
 ## Cómo se ejecuta
 
-Hace falta Node 24, Docker y `jq` (solo para el script de verificación).
+**Todo junto, con un comando.** Desde `tp-final/` hace falta solo Docker. El compose levanta la
+base, la API y el front, y migra y siembra la primera vez:
+
+```bash
+cd tp-final
+cp .env.example .env    # completar JWT_SECRET, ENCRYPTION_KEY y SEED_ADMIN_PASSWORD (abajo cómo)
+docker compose up -d --build
+```
+
+El sitio queda en `http://localhost:3101` (por ejemplo `/lo-de-lili`) y la API en
+`http://localhost:3100/api/v1`. Para trabajar con recarga en caliente, cada mitad se levanta por
+separado: el backend como sigue y el front como cuenta [su README](frontend/README.md).
+
+**El backend solo.** Hace falta Node 24, Docker y `jq` (solo para el script de verificación).
 
 ```bash
 cd tp-final/backend
@@ -88,7 +117,7 @@ Para correr la verificación hacen falta dos cosas, en dos corridas distintas:
 
 ```bash
 npm run start:verify     # en otra terminal
-npm run verify           # 558 casos de dominio
+npm run verify           # 569 casos de dominio
 
 npm run start:dev        # ahora con los límites de default
 npm run verify:limite    # que el límite de peticiones exista
@@ -106,18 +135,19 @@ corrida, porque los identificadores y las fechas se recalculan. La tabla de resu
 
 ### Desplegado: Supabase, Render y Vercel
 
-La base en Supabase, la API en Render y el front en Vercel. En producción no hace falta túnel:
+La base en Supabase, la API en Render ([hernandez-iisaia.onrender.com](https://hernandez-iisaia.onrender.com/api/v1/docs))
+y el front en Vercel ([pasate.vercel.app](https://pasate.vercel.app/)). En producción no hace falta túnel:
 Render y Vercel ya sirven HTTPS. Lo que hay que configurar en la API, además de lo de siempre:
 
 | Variable en Render | Valor | Sin ella |
 | --- | --- | --- |
-| `PUBLIC_API_URL` | `https://<api>.onrender.com` | Ningún centro cobra online |
-| `FRONTEND_URL` | `https://<front>.vercel.app` | Quien paga no vuelve sola al sitio |
-| `CORS_ORIGIN` | `https://<front>.vercel.app` | El navegador no le puede hablar a la API |
+| `PUBLIC_API_URL` | `https://hernandez-iisaia.onrender.com` | Ningún centro cobra online |
+| `FRONTEND_URL` | `https://pasate.vercel.app` | Quien paga no vuelve sola al sitio |
+| `CORS_ORIGIN` | `https://pasate.vercel.app` | El navegador no le puede hablar a la API |
 | `TRUST_PROXY` | `3`, los proxies que Render pone delante | El límite de peticiones lo comparten todos los usuarios |
 | `ENCRYPTION_KEY` | La misma siempre | No se pueden leer los tokens de MP ya guardados |
 
-En Vercel, `NEXT_PUBLIC_API_BASE_URL=https://<api>.onrender.com/api/v1`. Se hornea en el
+En Vercel, `NEXT_PUBLIC_API_BASE_URL=https://hernandez-iisaia.onrender.com/api/v1`. Se hornea en el
 build: si cambia, hay que volver a desplegar.
 
 `TRUST_PROXY=3` sale de lo que reporta la comunidad de Render, no de su documentación. Render
@@ -135,7 +165,7 @@ Mercado Pago", y la API guarda sus tokens cifrados en la base: nadie toca variab
 | --- | --- |
 | `MP_CLIENT_ID` | El número de la app |
 | `MP_CLIENT_SECRET` | Credenciales de producción de la app (pide activarlas) |
-| `MP_REDIRECT_URI` | `https://<front>.vercel.app/mercadopago/vuelta`, registrada en la app |
+| `MP_REDIRECT_URI` | `https://pasate.vercel.app/mercadopago/vuelta`, registrada en la app |
 | `MP_PLATFORM_ACCESS_TOKEN` | El access token de la cuenta dueña de la app: cobra las suscripciones |
 | `MP_WEBHOOK_SECRET` | La clave secreta de Webhooks de la app |
 
@@ -143,7 +173,7 @@ En el panel de la app, una vez, logueada con la cuenta dueña:
 
 - **Configuración de la aplicación:** la URL de vuelta, exacta, y el flujo authorization code
   con PKCE. Sin eso, MP muestra "La aplicación no está preparada para conectarse".
-- **Webhooks, pestaña Modo productivo:** `https://<api>.onrender.com/api/v1/webhooks/mercadopago`
+- **Webhooks, pestaña Modo productivo:** `https://hernandez-iisaia.onrender.com/api/v1/webhooks/mercadopago`
   con el evento *Planes y suscripciones*. Va en productivo también con cuentas de prueba, porque
   sus pagos son `live_mode`. Los cobros de los centros no van acá: cada uno lleva su URL de aviso.
 
@@ -173,13 +203,18 @@ Docker; la aplicación, afuera.
 
 ```
 tp-final/
+├── CLAUDE.md                      el panorama para el agente; cada mitad tiene el suyo
+├── docker-compose.yml             la base, la API y el front juntos
 ├── docs/
 │   ├── 1.backend-mvp-plan.md          el plan del MVP, sin editar
 │   ├── 2.frontend-mvp-integracion.md  la guía del MVP para integrar el front
 │   ├── 3.backend-post-mvp-plan.md     el plan del post MVP, sin editar
 │   ├── 4.frontend-post-mvp-integracion.md  la guía del post MVP
+│   ├── superpowers/                   spec y plan del perfil público, sin editar
 │   └── verificacion.md                lo genera verificar.sh; no se commitea
+├── frontend/                      Next.js; su README cuenta la arquitectura
 └── backend/
+    ├── CLAUDE.md                  comandos, capas, aislamiento y trampas ya pagadas
     ├── docker-compose.yml         solo Postgres 17, con healthcheck, en el puerto 5442
     ├── prisma/
     │   ├── schema.prisma          las 12 tablas
@@ -188,7 +223,7 @@ tp-final/
     │   └── conectar-mp.ts         conecta un centro a una cuenta de prueba de MP, sin OAuth
     ├── openapi.json               el contrato, regenerado con `npm run spec`
     ├── verificacion/
-    │   ├── verificar.sh           los 558 casos de dominio
+    │   ├── verificar.sh           los 569 casos de dominio
     │   ├── verificar-limite.sh    que el límite de peticiones exista
     │   └── mercadopago-mock.mjs   la API de Mercado Pago en memoria, para verificar
     └── src/
@@ -245,13 +280,14 @@ identificador en inglés para el front, el `message` está en español porque lo
 | `GET` · `PUT` | `/tenants/{slug}/suscripcion` | admin | `200` · `409` `mercadopago_not_connected` |
 | `POST` | `/tenants/{slug}/webhooks/mercadopago` | Mercado Pago | fuera del OpenAPI |
 | `GET` | `/planes` | público | `200` |
+| `GET` | `/tenants/{slug}` | público | `200` `{ slug, nombre }` · `404` `tenant_not_found` |
 | `POST` | `/tenants` | público | `201` centro y sesión · `409` `slug_taken` |
 | `POST` | `/webhooks/mercadopago` | Mercado Pago, firmado | fuera del OpenAPI · `401` `invalid_signature` |
 | `POST` | `/plataforma/sesiones` | público | `201` token · `401` |
 | `GET` | `/plataforma/tenants` · `/plataforma/resumen` | superadmin | `200` |
 | `PATCH` | `/plataforma/tenants/{slug}` | superadmin | `200` · `404` |
 
-Treinta operaciones en el contrato y dos webhooks fuera de él. El único `DELETE` es el de la
+Treinta y una operaciones en el contrato y dos webhooks fuera de él. El único `DELETE` es el de la
 conexión con Mercado Pago, que después de la llamada no existe más. Toda escritura pública tiene
 límite de peticiones: 5 por minuto en logins, códigos y altas de reserva, y 3 por hora en el
 alta de centros.
@@ -316,6 +352,54 @@ Después del MVP, la reserva trae además:
 
 En un centro que cobra online, un turno en efectivo nace `pendiente`, con la seña a pagar. El
 detalle está en la [guía del post MVP](docs/4.frontend-post-mvp-integracion.md).
+
+## Fragmentos clave del código
+
+Cuatro piezas que sostienen el diseño, abreviadas. Las escribió el agente; las decisiones que
+expresan están en la sección que sigue.
+
+**La extensión que sella el centro en cada consulta** (`backend/src/tenancy/tenant-scope.ts`).
+El `tenantId` va último: uno que venga del llamador se pisa, no se mezcla.
+
+```ts
+const tenantId = TenantContext.require();   // falla cerrado: sin centro no hay query
+if (!SIN_WHERE.has(operation)) next.where = { ...next.where, tenantId };
+if (next.data) next.data = Array.isArray(next.data) ? next.data.map(sellar) : sellar(next.data);
+```
+
+**El chequeo que tira el arranque** (mismo archivo). Una tabla nueva sin `tenantId` escaparía de
+todos los filtros en silencio; así es un error en la primera corrida.
+
+```ts
+const sinTenant = modelos.map((m) => m.name).filter((n) => !GLOBALES.has(n) && !conTenant.has(n));
+if (sinTenant.length > 0) throw new Error(`Modelos sin columna ${COLUMNA}: ${sinTenant.join(', ')}.`);
+```
+
+**El reintento que no se disparaba** (`backend/src/prisma/run-serializable.ts`). Con el driver
+adapter de Prisma 7 el conflicto no llega como `P2034`, y hay que mirar las dos formas:
+
+```ts
+function esConflictoDeSerializacion(e: unknown): boolean {
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034') return true;
+  const causa = (e as { cause?: { originalCode?: string; kind?: string } })?.cause;
+  return causa?.originalCode === '40001' || causa?.kind === 'TransactionWriteConflict';
+}
+```
+
+**El centro de una URL, en el front** (`frontend/src/lib/centro.ts`). Una llamada por render, 404
+solo si la API lo dice, y el nombre derivado si la API no contesta:
+
+```ts
+export const obtenerCentro = cache(async (slug: string): Promise<Centro | null> => {
+  if (!SLUG.test(slug)) return null;
+  try {
+    return await pedir<Centro>(enCentro(slug, ''), { signal: AbortSignal.timeout(4000) });
+  } catch (error) {
+    if (error instanceof ErrorApi && error.codigo === 'tenant_not_found') return null;
+    return { slug, nombre: nombreDeSlug(slug) };
+  }
+});
+```
 
 ## Qué decidí yo
 
@@ -547,6 +631,31 @@ clientas, los cobros, los webhooks, el alta de centros—, así que antes entrar
 Lo último cerraba un agujero real: hasta el MVP, cualquier token del centro pasaba las rutas de
 administración, y con cuentas de clientas eso les habría abierto la agenda completa.
 
+### En la entrega final
+
+**Trabajamos de a dos con el contrato en el medio.** El front no esperó al back ni al revés.
+Entre los dos había tres cosas:
+
+- `backend/openapi.json`, versionado y regenerado sin levantar nada;
+- dos guías de integración que dicen lo que un OpenAPI no puede: el orden de las llamadas y qué
+  hacer con cada error;
+- un cliente tipado que el front genera de ese archivo.
+
+Cuando el contrato cambia, los dos archivos generados van en el mismo PR. Si no, el compilador
+del front avisa.
+
+**El perfil público del centro existe, aunque el MVP lo había descartado.** El plan del MVP decía
+"no existe `GET /tenants/:slug`", porque devolver la fila filtraría `Tenant.id`, que es el claim
+`tid` del JWT. Esa objeción era contra devolver la fila, no contra la ruta. Sin ella, el front
+inventaba el nombre a partir del slug y cualquier URL armaba una landing falsa. La ruta copia dos
+campos uno por uno, y la verificación exige que la respuesta no tenga ninguna otra clave.
+
+**El 404 se decide en un solo lugar, y una caída no es un 404.** Lo decide el layout del segmento
+`[slug]`, que cubre todas las páginas del centro, panel incluido, sin tocarlas. Solo
+`tenant_not_found` es un 404. Si la API está caída, contesta 5xx o tarda más de 4 segundos, la
+página se arma con el nombre derivado del slug. Render en el plan gratis se duerme, y sin ese
+tope cada página de un centro esperaría a que despierte.
+
 ## Cómo gestioné el contexto
 
 ### En el MVP
@@ -642,6 +751,86 @@ Un resumen puede perder un matiz; un caso de `verificar.sh` que falla no.
 - **`/simplify`:** cuatro ángulos más de limpieza sobre el código ya corregido. Encontró, entre
   otras cosas, un error que yo había metido en el arreglo de un hallazgo; está en la sección
   que sigue.
+
+### En la entrega final
+
+**Los prompts que cambiaron el diseño**, copiados tal cual, con sus errores:
+
+- El de arranque, con el alcance y la estructura (resumido):
+
+  > Vamos a armar el MVP para el tp-final. [...] Stack: Backend: NestJS, Front: NextJS, Base:
+  > Postgres, Docker con docker compose para la db. Estructura: el TP final va a tener dos
+  > directorios, uno para el front y otro para el back, con el objetivo de que a futuro puedan
+  > ser dos repos distintos. [...] Armemos el plan, con las consultas que necesites.
+
+- Cuando el agente justificó Checkout Pro con lo que mostraba el prototipo:
+
+  > Mas alla de lo que dice el prototipo, el cual es simplemente un prototipo, no la fuente de la
+  > verdad, cual seria la mejor opcion?
+
+- Para comentar el plan del post MVP en el lugar y no en el chat:
+
+  > Ahi te pase a modo plan, abrime el plan en modo interactivo asi puedo ir haciendo comentarios ahi.
+
+- Probando Mercado Pago, cuando la configuración de un vendedor dependía de variables de entorno:
+
+  > El vendedor en producción no va a configurar las variables de entorno, creo que lo planteamos
+  > mal de entrada
+
+  De ahí salió separar los dos papeles de Mercado Pago: la app de la plataforma, que se
+  configura una vez, y la cuenta de cada centro, que se conecta con un botón.
+
+- Cuando la suscripción pedía un email:
+
+  > no tienen mail las cuentas de mp, ademas si acabo de configurar mp, por que me pide el mail,
+  > no deberia usar la misma cuenta que acabo de conectar?
+
+  Ahora la suscripción la paga la cuenta conectada, y el backend le pide el email a Mercado Pago.
+
+**Herramientas además del chat.**
+
+- **Modo plan**, para las dos etapas grandes.
+- **Sub-agentes y workflows** para las revisiones en paralelo: cada hallazgo pasaba por
+  verificadores que intentaban refutarlo leyendo el código.
+- **El plugin de Mercado Pago**, con su skill de revisión y su MCP. Con el MCP consulté la
+  documentación oficial y corrí el checklist de calidad de la integración, y de ahí salieron
+  nombre, apellido y descripción en el checkout, y el `test_token` en OAuth.
+- **El navegador del agente por MCP**, para recorrer el front y para la prueba contra el sandbox.
+  El pago lo hacía yo a mano, porque Mercado Pago no habilita el botón Pagar en un navegador
+  automatizado.
+
+**El perfil público, con superpowers.** Lo hice con el flujo que vimos en clase, sobre una
+rama propia:
+
+1. **`brainstorming`.** El agente clasificó el cambio como arquitectónico, porque toca el contrato
+   del que depende el front, y me hizo preguntar de a una:
+   - alcance: elegí nombre y 404, y dejé los horarios afuera;
+   - enfoque: un layout de `[slug]`, entre tres;
+   - las tres secciones del diseño, aprobadas antes de escribir el
+     [spec](docs/superpowers/specs/2026-10-13-perfil-publico-del-centro-design.md).
+2. **`writing-plans`.** Escribió un [plan](docs/superpowers/plans/2026-10-13-perfil-publico-del-centro.md)
+   de cuatro tareas, con el código de cada una y TDD:
+   - en el backend, casos nuevos en `verificar.sh` vistos fallar (10 de 569) antes del código;
+   - en el front, que no tiene tests, chequeos con `curl` en rojo y en verde.
+3. **`subagent-driven-development`.**
+   - Un sub-agente nuevo implementó cada tarea y otro la revisó antes de pasar a la siguiente.
+   - Después hubo una revisión final de toda la rama y una tanda de arreglos, con su re-revisión.
+   - Las decisiones que el agente tomó sin preguntarme quedaron anotadas con su costo si estaban mal.
+   - Lo que salió de esas revisiones está en *Qué salió mal*.
+4. **`finishing-a-development-branch`** abrió el PR #10.
+
+**Los CLAUDE.md llegaron tarde.** Durante el MVP y el post MVP, el contexto que sobrevivía a una
+sesión era:
+
+- los planes en `docs/`;
+- un commit por fase;
+- el script de verificación;
+- la memoria automática de Claude Code.
+
+Los [CLAUDE.md](CLAUDE.md) de `tp-final/`, `backend/` y `frontend/` los escribí al cerrar la
+entrega, cuando el proyecto ya tenía dos mitades y dos personas. Cada mitad se carga sola al
+trabajar ahí. Es lo primero que haría distinto: el aislamiento entre centros y las trampas ya
+pagadas tendrían que haber estado escritas para el agente desde el MVP, y no solo en este informe.
 
 ## Qué salió mal
 
@@ -783,4 +972,43 @@ del CLI de Prisma (mysql2 y deepmerge-ts), y la única salida que ofrecía npm e
 **Prisma no genera migraciones sin una terminal interactiva.** `prisma migrate dev` se niega a
 correr sin TTY cuando hay advertencias. Las migraciones las siguió generando Prisma, con
 `migrate diff` contra el esquema y `migrate deploy`: ninguna tiene SQL escrito a mano.
+
+### Contra Mercado Pago real
+
+La verificación pasaba entera contra el mock de Mercado Pago. Al probar contra el sandbox real
+aparecieron defectos que el mock no podía ver, porque el mock hacía lo que yo creía que hacía
+Mercado Pago:
+
+- **Se cobraba y el turno no se confirmaba nunca.** Sin una `PUBLIC_API_URL` en HTTPS, el
+  checkout salía sin `notification_url`. El aviso no llegaba, la reserva vencía con la plata
+  adentro y no quedaba ningún pago registrado para devolverla. Ahora, sin esa URL, ningún centro
+  cobra online.
+- **La vuelta de la suscripción iba a una página que el front no tiene.**
+- **El formulario anunciaba una seña cuando con Mercado Pago se cobraba el total.**
+- **La suscripción salía a nombre del email equivocado**: el de la administradora y no el de la
+  cuenta de Mercado Pago que la autoriza, y Mercado Pago rechaza el cobro si no coinciden.
+- **El plan no se activaba si se perdía un aviso.** Si el evento no estaba configurado cuando
+  Mercado Pago cobró, el aviso no se reenvía, y el centro quedaba pagando y en Básico. Ahora el
+  backend concilia con Mercado Pago al consultar el plan.
+
+Los reembolsos por API no se pudieron probar en el sandbox. Si fallan, el centro recibe el mail
+para devolver a mano.
+
+### En el perfil público
+
+Las revisiones encontraron lo que el plan no había previsto:
+
+- **Ocho páginas tenían la marca del primer cliente fija en el título.** Con la plantilla nueva
+  se leía "Reservar turno — Natura Estética Integral · Lo de Lili". Lo vio el sub-agente que
+  implementaba el front.
+- **El nombre real rompía el encabezado en el celular.** El nombre derivado era una palabra;
+  "Natura Estética Integral" desbordaba la pantalla a 375 px y cortaba el botón "Reservar turno".
+  El código venía tal cual del plan, y lo midió el revisor en el navegador.
+- **Un slug con `%00` daba 200.** La API contestaba 500 y el front lo tomaba como una caída, así
+  que armaba la página con el nombre derivado. Ahora un slug con un formato que no puede existir
+  es un 404 sin preguntarle a la API. El 500 de la API con ese slug sigue ahí: viene del guard,
+  que es anterior a este feature.
+- **Un chequeo pasaba en rojo.** El plan comparaba el nombre de `bella-piel`, pero "Bella Piel"
+  es justo lo que sale de derivar el slug, así que habría pasado antes de escribir el código. Se
+  cambió por un centro cuyo nombre el slug no puede reconstruir.
 
