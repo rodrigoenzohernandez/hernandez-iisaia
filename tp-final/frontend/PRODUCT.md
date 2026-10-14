@@ -54,8 +54,8 @@ online, la seña se cobra en el acto: no es una promesa de cobro a coordinar des
 Multi-tenant de verdad. El backend expone cada centro bajo `/tenants/{slug}`; en el frontend el
 slug es un segmento de la URL (`/[slug]/...`) y un solo build sirve a todos. Las superficies
 cross-tenant —la landing de la plataforma, el registro de un centro, el panel de superadmin y la
-vuelta de Mercado Pago— viven en la raíz, fuera del slug. No hay endpoint público que devuelva el
-nombre del centro, así que el frontend lo deriva del slug (title-case).
+vuelta de Mercado Pago— viven en la raíz, fuera del slug. El nombre de cada centro sale de
+`GET /tenants/{slug}`, que es pública; si la API no contesta, el frontend lo deriva del slug.
 
 La marca del producto es **Turnos**, la plataforma; cada centro es un tenant con su propio nombre.
 `lo-de-lili` (Lo de Lili, plan Profesional, Mercado Pago conectado) y `bella-piel` (Bella Piel,
@@ -118,7 +118,7 @@ template de stock.
 
 Real y verificable:
 
-- El contrato completo de la API en `../backend/openapi.json` (30 operaciones, 38 códigos de error)
+- El contrato completo de la API en `../backend/openapi.json` (31 operaciones, 38 códigos de error)
   y la guía de integración post-MVP en `../docs/4.frontend-post-mvp-integracion.md`.
 - Tres centros del seed con sus catálogos reales, dos usables de punta a punta: `lo-de-lili`
   (Profesional, Mercado Pago conectado) y `bella-piel` (Básico).

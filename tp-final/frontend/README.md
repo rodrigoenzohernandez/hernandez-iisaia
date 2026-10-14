@@ -1,11 +1,18 @@
-# Frontend — Natura Estética Integral
+# Frontend — Turnos
 
-La cara pública del centro: una landing que muestra los tratamientos y un flujo de reserva sin
-cuenta en tres pasos. Consume la API de [`../backend`](../backend) y no tiene servidor propio ni
-base de datos.
+El sitio de la plataforma y de cada centro. Un solo build sirve a todos: el centro viaja en la URL
+(`/[slug]/...`). Consume la API de [`../backend`](../backend) y no tiene servidor propio ni base de
+datos. Lo hizo Matías Alfaro.
 
-Next.js 16 con App Router, TypeScript y Tailwind 4. El panel de administración queda fuera de
-esta entrega: esto cubre los cinco endpoints públicos del contrato, no los once.
+Next.js 16 con App Router, TypeScript y Tailwind 4. Cubre las tres personas del producto:
+
+- **la clienta**: la portada del centro, la reserva en tres pasos, el pago con Mercado Pago y
+  "Mis turnos", donde entra con un código por mail para reprogramar o cancelar;
+- **la administradora**: el panel con la agenda, los tratamientos, los horarios, los cobros, la
+  conexión con Mercado Pago y el plan;
+- **la plataforma**: la landing, el alta de centros y el panel de superadmin.
+
+Desplegado en [pasate.vercel.app](https://pasate.vercel.app/), contra la API de Render.
 
 ## Cómo se ejecuta
 
@@ -88,31 +95,40 @@ contenedor del frontend, así que apunta a `http://backend:3100/api/v1`. Fuera d
 coinciden y no hace falta definir la interna. El slug del centro **ya no se hornea**: viaja en la
 URL (`/[slug]/...`), así que un solo build sirve a todos los centros.
 
-## El nombre en pantalla y el slug de la API son distintos
 
-El centro se llama **Natura Estética Integral** y así se lee en toda la interfaz. En las URLs de
-la API viaja `lo-de-lili`, que es el slug con el que el seed del backend creó el tenant. No hay
-ningún endpoint que devuelva el nombre del centro —la tabla `Tenant` no se expone— así que la
-marca la pone el frontend, desde `src/lib/centro.ts`.
+## El nombre del centro
+
+Sale de `GET /tenants/{slug}`. `app/[slug]/layout.tsx` lo pide una vez por render (`obtenerCentro`
+en `src/lib/centro.ts`, con `React.cache`), da 404 si el centro no existe o está dado de baja, y lo
+pone en el título de cada página con una plantilla ("Reservar turno · Lo de Lili"). Si la API no
+contesta en 4 segundos, la página se arma igual con el nombre derivado del slug: una caída de la
+API no convierte todos los centros en 404.
 
 ## Arquitectura
 
 ```
 src/
 ├── app/
-│   ├── layout.tsx          fuente variable, metadata, shell
-│   ├── page.tsx            landing (dinámica: muestra disponibilidad real)
-│   ├── reservar/page.tsx   trae el catálogo y monta el flujo
-│   └── globals.css         tokens del sistema visual
-├── components/
-│   ├── reserva/Flujo.tsx         los tres pasos y el manejo de cada error
-│   ├── reserva/SelectorFecha.tsx calendario y grilla de horarios
-│   └── …                          marca, encabezado, pie, botones, íconos
+│   ├── page.tsx                  landing de la plataforma
+│   ├── registrarse/              alta de un centro
+│   ├── plataforma/               panel de superadmin y su ingreso
+│   ├── mercadopago/vuelta/       la vuelta del OAuth de Mercado Pago
+│   ├── not-found.tsx             la 404, también la de un centro que no existe
+│   └── [slug]/
+│       ├── layout.tsx            pide el centro, da 404 y arma el título
+│       ├── page.tsx              portada del centro, con el próximo horario libre real
+│       ├── reservar/             el flujo de reserva
+│       ├── reservas/[id]/pago/   la vuelta de Mercado Pago después de pagar
+│       ├── ingresar/ · mis-turnos/   la clienta, con código por mail
+│       └── admin/                agenda, tratamientos, horarios y cobros
+├── components/                   reserva/, cuenta/, admin/, plataforma/ y las piezas comunes
 └── lib/
-    ├── api.d.ts            GENERADO del contrato — no editar a mano
-    ├── cliente.ts          fetch tipado y normalización de errores
-    ├── formato.ts          plata, fechas y horas
-    └── centro.ts           nombre y horarios del centro
+    ├── api.d.ts                  GENERADO del contrato — no editar a mano
+    ├── cliente.ts                fetch tipado y errores; la única puerta a la API
+    ├── cuenta.ts · admin.ts · plataforma.ts   las llamadas de cada persona
+    ├── sesion.ts                 los tokens, por centro y por rol
+    ├── centro.ts                 el centro de la URL y el nombre de la plataforma
+    └── formato.ts                plata, fechas y horas
 ```
 
 El cliente tipado sale del contrato del backend, no se escribe a mano:
@@ -121,13 +137,13 @@ El cliente tipado sale del contrato del backend, no se escribe a mano:
 npm run api:types    # openapi-typescript ../backend/openapi.json -o src/lib/api.d.ts
 ```
 
-De ahí salen los diecisiete códigos de error como una unión de strings, así que el `switch` del
-manejo de errores es exhaustivo y el compilador avisa si el backend agrega uno.
+De ahí salen los códigos de error como una unión de strings, así que el `switch` del manejo de
+errores es exhaustivo y el compilador avisa si el backend agrega uno.
 
 ## Las reglas del contrato que gobiernan este código
 
-Salen de [`../docs/2.frontend-mvp-integracion.md`](../docs/2.frontend-mvp-integracion.md) y son
-las que cuestan una tarde si se ignoran.
+Salen de las guías de integración ([MVP](../docs/2.frontend-mvp-integracion.md) y
+[post MVP](../docs/4.frontend-post-mvp-integracion.md)) y son las que cuestan una tarde si se ignoran.
 
 **La plata es centavos enteros.** `senaCentavos: 540000` son $5.400,00. Se divide por cien una
 sola vez, al mostrar, en `formato.ts`. En ningún otro lado.
@@ -146,33 +162,20 @@ diagonal: el estado es estructura y no solo color.
 mandar `horaFin`, `senaCentavos` o cualquier campo auxiliar del formulario devuelve `400`. Por
 eso `crearReserva` construye el objeto explícitamente en lugar de spreadear el estado del form.
 
-**El `429` no usa el formato de error de la API.** Los diecisiete códigos llegan como
-`{ code, message }`, pero el limitador de peticiones devuelve `{ statusCode, message }` sin
-`code`. El cliente lo traduce a un código propio para que la UI no lea `undefined` justo cuando
-alguien aprieta el botón varias veces.
-
 **`high_contention` se reintenta solo.** Es el único error que se resuelve reintentando: Postgres
 abortó la transacción perdedora de un empate. `crearReserva` reintenta dos veces antes de
 propagarlo.
 
-**Efectivo confirma, Mercado Pago deja pendiente.** No hay integración real de pagos. La
-pantalla de confirmación dice cuál de las dos cosas pasó, porque significan cosas distintas para
-quien reservó.
-
-## Lo que la interfaz no promete
-
-Porque la API todavía no lo hace: no se manda ningún mail, la clienta no puede cancelar ni
-reprogramar su turno, y no hay checkout de Mercado Pago al que mandarla. La pantalla de
-confirmación lo dice con todas las letras en vez de dejarlo implícito.
+**En un centro que cobra online, todo turno pasa por Mercado Pago.** Con efectivo se paga la seña
+online y el resto en el local; con Mercado Pago, el total. El turno queda `pendiente` hasta que
+llega el aviso del pago, y la pantalla de la vuelta le pregunta el estado real al backend: los
+parámetros que Mercado Pago agrega a la URL los escribe cualquiera.
 
 ## Lo que falta completar antes de publicarlo
 
-- **Fotografía real del centro.** Las seis imágenes de `public/img/` son de Unsplash, con
-  licencia libre y atribución en [`public/img/CREDITOS.md`](public/img/CREDITOS.md). Para
-  reemplazarlas alcanza con sustituir el archivo manteniendo el nombre y la relación de aspecto.
-- **Datos de contacto.** No hay dirección, teléfono ni redes en el pie, a propósito: no los
-  tengo y inventarlos sería peor que omitirlos.
-- **Los horarios de atención** están declarados en `src/lib/centro.ts` porque el `GET` de
-  ventanas de atención es privado y este frontend es público. Si se editan las franjas en el
-  backend, hay que actualizarlos ahí.
+- **Fotografía real de cada centro.** Las seis imágenes de `public/img/` son de Unsplash, con
+  licencia libre y atribución en [`public/img/CREDITOS.md`](public/img/CREDITOS.md), y hoy son las
+  mismas para todos los centros.
+- **Datos de contacto y horarios de atención** en el pie. La API todavía no los expone en público:
+  el perfil del centro trae solo su nombre.
 - **Los precios del seed son placeholder**, según el plan del backend. Hay que cargar los reales.
