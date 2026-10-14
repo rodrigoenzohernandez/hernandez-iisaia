@@ -48,10 +48,10 @@ const BASE =
 
 /**
  * Prefijo de las rutas de un centro. El slug ya no se hornea en el build: viaja en la URL
- * (`/[slug]/...`) y cada llamada lo recibe. Las rutas de plataforma y `/planes` no lo llevan.
+ * (`/[slug]/...`) y cada llamada lo recibe, y acá se codifica para la URL. Las rutas de plataforma y `/planes` no lo llevan.
  */
 export function enCentro(slug: string, ruta: string): string {
-  return `/tenants/${slug}${ruta}`;
+  return `/tenants/${encodeURIComponent(slug)}${ruta}`;
 }
 
 export type Opciones = Omit<RequestInit, 'body'> & { token?: string; body?: unknown };

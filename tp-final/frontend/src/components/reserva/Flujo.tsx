@@ -335,19 +335,21 @@ export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: 
               </div>
 
               <fieldset className="mt-10">
-                <legend className={etiqueta}>Cómo pagás la seña</legend>
+                <legend className={etiqueta}>Cómo pagás</legend>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   {(
                     [
+                      // El front no sabe si el centro cobra online: con efectivo, el backend
+                      // decide si hay seña para pagar con Mercado Pago antes de confirmar.
                       {
                         valor: 'efectivo',
                         titulo: 'En efectivo, en el local',
-                        nota: 'El turno queda confirmado ahora mismo.',
+                        nota: 'Si el centro pide seña, la pagás ahora con Mercado Pago y el resto el día del turno.',
                       },
                       {
                         valor: 'mercadopago',
                         titulo: 'Mercado Pago',
-                        nota: 'Todavía no se cobra online. El turno queda pendiente hasta que el centro lo confirme a mano.',
+                        nota: 'Pagás el total ahora. El turno se confirma cuando se acredita el pago.',
                       },
                     ] as const
                   ).map((opcion) => (
@@ -398,15 +400,18 @@ export function Flujo({ servicios, inicial }: { servicios: Servicio[]; inicial: 
                 <Dato titulo="Cuándo" valor={`${formatearFechaLarga(fecha)}, ${hora} h`} />
                 <Dato titulo="Dura" valor={formatearDuracion(servicio.duracionMinutos)} />
                 <Dato titulo="Sale" valor={formatearPrecio(servicio.precioCentavos)} />
-                <Dato
-                  titulo="Seña a abonar"
-                  valor={formatearPrecio(servicio.senaCentavos)}
-                  destacado
-                />
+                {/* Con Mercado Pago se cobra el precio entero, no la seña. */}
+                {metodoPago === 'mercadopago' ? (
+                  <Dato titulo="Pagás ahora" valor={formatearPrecio(servicio.precioCentavos)} destacado />
+                ) : (
+                  <Dato titulo="Seña" valor={formatearPrecio(servicio.senaCentavos)} destacado />
+                )}
               </dl>
-              <p className="angosta mt-7 border-t border-papel/15 pt-5 text-[0.82rem] leading-relaxed text-papel/60">
-                La seña se descuenta del total el día del turno.
-              </p>
+              {metodoPago === 'efectivo' && (
+                <p className="angosta mt-7 border-t border-papel/15 pt-5 text-[0.82rem] leading-relaxed text-papel/60">
+                  La seña se descuenta del total el día del turno.
+                </p>
+              )}
             </aside>
           </div>
         </section>
@@ -484,7 +489,7 @@ function Confirmacion({ reserva, servicio }: { reserva: Reserva; servicio: Servi
           <Flecha className="h-4 w-4" />
         </Link>
         <Link
-          href="/"
+          href={`/${slug}`}
           className="inline-flex items-center gap-2.5 text-[0.76rem] font-semibold uppercase tracking-[0.16em] text-tinta-suave underline decoration-tinta/30 underline-offset-[0.35em]"
         >
           <FlechaIzquierda className="h-4 w-4" />

@@ -6,12 +6,7 @@ import {
   ApiServiceUnavailableResponse,
 } from '@nestjs/swagger';
 import { ApiSoloAdmin, ApiTenant } from '../common/api.decorators.js';
-import {
-  CurrentTenant,
-  CurrentUsuario,
-  type TenantRequest,
-  type UsuarioRequest,
-} from '../common/decorators.js';
+import { CurrentTenant, type TenantRequest } from '../common/decorators.js';
 import { ErrorDto } from '../common/error.dto.js';
 import { SuscripcionDto, UpdateSuscripcionDto } from './dto/suscripcion.dto.js';
 import { SuscripcionesService } from './suscripciones.service.js';
@@ -27,7 +22,9 @@ export class SuscripcionController {
   @Get()
   @ApiOkResponse({ type: SuscripcionDto })
   estado(): Promise<SuscripcionDto> {
-    return this.suscripciones.estado();
+    // Concilia con MP si la suscripcion quedo pendiente: un aviso perdido no deja al centro
+    // pagando y en Basico.
+    return this.suscripciones.estado({ conciliar: true });
   }
 
   /** Cambia de plan: al Profesional con el cobro mensual en Mercado Pago, o de vuelta al Basico. */
@@ -53,9 +50,8 @@ export class SuscripcionController {
   })
   cambiar(
     @CurrentTenant() tenant: TenantRequest,
-    @CurrentUsuario() usuario: UsuarioRequest,
     @Body() dto: UpdateSuscripcionDto,
   ): Promise<SuscripcionDto> {
-    return this.suscripciones.cambiar(tenant, usuario, dto);
+    return this.suscripciones.cambiar(tenant, dto);
   }
 }

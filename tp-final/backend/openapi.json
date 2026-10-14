@@ -2349,6 +2349,49 @@
           "AltaCentro"
         ]
       }
+    },
+    "/api/v1/tenants/{tenantSlug}": {
+      "get": {
+        "operationId": "AltaCentroController_perfil",
+        "parameters": [
+          {
+            "name": "tenantSlug",
+            "required": true,
+            "in": "path",
+            "description": "Identificador del centro en la URL, por ejemplo `lo-de-lili`.",
+            "schema": {
+              "example": "lo-de-lili",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "El slug y el nombre del centro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CentroPublicoDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El centro no existe o esta inactivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "El nombre de un centro, para mostrarlo en su sitio.",
+        "tags": [
+          "AltaCentro"
+        ]
+      }
     }
   },
   "info": {
@@ -3330,7 +3373,7 @@
           },
           "emailPagador": {
             "type": "string",
-            "description": "El email de la cuenta de Mercado Pago que va a pagar: si no coincide, Mercado Pago\nrechaza el cobro. Default: el de la administradora.",
+            "description": "Solo si paga otra cuenta de Mercado Pago que la conectada: si no coincide con la que\nautoriza, Mercado Pago rechaza el cobro. Default: el de la cuenta conectada del centro.",
             "maxLength": 254,
             "format": "email",
             "example": "pagos@lodelili.com"
@@ -3611,7 +3654,7 @@
           "admin"
         ]
       },
-      "CentroCreadoResumenDto": {
+      "CentroPublicoDto": {
         "type": "object",
         "properties": {
           "slug": {
@@ -3638,7 +3681,7 @@
             "$ref": "#/components/schemas/UsuarioSesionDto"
           },
           "centro": {
-            "$ref": "#/components/schemas/CentroCreadoResumenDto"
+            "$ref": "#/components/schemas/CentroPublicoDto"
           }
         },
         "required": [

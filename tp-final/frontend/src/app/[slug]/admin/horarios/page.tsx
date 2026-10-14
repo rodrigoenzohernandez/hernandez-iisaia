@@ -5,7 +5,7 @@ import { EncabezadoAdmin } from '@/components/admin/EncabezadoAdmin';
 import { Horarios } from '@/components/admin/Horarios';
 
 export const metadata: Metadata = {
-  title: 'Horarios — Natura Estética Integral',
+  title: 'Horarios',
   robots: { index: false },
 };
 

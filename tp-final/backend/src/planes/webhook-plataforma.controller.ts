@@ -3,6 +3,7 @@ import {
   Controller,
   Headers,
   HttpCode,
+  Logger,
   Post,
   Query,
   UnauthorizedException,
@@ -20,6 +21,8 @@ import { SuscripcionesService } from './suscripciones.service.js';
  */
 @Controller('webhooks/mercadopago')
 export class WebhookPlataformaController {
+  private readonly logger = new Logger('Webhooks');
+
   constructor(
     private readonly cuentas: CuentasMercadoPagoService,
     private readonly suscripciones: SuscripcionesService,
@@ -44,9 +47,17 @@ export class WebhookPlataformaController {
         { headers, query, body },
         { secret: env.mercadoPago.webhookSecret, signature: 'required' },
       );
+      this.logger.debug(
+        `Aviso de la plataforma: ${evento.type === 'ignored' ? `ignorado, ${evento.reason}` : evento.type}`,
+      );
       await this.suscripciones.registrarEvento(evento);
     } catch (e) {
       if (e instanceof InvalidWebhookSignatureError) {
+        // Visible en el log: el filtro de errores no loguea las HttpException, y un
+        // MP_WEBHOOK_SECRET mal copiado dejaria todas las suscripciones sin activar en silencio.
+        this.logger.warn(
+          `Aviso de la plataforma rechazado por firma: ${e.reason}`,
+        );
         throw new UnauthorizedException({
           code: 'invalid_signature',
           message: 'La firma del aviso no es valida.',

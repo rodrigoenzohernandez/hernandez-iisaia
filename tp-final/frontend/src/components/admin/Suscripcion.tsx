@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Aviso } from '@/components/Aviso';
 import { Boton } from '@/components/Boton';
-import { campo, etiqueta, nota } from '@/components/campos';
+import { nota } from '@/components/campos';
 import { ErrorApi, type Plan } from '@/lib/cliente';
 import { cambiarPlan, type Suscripcion as SuscripcionDto } from '@/lib/admin';
 import { formatearFechaLarga, formatearPrecio } from '@/lib/formato';
@@ -26,8 +26,6 @@ export function Suscripcion({
   onCambio: () => void;
 }) {
   const slug = useSlug();
-  const [emailPagador, setEmailPagador] = useState('');
-  const [subiendo, setSubiendo] = useState(false);
   const [bajando, setBajando] = useState(false);
   const [trabajando, setTrabajando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,12 +34,11 @@ export function Suscripcion({
   const mp = suscripcion.suscripcion;
   const procesando = mp?.estado === 'pending';
 
-  async function subir(evento: React.FormEvent) {
-    evento.preventDefault();
+  async function subir() {
     setTrabajando(true);
     setError(null);
     try {
-      const resp = await cambiarPlan(slug, token, 'profesional', emailPagador.trim() || undefined);
+      const resp = await cambiarPlan(slug, token, 'profesional');
       // El PUT devuelve la URL donde la administradora autoriza el cobro mensual.
       if (resp.suscripcion?.url) {
         window.location.href = resp.suscripcion.url;
@@ -116,35 +113,15 @@ export function Suscripcion({
 
       {/* acciones */}
       <div className="mt-10">
-        {!esProfesional &&
-          (subiendo ? (
-            <form onSubmit={subir} className="max-w-[46ch]">
-              <label htmlFor="email-pagador" className={etiqueta}>Email de la cuenta de Mercado Pago que paga</label>
-              <input
-                id="email-pagador"
-                type="email"
-                className={campo}
-                value={emailPagador}
-                onChange={(e) => setEmailPagador(e.target.value)}
-                autoFocus
-                aria-describedby="pagador-nota"
-              />
-              <p id="pagador-nota" className={nota}>
-                Si lo dejás vacío, usamos tu email. Si no coincide con la cuenta que paga, Mercado
-                Pago rechaza el cobro.
-              </p>
-              <div className="mt-7 flex flex-wrap items-center gap-5">
-                <Boton type="submit" disabled={trabajando}>
-                  {trabajando ? 'Abriendo Mercado Pago…' : 'Ir a autorizar el cobro'}
-                </Boton>
-                <button type="button" onClick={() => setSubiendo(false)} disabled={trabajando} className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-tinta-suave underline decoration-tinta/30 underline-offset-[0.35em] disabled:opacity-45">
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          ) : (
-            <Boton onClick={() => setSubiendo(true)}>Subir al Profesional</Boton>
-          ))}
+        {!esProfesional && (
+          <div className="max-w-[46ch]">
+            <Boton onClick={subir} disabled={trabajando}>
+              {trabajando ? 'Abriendo Mercado Pago…' : 'Subir al Profesional'}
+            </Boton>
+            {/* El backend toma el email de la cuenta conectada: es la única que MP deja autorizar. */}
+            <p className={nota}>Lo autorizás en Mercado Pago con la cuenta que conectaste.</p>
+          </div>
+        )}
 
         {esProfesional &&
           !procesando &&

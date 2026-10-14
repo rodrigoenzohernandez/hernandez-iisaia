@@ -10,9 +10,11 @@ import {
   PaymentRefund,
   PreApproval,
   Preference,
+  User,
   WebhookSignatureValidator,
 } from 'mercadopago';
 import {
+  type Account,
   type Checkout,
   type CheckoutInput,
   type ConnectedAccount,
@@ -134,6 +136,18 @@ export class MercadoPago {
 
   private config(): MercadoPagoConfig {
     return configDelSdk(this.opciones.accessToken, this.opciones);
+  }
+
+  /**
+   * La cuenta duenia de este token. El panel de MP no muestra el email de las cuentas de
+   * prueba, y es el que pide una suscripcion para saber quien paga.
+   */
+  async getAccount(): Promise<Account> {
+    const u = await llamar(() => new User(this.config()).get());
+    if (!u.id || !u.email) {
+      throw new MercadoPagoError('MP no devolvio la cuenta', 502, true);
+    }
+    return { id: String(u.id), email: u.email };
   }
 
   /** Crea un link de pago de Checkout Pro. */
@@ -283,14 +297,22 @@ export class MercadoPago {
   }
 
   async getSubscriptionCharge(id: string): Promise<SubscriptionCharge> {
-    const r = await llamar(() => new Invoice(this.config()).get({ id }));
-    return {
-      id: String(r.id),
-      subscriptionId: r.preapproval_id ?? null,
-      status: r.status ?? 'unknown',
-      paymentStatus: r.payment?.status ? estadoDePago(r.payment.status) : null,
-      chargedAt: r.debit_date ? new Date(r.debit_date) : null,
-    };
+    return aCobro(await llamar(() => new Invoice(this.config()).get({ id })));
+  }
+
+  /**
+   * Los cobros de una suscripcion. Para conciliar sin depender de los avisos: MP no reenvia
+   * los de un evento que no estaba configurado cuando paso.
+   */
+  async getSubscriptionCharges(
+    subscriptionId: string,
+  ): Promise<SubscriptionCharge[]> {
+    const r = await llamar(() =>
+      new Invoice(this.config()).search({
+        options: { preapproval_id: subscriptionId },
+      }),
+    );
+    return (r.results ?? []).map(aCobro);
   }
 
   /**
@@ -356,8 +378,12 @@ export class MercadoPago {
           };
       }
     } catch (e) {
-      // Un id que esta cuenta no ve no es un aviso para ella.
-      if (e instanceof MercadoPagoError && e.status === 404) {
+      // Un id que esta cuenta no ve, o que ni siquiera es de ese recurso (MP da 400), no es un
+      // aviso para ella. Con un error, MP lo reintentaria durante dias sin que sirva.
+      if (
+        e instanceof MercadoPagoError &&
+        (e.status === 404 || e.status === 400)
+      ) {
         return {
           type: 'ignored',
           reason: 'recurso inexistente para esta cuenta',
@@ -466,6 +492,22 @@ function aSuscripcion(r: {
     amountCents: aCentavos(r.auto_recurring?.transaction_amount ?? 0),
     nextChargeAt: r.next_payment_date ? new Date(r.next_payment_date) : null,
     url: r.init_point ? sinActivation(r.init_point) : null,
+  };
+}
+
+function aCobro(r: {
+  id?: number | string;
+  preapproval_id?: string;
+  status?: string;
+  payment?: { status?: string };
+  debit_date?: string;
+}): SubscriptionCharge {
+  return {
+    id: String(r.id),
+    subscriptionId: r.preapproval_id ?? null,
+    status: r.status ?? 'unknown',
+    paymentStatus: r.payment?.status ? estadoDePago(r.payment.status) : null,
+    chargedAt: r.debit_date ? new Date(r.debit_date) : null,
   };
 }
 

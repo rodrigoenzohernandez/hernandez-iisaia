@@ -118,6 +118,9 @@ export type ConnectedAccount = {
   liveMode: boolean;
 };
 
+/** La cuenta duenia de un token: con ese email es con el que entra a Mercado Pago. */
+export type Account = { id: string; email: string };
+
 /** Lo que el proyecto le pasa a parseWebhook, sacado de su framework. */
 export type WebhookRequest = {
   headers: Record<string, string | string[] | undefined>;

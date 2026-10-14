@@ -48,8 +48,8 @@ export class UpdateSuscripcionDto {
   plan!: Plan;
 
   /**
-   * El email de la cuenta de Mercado Pago que va a pagar: si no coincide, Mercado Pago
-   * rechaza el cobro. Default: el de la administradora.
+   * Solo si paga otra cuenta de Mercado Pago que la conectada: si no coincide con la que
+   * autoriza, Mercado Pago rechaza el cobro. Default: el de la cuenta conectada del centro.
    */
   @ApiProperty({ required: false, example: 'pagos@lodelili.com' })
   @IsOptional()

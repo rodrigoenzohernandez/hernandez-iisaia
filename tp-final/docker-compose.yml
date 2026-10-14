@@ -129,6 +129,9 @@ services:
       # Con `log` los mails salen por la consola de la API, incluido el codigo de la clienta.
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-log}
       THROTTLE_LIMIT: ${THROTTLE_LIMIT:-5}
+      # Donde Mercado Pago avisa los pagos: HTTPS, en local un túnel. Sin ella ningún centro
+      # cobra online.
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-}
     depends_on:
       db:
         condition: service_healthy

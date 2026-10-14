@@ -5,7 +5,7 @@ import { EncabezadoAdmin } from '@/components/admin/EncabezadoAdmin';
 import { Tratamientos } from '@/components/admin/Tratamientos';
 
 export const metadata: Metadata = {
-  title: 'Tratamientos — Natura Estética Integral',
+  title: 'Tratamientos',
   robots: { index: false },
 };
 

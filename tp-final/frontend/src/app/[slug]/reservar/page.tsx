@@ -6,7 +6,7 @@ import { Flujo } from '@/components/reserva/Flujo';
 import { listarServicios, type Servicio } from '@/lib/cliente';
 
 export const metadata: Metadata = {
-  title: 'Reservar turno — Natura Estética Integral',
+  title: 'Reservar turno',
   description:
     'Elegí el tratamiento, mirá los horarios libres de la agenda real y reservá tu turno en tres pasos.',
 };

@@ -1,9 +1,13 @@
+'use client';
+
 import { Aviso } from '@/components/Aviso';
 import { Boton, BotonEnlace } from '@/components/Boton';
 import { Flecha } from '@/components/Iconos';
+import { useSlug } from '@/hooks/useSlug';
 
 /** La sesión no está activa o venció: mismo cartel en las tres pantallas. */
 export function PanelAnonimo() {
+  const slug = useSlug();
   return (
     <section className="max-w-[50ch]">
       <h1 className="ancha text-[clamp(1.5rem,2.8vw,2.3rem)] font-bold uppercase leading-tight tracking-[-0.025em]">
@@ -13,7 +17,7 @@ export function PanelAnonimo() {
         Tu sesión no está activa o venció. Ingresá de nuevo con tu email y contraseña.
       </p>
       <div className="mt-11">
-        <BotonEnlace href="/admin/ingresar">
+        <BotonEnlace href={`/${slug}/admin/ingresar`}>
           Ingresar
           <Flecha className="h-4 w-4" />
         </BotonEnlace>

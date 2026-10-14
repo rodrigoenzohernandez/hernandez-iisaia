@@ -30,6 +30,10 @@ OTRO=/tenants/bella-piel
 
 command -v jq >/dev/null || { echo 'Falta jq. En macOS: brew install jq'; exit 1; }
 [[ -f "$RAIZ/.env" ]] && { set -a; . "$RAIZ/.env"; set +a; }
+# Las credenciales de prueba de MP son para probar a mano: con ellas el seed conecta Lo de
+# Lili a una cuenta real, y los casos esperan que arranque sin cuenta y la conecte el mock.
+# Vacias y no unset: el seed relee el .env, y loadEnvFile no pisa una variable que ya existe.
+export SEED_MP_ACCESS_TOKEN= SEED_MP_USER_ID= SEED_MP_PUBLIC_KEY=
 PASSWORD=${SEED_ADMIN_PASSWORD:?Falta SEED_ADMIN_PASSWORD en .env}
 
 curl -so /dev/null "$BASE$T/servicios" || { echo "La API no responde en $BASE. Levantala con: npm|pnpm run start:verify"; exit 1; }
@@ -198,6 +202,14 @@ reserva() {
 seccion 'Resolucion del centro y catalogo'
 req 'centro inexistente' 404 GET /tenants/no-existe/servicios
 req 'centro dado de baja responde igual que uno que no existe' 404 GET /tenants/centro-cerrado/servicios
+req 'perfil publico del centro' 200 GET "$T"
+check 'solo el slug y el nombre: nunca el id, que es el claim tid del JWT' 'nombre,slug' "$(jq -r 'keys | join(",")' "$TMP/body")"
+check 'el nombre que cargo el centro, no el derivado del slug' 'Lo de Lili' "$(jq -r .nombre "$TMP/body")"
+check 'y su slug' lo-de-lili "$(jq -r .slug "$TMP/body")"
+req 'perfil de un centro inexistente' 404 GET /tenants/no-existe
+check 'con codigo tenant_not_found' tenant_not_found "$(jq -r .code "$TMP/body")"
+req 'perfil de un centro dado de baja: igual que si no existiera' 404 GET /tenants/centro-cerrado
+check 'con codigo tenant_not_found' tenant_not_found "$(jq -r .code "$TMP/body")"
 req 'catalogo completo del centro' 200 GET "$T/servicios?limit=100"
 check 'el seed carga los 8 tratamientos del prototipo' 8 "$(jq '.data | length' "$TMP/body")"
 S30=$(jq -r '[.data[] | select(.duracionMinutos == 30)][0].id' "$TMP/body")
@@ -475,6 +487,8 @@ check 'con codigo servicio_name_taken' servicio_name_taken "$(jq -r .code "$TMP/
 req 'login del admin del otro centro' 201 POST "$OTRO/sesiones" \
   "$(jq -nc --arg p "$PASSWORD" '{email:"admin@bellapiel.test", password:$p}')"
 TOKEN_OTRO=$(jq -r .accessToken "$TMP/body")
+req 'el perfil de este centro con el token del otro' 403 GET "$T" '' "$TOKEN_OTRO"
+check 'con codigo wrong_tenant' wrong_tenant "$(jq -r .code "$TMP/body")"
 req 'el mismo nombre de tratamiento en el otro centro si se puede' 201 POST "$OTRO/servicios" "$NUEVO" "$TOKEN_OTRO"
 req 'duracion 0 desactivaria el control de cupo' 400 POST "$T/servicios" \
   '{"nombre":"Imposible","duracionMinutos":0,"precioCentavos":100000,"senaCentavos":0}' "$TOKEN"
@@ -1039,6 +1053,8 @@ check 'se leen con el tope del plan' 1 "$(jq '.data[0].capacidad' "$TMP/body")"
 req 'y se guardan tal como se leen' 200 PUT "$OTRO/ventanas-atencion" "$(jq -c '{data}' "$TMP/body")" "$TOKEN_OTRO"
 req 'volver a suscribirse despues de cancelar' 200 PUT "$OTRO/suscripcion" '{"plan":"profesional"}' "$TOKEN_OTRO"
 check 'queda pendiente, y sin gracia: nunca se cobro' 'basico pending' "$(jq -r '"\(.plan) \(.suscripcion.estado)"' "$TMP/body")"
+check 'sin emailPagador paga la cuenta de MP conectada del centro' 'cuenta-222333@testuser.com' \
+  "$(llamadas_mp | jq -r '[.[] | select(.path == "/preapproval" and .metodo == "POST")] | last | .cuerpo.payer_email')"
 req 'y cancelarla otra vez' 200 PUT "$OTRO/suscripcion" '{"plan":"basico"}' "$TOKEN_OTRO"
 req 'desconectar Mercado Pago con un cobro abierto' 409 DELETE "$OTRO/cuenta-mercadopago" '' "$TOKEN_OTRO"
 check 'la clienta todavia puede pagar: la cuenta no se va' mp_account_change_blocked "$(jq -r .code "$TMP/body")"
@@ -1093,6 +1109,7 @@ TOKEN_PLATAFORMA=$(jq -r .accessToken "$TMP/body")
 req 'el token de la plataforma en una ruta de centro' 403 GET "$T/reservas" '' "$TOKEN_PLATAFORMA"
 check 'con codigo wrong_tenant' wrong_tenant "$(jq -r .code "$TMP/body")"
 req 'y en una ruta publica de centro' 403 GET "$T/servicios" '' "$TOKEN_PLATAFORMA"
+req 'y en el perfil publico del centro' 403 GET "$T" '' "$TOKEN_PLATAFORMA"
 req 'el token de un centro en la plataforma' 403 GET /plataforma/tenants '' "$TOKEN"
 check 'con codigo wrong_tenant' wrong_tenant "$(jq -r .code "$TMP/body")"
 req 'el token de una clienta en la plataforma' 403 GET /plataforma/tenants '' "$TOKEN_SOFIA"
@@ -1144,6 +1161,11 @@ wait "${SUSCRIPCIONES[@]}"
 CREADAS=$(llamadas_mp | jq '[.[] | select(.path == "/preapproval" and .cuerpo.external_reference == "estetica-luz")] | length')
 CANCELADAS=$(llamadas_mp | jq '[.[] | select(.metodo == "PUT" and (.path | startswith("/preapproval/")) and .cuerpo.status == "cancelled")] | length')
 check 'dos pedidos del Profesional a la vez dejan una sola suscripcion viva' 1 "$((CREADAS - (CANCELADAS - CANCELADAS_ANTES)))"
+SUB_LUZ=$(sql "select \"suscripcionMpId\" from \"Tenant\" where slug = 'estetica-luz'")
+mock /__test/facturas -X POST -d "$(jq -nc --arg s "$SUB_LUZ" '{suscripcion:$s, status:"approved"}')" >/dev/null
+req 'Mercado Pago la cobro y el aviso no llego' 200 GET /tenants/estetica-luz/suscripcion '' "$TOKEN_NUEVO"
+check 'al consultar el plan concilia con Mercado Pago: rige el Profesional' 'profesional authorized' \
+  "$(jq -r '"\(.plan) \(.suscripcion.estado)"' "$TMP/body")"
 req 'dar de baja el centro nuevo' 200 PATCH /plataforma/tenants/estetica-luz '{"activo":false}' "$TOKEN_PLATAFORMA"
 check 'queda inactivo' false "$(jq -r .activo "$TMP/body")"
 check 'y la baja cancela su suscripcion: Mercado Pago no le sigue cobrando' cancelled \
@@ -1159,7 +1181,7 @@ req 'dar de baja un centro con token de centro' 403 PATCH /plataforma/tenants/es
 
 seccion 'Documentacion'
 req 'el OpenAPI se sirve' 200 GET /docs-json
-check 'documenta los 21 paths: los webhooks no, porque no son para el front' 21 "$(jq '.paths | length' "$TMP/body")"
+check 'documenta los 22 paths: los webhooks no, porque no son para el front' 22 "$(jq '.paths | length' "$TMP/body")"
 check 'cada operacion tiene su resumen en espanol' true \
   "$(jq '[.paths | to_entries[] | .value | to_entries[] | .value.summary // ""] | all(length > 0) and any(test("centro"))' "$TMP/body")"
 check 'ningun resumen es un parrafo: el razonamiento no va al OpenAPI' true \

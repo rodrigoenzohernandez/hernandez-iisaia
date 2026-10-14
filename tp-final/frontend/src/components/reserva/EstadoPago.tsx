@@ -73,13 +73,13 @@ export function EstadoPago({ slug, reservaId }: { slug: string; reservaId: strin
 
       <div className="mt-12 flex flex-wrap items-center gap-5">
         {(estado === 'cancelada' || estado === 'error') && (
-          <BotonEnlace href="/reservar">
+          <BotonEnlace href={`/${slug}/reservar`}>
             Elegir otro horario
             <Flecha className="h-4 w-4" />
           </BotonEnlace>
         )}
         <Link
-          href="/"
+          href={`/${slug}`}
           className="inline-flex items-center gap-2.5 text-[0.76rem] font-semibold uppercase tracking-[0.16em] text-tinta underline decoration-verde decoration-2 underline-offset-[0.35em]"
         >
           <FlechaIzquierda className="h-4 w-4" />
