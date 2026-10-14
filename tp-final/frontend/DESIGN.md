@@ -1,6 +1,6 @@
 ---
-name: Natura Estética Integral
-description: Un régimen empaquetado — verde oliva a escala de página, dato impreso y una espina que cose la página entera.
+name: Turnos
+description: El sistema visual de Turnos, la plataforma multi-tenant de turnos para centros de estética: un régimen empaquetado —verde oliva a escala de página, dato impreso y una espina que cose la página— que viste tanto la plataforma como cada centro que aloja.
 colors:
   verde: "#a8c63c"
   verde-vivo: "#c3e24d"
@@ -160,9 +160,11 @@ components:
     padding: "1.25rem 1.5rem"
 ---
 
-# Design System: Natura Estética Integral
+# Design System: Turnos
 
 ## Overview
+
+**Turnos** es una plataforma web multi-tenant donde cada centro de estética tiene su agenda de turnos online. Este es su sistema visual: un mundo único que viste por igual las superficies de la plataforma (la landing que invita a registrar un centro, el alta, el panel de superadmin) y las de cada centro que aloja (su landing, la reserva, el panel de administración). La marca es «Turnos» en las superficies de plataforma y el nombre del centro —derivado del slug— en las de un centro. El sistema no cambia entre una y otra; cambia sólo el contenido.
 
 **Creative North Star: "El régimen empaquetado"**
 
