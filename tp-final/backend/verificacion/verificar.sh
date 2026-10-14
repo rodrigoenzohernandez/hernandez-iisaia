@@ -202,6 +202,14 @@ reserva() {
 seccion 'Resolucion del centro y catalogo'
 req 'centro inexistente' 404 GET /tenants/no-existe/servicios
 req 'centro dado de baja responde igual que uno que no existe' 404 GET /tenants/centro-cerrado/servicios
+req 'perfil publico del centro' 200 GET "$T"
+check 'solo el slug y el nombre: nunca el id, que es el claim tid del JWT' 'nombre,slug' "$(jq -r 'keys | join(",")' "$TMP/body")"
+check 'el nombre que cargo el centro, no el derivado del slug' 'Lo de Lili' "$(jq -r .nombre "$TMP/body")"
+check 'y su slug' lo-de-lili "$(jq -r .slug "$TMP/body")"
+req 'perfil de un centro inexistente' 404 GET /tenants/no-existe
+check 'con codigo tenant_not_found' tenant_not_found "$(jq -r .code "$TMP/body")"
+req 'perfil de un centro dado de baja: igual que si no existiera' 404 GET /tenants/centro-cerrado
+check 'con codigo tenant_not_found' tenant_not_found "$(jq -r .code "$TMP/body")"
 req 'catalogo completo del centro' 200 GET "$T/servicios?limit=100"
 check 'el seed carga los 8 tratamientos del prototipo' 8 "$(jq '.data | length' "$TMP/body")"
 S30=$(jq -r '[.data[] | select(.duracionMinutos == 30)][0].id' "$TMP/body")
@@ -479,6 +487,8 @@ check 'con codigo servicio_name_taken' servicio_name_taken "$(jq -r .code "$TMP/
 req 'login del admin del otro centro' 201 POST "$OTRO/sesiones" \
   "$(jq -nc --arg p "$PASSWORD" '{email:"admin@bellapiel.test", password:$p}')"
 TOKEN_OTRO=$(jq -r .accessToken "$TMP/body")
+req 'el perfil de este centro con el token del otro' 403 GET "$T" '' "$TOKEN_OTRO"
+check 'con codigo wrong_tenant' wrong_tenant "$(jq -r .code "$TMP/body")"
 req 'el mismo nombre de tratamiento en el otro centro si se puede' 201 POST "$OTRO/servicios" "$NUEVO" "$TOKEN_OTRO"
 req 'duracion 0 desactivaria el control de cupo' 400 POST "$T/servicios" \
   '{"nombre":"Imposible","duracionMinutos":0,"precioCentavos":100000,"senaCentavos":0}' "$TOKEN"
@@ -1099,6 +1109,7 @@ TOKEN_PLATAFORMA=$(jq -r .accessToken "$TMP/body")
 req 'el token de la plataforma en una ruta de centro' 403 GET "$T/reservas" '' "$TOKEN_PLATAFORMA"
 check 'con codigo wrong_tenant' wrong_tenant "$(jq -r .code "$TMP/body")"
 req 'y en una ruta publica de centro' 403 GET "$T/servicios" '' "$TOKEN_PLATAFORMA"
+req 'y en el perfil publico del centro' 403 GET "$T" '' "$TOKEN_PLATAFORMA"
 req 'el token de un centro en la plataforma' 403 GET /plataforma/tenants '' "$TOKEN"
 check 'con codigo wrong_tenant' wrong_tenant "$(jq -r .code "$TMP/body")"
 req 'el token de una clienta en la plataforma' 403 GET /plataforma/tenants '' "$TOKEN_SOFIA"
@@ -1170,7 +1181,7 @@ req 'dar de baja un centro con token de centro' 403 PATCH /plataforma/tenants/es
 
 seccion 'Documentacion'
 req 'el OpenAPI se sirve' 200 GET /docs-json
-check 'documenta los 21 paths: los webhooks no, porque no son para el front' 21 "$(jq '.paths | length' "$TMP/body")"
+check 'documenta los 22 paths: los webhooks no, porque no son para el front' 22 "$(jq '.paths | length' "$TMP/body")"
 check 'cada operacion tiene su resumen en espanol' true \
   "$(jq '[.paths | to_entries[] | .value | to_entries[] | .value.summary // ""] | all(length > 0) and any(test("centro"))' "$TMP/body")"
 check 'ningun resumen es un parrafo: el razonamiento no va al OpenAPI' true \

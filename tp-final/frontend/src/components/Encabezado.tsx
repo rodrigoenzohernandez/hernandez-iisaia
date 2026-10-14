@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { nombreDeSlug } from '@/lib/centro';
+import { nombreDelCentro } from '@/lib/centro';
 import { Marca } from './Marca';
 
-export function Encabezado({ slug, sobreFoto = false }: { slug: string; sobreFoto?: boolean }) {
+export async function Encabezado({ slug, sobreFoto = false }: { slug: string; sobreFoto?: boolean }) {
+  const nombre = await nombreDelCentro(slug);
   return (
     <header
       className={
@@ -11,9 +12,9 @@ export function Encabezado({ slug, sobreFoto = false }: { slug: string; sobreFot
           : 'relative z-20 bg-tinta text-papel'
       }
     >
-      <div className="mx-auto flex max-w-[1380px] items-center justify-between gap-6 px-6 py-6 lg:px-12">
-        <Link href={`/${slug}`} aria-label={`${nombreDeSlug(slug)} — inicio`}>
-          <Marca slug={slug} />
+      <div className="mx-auto flex max-w-[1380px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-6 py-6 lg:px-12">
+        <Link href={`/${slug}`} aria-label={`${nombre} — inicio`}>
+          <Marca nombre={nombre} />
         </Link>
         {/* Dos enlaces, una sola jerarquía: el subrayado verde es de la acción primaria y
             no se reparte. "Mis turnos" va sin él, que es la diferencia que se ve. */}

@@ -5,7 +5,7 @@ import { EncabezadoAdmin } from '@/components/admin/EncabezadoAdmin';
 import { Agenda } from '@/components/admin/Agenda';
 
 export const metadata: Metadata = {
-  title: 'Agenda — Natura Estética Integral',
+  title: 'Agenda',
   robots: { index: false },
 };
 

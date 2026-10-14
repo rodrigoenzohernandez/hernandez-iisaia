@@ -5,7 +5,7 @@ import { Pie } from '@/components/Pie';
 import { MisTurnos } from '@/components/cuenta/MisTurnos';
 
 export const metadata: Metadata = {
-  title: 'Mis turnos — Natura Estética Integral',
+  title: 'Mis turnos',
   robots: { index: false },
 };
 

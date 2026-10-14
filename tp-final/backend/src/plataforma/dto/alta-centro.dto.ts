@@ -59,12 +59,13 @@ export class CrearCentroDto {
   admin!: AdministradoraDto;
 }
 
-export class CentroCreadoResumenDto {
+/** Lo publico de un centro: lo que devuelven el alta y GET /tenants/{slug}. Nunca el id. */
+export class CentroPublicoDto {
   slug!: string;
   nombre!: string;
 }
 
 /** El centro nuevo y la sesion de su administradora, lista para entrar al panel. */
 export class CentroCreadoDto extends SesionDto {
-  centro!: CentroCreadoResumenDto;
+  centro!: CentroPublicoDto;
 }

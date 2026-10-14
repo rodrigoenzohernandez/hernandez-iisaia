@@ -5,7 +5,7 @@ import { Pie } from '@/components/Pie';
 import { Ingreso } from '@/components/cuenta/Ingreso';
 
 export const metadata: Metadata = {
-  title: 'Ingresar — Natura Estética Integral',
+  title: 'Ingresar',
   description: 'Entrá con un código al mail para ver, reprogramar o cancelar tus turnos.',
   robots: { index: false },
 };
